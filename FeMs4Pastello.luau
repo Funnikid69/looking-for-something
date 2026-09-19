@@ -655,7 +655,40 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 2. Subject_0 Attack
+-- 2. Jason Behead
+local autoBeheadOn = false
+local function findBeheadRemote()
+    local remote = ReplicatedStorage:FindFirstChild("Behead", true)
+    if remote then return remote end
+    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+    if charAbilities then
+        local jasonFolder = charAbilities:FindFirstChild("Jason", true)
+        if jasonFolder then return jasonFolder:FindFirstChild("Behead", true) end
+    end
+    return nil
+end
+local beheadRemote = findBeheadRemote()
+
+task.spawn(function()
+    while true do
+        if autoBeheadOn then
+            if not beheadRemote then beheadRemote = findBeheadRemote() end
+            if beheadRemote then beheadRemote:FireServer() end
+        end
+        task.wait(0.1)
+    end
+end)
+
+CombatTab:CreateToggle({
+   name = "Jason Behead",
+   currentValue = false,
+   callback = function(value)
+      autoBeheadOn = value
+      if value and not beheadRemote then beheadRemote = findBeheadRemote() end
+   end,
+})
+
+-- 3. Subject_0 Attack
 local autoSubjectOn = false
 local function findSubjectRemote()
     local remote = ReplicatedStorage:FindFirstChild("SubjectAttackRemote", true)
@@ -688,7 +721,7 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 3. Noli Attack
+-- 4. Noli Attack
 local autoNoliOn = false
 local function findNoliRemote()
     local remote = ReplicatedStorage:FindFirstChild("NoliAttackRemote", true)
@@ -721,7 +754,7 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 4. John Doe Attack
+-- 5. John Doe Attack
 local autoJohnDoeOn = false
 local function findJohnDoeRemote()
     local remote = ReplicatedStorage:FindFirstChild("JohnDoeAttackRemote", true)
@@ -754,7 +787,7 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 5. Auto 1x4 Mass Infection
+-- 6. Auto 1x4 Mass Infection
 local autoMassInfectionOn = false
 local function findMassInfectionRemote()
     local remote = ReplicatedStorage:FindFirstChild("MassInfection", true)
@@ -787,11 +820,12 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 6. Camlock Target Focus
-local ACTIVATION_DISTANCE = 80 
-local DROP_DISTANCE = 200      
+-- 7. Camlock Target Focus (Short Switching Range)
+local ACTIVATION_DISTANCE = 25 -- Reduced from 80 for tighter target selection
+local DROP_DISTANCE = 35       -- Quickly drops targets outside close range
 local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
-local TURN_SMOOTHNESS = 0.25
+local TURN_SMOOTHNESS = 0.35
+
 local currentTarget = nil
 local isLocked = false
 
@@ -800,7 +834,7 @@ local function getBestTarget()
 	if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
 	local myRoot = character.HumanoidRootPart
 	local bestTarget = nil
-	local highestFacingScore = 0.3 
+	local highestFacingScore = 0.2
 	local cameraLookDirection = camera.CFrame.LookVector
 
 	for _, p in ipairs(Players:GetPlayers()) do
@@ -873,7 +907,7 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 7. Additional Attack Loops (Coolkid & 1x4 Fast Cast)
+-- 8. Additional Attack Loops (Coolkid & 1x4 Fast Cast)
 CombatTab:CreateSection("Additional Attack Loops")
 
 local coolkidAutoOn = false
