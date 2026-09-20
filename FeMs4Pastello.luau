@@ -583,7 +583,8 @@ local function applyESP(plr)
             end
         end)
 
-    Highlight = highlight,
+        activeESP[plr] = {
+            Highlight = highlight,
             Billboard = billboard,
             Connection = conn
         }
