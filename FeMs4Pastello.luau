@@ -583,8 +583,7 @@ local function applyESP(plr)
             end
         end)
 
-        activeESP[plr] = {
-            Highlight = highlight,
+    Highlight = highlight,
             Billboard = billboard,
             Connection = conn
         }
@@ -622,6 +621,43 @@ end)
 -- COMBAT TAB
 --------------------------------------------------------------------------------
 
+-- Helper function to find the closest valid target player
+local function getClosestTarget()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+    
+    local myRoot = character.HumanoidRootPart
+    local closestTarget = nil
+    local shortestDistance = math.huge
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local targetChar = p.Character
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
+            
+            if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
+                local distance = (myRoot.Position - targetRoot.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestTarget = targetChar
+                end
+            end
+        end
+    end
+    return closestTarget
+end
+
+-- Helper to make the player automatically face the target when firing
+local function aimAtTarget(targetChar)
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
+        local myRoot = character.HumanoidRootPart
+        local targetPos = targetChar.HumanoidRootPart.Position
+        myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
+    end
+end
+
 -- 1. Auto Attack (Slasher M1)
 local autoAttackOn = false
 local function findRemote()
@@ -639,8 +675,17 @@ local attackRemote = findRemote()
 task.spawn(function()
     while true do
         if autoAttackOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+            
             if not attackRemote then attackRemote = findRemote() end
-            if attackRemote then attackRemote:FireServer() end
+            if attackRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    attackRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    attackRemote:FireServer()
+                end
+            end
         end
         task.wait(0.1)
     end
@@ -672,8 +717,17 @@ local beheadRemote = findBeheadRemote()
 task.spawn(function()
     while true do
         if autoBeheadOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+
             if not beheadRemote then beheadRemote = findBeheadRemote() end
-            if beheadRemote then beheadRemote:FireServer() end
+            if beheadRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    beheadRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    beheadRemote:FireServer()
+                end
+            end
         end
         task.wait(0.1)
     end
@@ -705,8 +759,17 @@ local subjectRemote = findSubjectRemote()
 task.spawn(function()
     while true do
         if autoSubjectOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+
             if not subjectRemote then subjectRemote = findSubjectRemote() end
-            if subjectRemote then subjectRemote:FireServer() end
+            if subjectRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    subjectRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    subjectRemote:FireServer()
+                end
+            end
         end
         task.wait(0.2)
     end
@@ -738,8 +801,17 @@ local noliRemote = findNoliRemote()
 task.spawn(function()
     while true do
         if autoNoliOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+
             if not noliRemote then noliRemote = findNoliRemote() end
-            if noliRemote then noliRemote:FireServer() end
+            if noliRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    noliRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    noliRemote:FireServer()
+                end
+            end
         end
         task.wait(0.2)
     end
@@ -771,8 +843,17 @@ local johnDoeRemote = findJohnDoeRemote()
 task.spawn(function()
     while true do
         if autoJohnDoeOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+
             if not johnDoeRemote then johnDoeRemote = findJohnDoeRemote() end
-            if johnDoeRemote then johnDoeRemote:FireServer() end
+            if johnDoeRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    johnDoeRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    johnDoeRemote:FireServer()
+                end
+            end
         end
         task.wait(0.2)
     end
@@ -804,8 +885,17 @@ local massInfectionRemote = findMassInfectionRemote()
 task.spawn(function()
     while true do
         if autoMassInfectionOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+
             if not massInfectionRemote then massInfectionRemote = findMassInfectionRemote() end
-            if massInfectionRemote then massInfectionRemote:FireServer() end
+            if massInfectionRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    massInfectionRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    massInfectionRemote:FireServer()
+                end
+            end
         end
         task.wait(0.2)
     end
@@ -820,43 +910,14 @@ CombatTab:CreateToggle({
    end,
 })
 
--- 7. Camlock Target Focus (Short Switching Range)
-local ACTIVATION_DISTANCE = 25 -- Reduced from 80 for tighter target selection
-local DROP_DISTANCE = 35       -- Quickly drops targets outside close range
+-- 7. Camlock Target Focus
+local ACTIVATION_DISTANCE = 25
+local DROP_DISTANCE = 35
 local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
 local TURN_SMOOTHNESS = 0.35
 
 local currentTarget = nil
 local isLocked = false
-
-local function getBestTarget()
-	local character = player.Character
-	if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
-	local myRoot = character.HumanoidRootPart
-	local bestTarget = nil
-	local highestFacingScore = 0.2
-	local cameraLookDirection = camera.CFrame.LookVector
-
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= player and p.Character then
-			local targetChar = p.Character
-			local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-			local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-			if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
-				local distance = (myRoot.Position - targetRoot.Position).Magnitude
-				if distance <= ACTIVATION_DISTANCE then
-					local vectorToTarget = (targetRoot.Position - camera.CFrame.Position).Unit
-					local dotProduct = cameraLookDirection:Dot(vectorToTarget) 
-					if dotProduct > highestFacingScore then
-						highestFacingScore = dotProduct
-						bestTarget = targetChar
-					end
-				end
-			end
-		end
-	end
-	return bestTarget
-end
 
 local function isTargetValid(targetChar)
 	if not targetChar or not targetChar.Parent or not targetChar:FindFirstChild("HumanoidRootPart") then return false end
@@ -882,7 +943,7 @@ local function enableLock()
 		if not isLocked then return end
 		local myChar = player.Character
 		if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
-		if not isTargetValid(currentTarget) then currentTarget = getBestTarget() end
+		if not isTargetValid(currentTarget) then currentTarget = getClosestTarget() end
 		if currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
 			local myRoot = myChar.HumanoidRootPart
 			local myPos = myRoot.Position
@@ -941,8 +1002,17 @@ local remote1x4 = find1x4Remote()
 task.spawn(function()
     while true do
         if coolkidAutoOn then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+            
             if not coolkidRemote then coolkidRemote = findCoolkidRemote() end
-            if coolkidRemote then coolkidRemote:FireServer() end
+            if coolkidRemote then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    coolkidRemote:FireServer(target.HumanoidRootPart.Position)
+                else
+                    coolkidRemote:FireServer()
+                end
+            end
         end
         task.wait(0.2)
     end
@@ -951,8 +1021,17 @@ end)
 task.spawn(function()
     while true do
         if auto1x4On then
+            local target = getClosestTarget()
+            if target then aimAtTarget(target) end
+
             if not remote1x4 then remote1x4 = find1x4Remote() end
-            if remote1x4 then remote1x4:FireServer() end
+            if remote1x4 then 
+                if target and target:FindFirstChild("HumanoidRootPart") then
+                    remote1x4:FireServer(target.HumanoidRootPart.Position)
+                else
+                    remote1x4:FireServer()
+                end
+            end
         end
         task.wait(0.2)
     end
