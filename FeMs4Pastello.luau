@@ -1144,9 +1144,16 @@ UtilityTab:CreateButton({
 -- MISC TAB & PLAYER TELEPORTER (PART 5)
 --------------------------------------------------------------------------------
 
--- Create or reference Misc and Teleporter tabs
-local MiscTab = Window:CreateTab("Misc")
-local TeleportTab = Window:CreateTab("Teleporter")
+-- Reference your existing Rayfield Window (adjust 'Window' name if yours is different)
+local MiscTab = Window:CreateTab({
+   Name = "Misc",
+   Icon = 4483362458 -- Optional Rayfield icon ID
+})
+
+local TeleportTab = Window:CreateTab({
+   Name = "Teleporter",
+   Icon = 4483362458
+})
 
 --------------------------------------------------------------------------------
 -- LOW HEALTH TELEPORT PROTECTION (MISC TAB)
@@ -1159,21 +1166,23 @@ local safePosition = Vector3.new(-1119.03, 894.94, -85.90)
 MiscTab:CreateSection("Safety & Protection")
 
 MiscTab:CreateToggle({
-   name = "Low Health Auto-Teleport",
-   currentValue = false,
-   callback = function(value)
-      lowHealthProtectionOn = value
+   Name = "Low Health Auto-Teleport",
+   CurrentValue = false,
+   Flag = "LowHealthProtectionToggle",
+   Callback = function(Value)
+      lowHealthProtectionOn = Value
    end,
 })
 
 MiscTab:CreateSlider({
-   name = "Health Threshold",
-   range = {10, 80},
-   increment = 5,
-   suffix = " HP",
-   currentValue = 40,
-   callback = function(value)
-      healthThreshold = value
+   Name = "Health Threshold",
+   Range = {10, 80},
+   Increment = 5,
+   Suffix = " HP",
+   CurrentValue = 40,
+   Flag = "HealthThresholdSlider",
+   Callback = function(Value)
+      healthThreshold = Value
    end,
 })
 
@@ -1216,7 +1225,7 @@ end)
 --------------------------------------------------------------------------------
 local selectedPlayer = nil
 local stickInFrontOn = false
-local stickOffset = 5.5 -- Dynamic distance in front of the target player
+local stickOffset = 5.5 -- Dynamic distance in front of target player
 
 local playerDropdownOptions = {}
 local playerMap = {}
@@ -1243,20 +1252,22 @@ updatePlayerList()
 TeleportTab:CreateSection("Target Selector")
 
 local PlayerDropdown = TeleportTab:CreateDropdown({
-   name = "Select Target Player",
-   options = playerDropdownOptions,
-   currentOption = playerDropdownOptions[1] or "No Other Players",
-   callback = function(option)
-      local selected = typeof(option) == "table" and option[1] or option
+   Name = "Select Target Player",
+   Options = playerDropdownOptions,
+   CurrentOption = playerDropdownOptions[1] or "No Other Players",
+   MultipleOptions = false,
+   Flag = "TargetPlayerDropdown",
+   Callback = function(Option)
+      local selected = typeof(Option) == "table" and Option[1] or Option
       selectedPlayer = playerMap[selected]
    end,
 })
 
--- Auto-update dropdown when players join or leave
+-- Auto-update dropdown options when players join or leave
 local function refreshDropdown()
     updatePlayerList()
-    if PlayerDropdown and PlayerDropdown.Refresh then
-        PlayerDropdown:Refresh(playerDropdownOptions, playerDropdownOptions[1])
+    if PlayerDropdown and PlayerDropdown.Set then
+        PlayerDropdown:Set(playerDropdownOptions)
     end
 end
 
@@ -1270,8 +1281,8 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 TeleportTab:CreateButton({
-   name = "Teleport to Player",
-   callback = function()
+   Name = "Teleport to Player",
+   Callback = function()
       if selectedPlayer and selectedPlayer.Character then
          local targetHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
          local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -1283,21 +1294,23 @@ TeleportTab:CreateButton({
 })
 
 TeleportTab:CreateToggle({
-   name = "Stick in Front of Player",
-   currentValue = false,
-   callback = function(value)
-      stickInFrontOn = value
+   Name = "Stick in Front of Player",
+   CurrentValue = false,
+   Flag = "StickInFrontToggle",
+   Callback = function(Value)
+      stickInFrontOn = Value
    end,
 })
 
 TeleportTab:CreateSlider({
-   name = "Stick Distance Offset",
-   range = {2, 25},
-   increment = 0.5,
-   suffix = " studs",
-   currentValue = 5.5,
-   callback = function(value)
-      stickOffset = value
+   Name = "Stick Distance Offset",
+   Range = {2, 25},
+   Increment = 0.5,
+   Suffix = " studs",
+   CurrentValue = 5.5,
+   Flag = "StickOffsetSlider",
+   Callback = function(Value)
+      stickOffset = Value
    end,
 })
 
@@ -1332,3 +1345,4 @@ RS.RenderStepped:Connect(function()
         end
     end
 end)
+
