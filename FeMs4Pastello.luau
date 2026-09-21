@@ -1143,10 +1143,10 @@ UtilityTab:CreateButton({
    end,
 })
 --------------------------------------------------------------------------------
--- PART 5: LOW HEALTH PROTECTION & PLAYER TELEPORTER TAB
+-- PART 5: LOW HEALTH PROTECTION & TELEPORTER TAB
 --------------------------------------------------------------------------------
 
--- 1. LOW HEALTH PROTECTION (In Movement & Misc Tab)
+-- 1. LOW HEALTH PROTECTION (Movement & Misc Tab)
 local lowHealthProtectionOn = false
 local healthThreshold = 40
 local protectionPlatform = nil
@@ -1202,7 +1202,7 @@ task.spawn(function()
     end
 end)
 
--- 2. DEDICATED PLAYER TELEPORTER TAB
+-- 2. PLAYER TELEPORTER (Dedicated TeleportTab)
 local selectedPlayer = nil
 local stickInFrontOn = false
 local stickOffset = 5.5
