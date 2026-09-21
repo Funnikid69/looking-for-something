@@ -622,6 +622,30 @@ end)
 -- COMBAT TAB
 --------------------------------------------------------------------------------
 
+-- Maximum distance (in studs) required for auto-aim to trigger
+local AIM_DISTANCE = 30 
+
+-- Helper function to verify if the player's current character matches a name/type
+local function isMatchingCharacter(charName)
+    local character = player.Character
+    if not character then return false end
+    
+    -- Checks model name or a custom Character attribute if used by the game
+    local currentName = character.Name
+    local charAttr = character:GetAttribute("Character") or character:GetAttribute("CharacterType")
+    
+    if type(charName) == "table" then
+        for _, name in ipairs(charName) do
+            if currentName:find(name) or (charAttr and tostring(charAttr):find(name)) then
+                return true
+            end
+        end
+        return false
+    else
+        return currentName:find(charName) or (charAttr and tostring(charAttr):find(charName))
+    end
+end
+
 -- Helper function to find the closest valid target player
 local function getClosestTarget()
     local character = player.Character
@@ -649,14 +673,20 @@ local function getClosestTarget()
     return closestTarget
 end
 
--- Helper to make the player automatically face the target when firing
+-- Helper to make the player automatically face the target ONLY if within close distance
 local function aimAtTarget(targetChar)
     local character = player.Character
     if character and character:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
         local myRoot = character.HumanoidRootPart
         local targetPos = targetChar.HumanoidRootPart.Position
-        myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
+        local distance = (myRoot.Position - targetPos).Magnitude
+
+        if distance <= AIM_DISTANCE then
+            myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
+            return true
+        end
     end
+    return false
 end
 
 -- 1. Auto Attack (Slasher M1)
@@ -675,13 +705,13 @@ local attackRemote = findRemote()
 
 task.spawn(function()
     while true do
-        if autoAttackOn then
+        if autoAttackOn and isMatchingCharacter({"Jason", "Slasher"}) then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
             
             if not attackRemote then attackRemote = findRemote() end
             if attackRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     attackRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     attackRemote:FireServer()
@@ -717,13 +747,13 @@ local beheadRemote = findBeheadRemote()
 
 task.spawn(function()
     while true do
-        if autoBeheadOn then
+        if autoBeheadOn and isMatchingCharacter({"Jason", "Slasher"}) then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
 
             if not beheadRemote then beheadRemote = findBeheadRemote() end
             if beheadRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     beheadRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     beheadRemote:FireServer()
@@ -759,13 +789,13 @@ local subjectRemote = findSubjectRemote()
 
 task.spawn(function()
     while true do
-        if autoSubjectOn then
+        if autoSubjectOn and isMatchingCharacter("Subject") then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
 
             if not subjectRemote then subjectRemote = findSubjectRemote() end
             if subjectRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     subjectRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     subjectRemote:FireServer()
@@ -801,13 +831,13 @@ local noliRemote = findNoliRemote()
 
 task.spawn(function()
     while true do
-        if autoNoliOn then
+        if autoNoliOn and isMatchingCharacter("Noli") then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
 
             if not noliRemote then noliRemote = findNoliRemote() end
             if noliRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     noliRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     noliRemote:FireServer()
@@ -843,13 +873,13 @@ local johnDoeRemote = findJohnDoeRemote()
 
 task.spawn(function()
     while true do
-        if autoJohnDoeOn then
+        if autoJohnDoeOn and isMatchingCharacter("JohnDoe") then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
 
             if not johnDoeRemote then johnDoeRemote = findJohnDoeRemote() end
             if johnDoeRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     johnDoeRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     johnDoeRemote:FireServer()
@@ -885,13 +915,13 @@ local massInfectionRemote = findMassInfectionRemote()
 
 task.spawn(function()
     while true do
-        if autoMassInfectionOn then
+        if autoMassInfectionOn and isMatchingCharacter("1x4") then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
 
             if not massInfectionRemote then massInfectionRemote = findMassInfectionRemote() end
             if massInfectionRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     massInfectionRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     massInfectionRemote:FireServer()
@@ -1002,13 +1032,13 @@ local remote1x4 = find1x4Remote()
 
 task.spawn(function()
     while true do
-        if coolkidAutoOn then
+        if coolkidAutoOn and isMatchingCharacter("Coolkid") then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
             
             if not coolkidRemote then coolkidRemote = findCoolkidRemote() end
             if coolkidRemote then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     coolkidRemote:FireServer(target.HumanoidRootPart.Position)
                 else
                     coolkidRemote:FireServer()
@@ -1021,13 +1051,13 @@ end)
 
 task.spawn(function()
     while true do
-        if auto1x4On then
+        if auto1x4On and isMatchingCharacter("1x4") then
             local target = getClosestTarget()
-            if target then aimAtTarget(target) end
+            local isClose = target and aimAtTarget(target)
 
             if not remote1x4 then remote1x4 = find1x4Remote() end
             if remote1x4 then 
-                if target and target:FindFirstChild("HumanoidRootPart") then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then
                     remote1x4:FireServer(target.HumanoidRootPart.Position)
                 else
                     remote1x4:FireServer()
@@ -1110,3 +1140,195 @@ UtilityTab:CreateButton({
       hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
    end,
 })
+--------------------------------------------------------------------------------
+-- MISC TAB & PLAYER TELEPORTER (PART 5)
+--------------------------------------------------------------------------------
+
+-- Create or reference Misc and Teleporter tabs
+local MiscTab = Window:CreateTab("Misc")
+local TeleportTab = Window:CreateTab("Teleporter")
+
+--------------------------------------------------------------------------------
+-- LOW HEALTH TELEPORT PROTECTION (MISC TAB)
+--------------------------------------------------------------------------------
+local lowHealthProtectionOn = false
+local healthThreshold = 40
+local protectionPlatform = nil
+local safePosition = Vector3.new(-1119.03, 894.94, -85.90)
+
+MiscTab:CreateSection("Safety & Protection")
+
+MiscTab:CreateToggle({
+   name = "Low Health Auto-Teleport",
+   currentValue = false,
+   callback = function(value)
+      lowHealthProtectionOn = value
+   end,
+})
+
+MiscTab:CreateSlider({
+   name = "Health Threshold",
+   range = {10, 80},
+   increment = 5,
+   suffix = " HP",
+   currentValue = 40,
+   callback = function(value)
+      healthThreshold = value
+   end,
+})
+
+-- Protection Loop
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if lowHealthProtectionOn then
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                local hrp = character:FindFirstChild("HumanoidRootPart")
+
+                if humanoid and hrp and humanoid.Health > 0 and humanoid.Health <= healthThreshold then
+                    -- Create dynamic safety baseplate if it doesn't exist
+                    if not protectionPlatform or not protectionPlatform.Parent then
+                        protectionPlatform = Instance.new("Part")
+                        protectionPlatform.Size = Vector3.new(60, 5, 60)
+                        protectionPlatform.Position = safePosition
+                        protectionPlatform.Anchored = true
+                        protectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                        protectionPlatform.Material = Enum.Material.SmoothPlastic
+                        protectionPlatform.Name = "AutoProtectionBaseplate"
+                        protectionPlatform.Parent = workspace
+                    end
+
+                    -- Teleport safely above baseplate
+                    hrp.CFrame = CFrame.new(safePosition + Vector3.new(0, 6, 0))
+                    
+                    -- Turn off to prevent infinite teleport loop while healing
+                    lowHealthProtectionOn = false
+                end
+            end
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- PLAYER TELEPORTER & STICK IN FRONT (TELEPORTER TAB)
+--------------------------------------------------------------------------------
+local selectedPlayer = nil
+local stickInFrontOn = false
+local stickOffset = 5.5 -- Dynamic distance in front of the target player
+
+local playerDropdownOptions = {}
+local playerMap = {}
+
+local function updatePlayerList()
+    playerDropdownOptions = {}
+    playerMap = {}
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local displayNameFormat = p.DisplayName .. " (@" .. p.Name .. ")"
+            table.insert(playerDropdownOptions, displayNameFormat)
+            playerMap[displayNameFormat] = p
+        end
+    end
+
+    if #playerDropdownOptions == 0 then
+        playerDropdownOptions = {"No Other Players"}
+    end
+end
+
+updatePlayerList()
+
+TeleportTab:CreateSection("Target Selector")
+
+local PlayerDropdown = TeleportTab:CreateDropdown({
+   name = "Select Target Player",
+   options = playerDropdownOptions,
+   currentOption = playerDropdownOptions[1] or "No Other Players",
+   callback = function(option)
+      local selected = typeof(option) == "table" and option[1] or option
+      selectedPlayer = playerMap[selected]
+   end,
+})
+
+-- Auto-update dropdown when players join or leave
+local function refreshDropdown()
+    updatePlayerList()
+    if PlayerDropdown and PlayerDropdown.Refresh then
+        PlayerDropdown:Refresh(playerDropdownOptions, playerDropdownOptions[1])
+    end
+end
+
+Players.PlayerAdded:Connect(refreshDropdown)
+Players.PlayerRemoving:Connect(function(p)
+    if selectedPlayer == p then
+        selectedPlayer = nil
+        stickInFrontOn = false
+    end
+    refreshDropdown()
+end)
+
+TeleportTab:CreateButton({
+   name = "Teleport to Player",
+   callback = function()
+      if selectedPlayer and selectedPlayer.Character then
+         local targetHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+         local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+         if targetHrp and myHrp then
+            myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -3)
+         end
+      end
+   end,
+})
+
+TeleportTab:CreateToggle({
+   name = "Stick in Front of Player",
+   currentValue = false,
+   callback = function(value)
+      stickInFrontOn = value
+   end,
+})
+
+TeleportTab:CreateSlider({
+   name = "Stick Distance Offset",
+   range = {2, 25},
+   increment = 0.5,
+   suffix = " studs",
+   currentValue = 5.5,
+   callback = function(value)
+      stickOffset = value
+   end,
+})
+
+-- Stick in Front render loop
+RS.RenderStepped:Connect(function()
+    if stickInFrontOn and selectedPlayer and selectedPlayer.Character then
+        local targetChar = selectedPlayer.Character
+        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+        
+        local myChar = player.Character
+        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+        -- Target died or invalid state check
+        if not targetHrp or not targetHum or targetHum.Health <= 0 then
+            stickInFrontOn = false
+            selectedPlayer = nil
+            return
+        end
+
+        if myHrp then
+            -- Positions you in front using the dynamic stickOffset value
+            local targetCFrame = targetHrp.CFrame
+            local inFrontPosition = targetCFrame * CFrame.new(0, 0, -stickOffset)
+            
+            -- Face directly at the targeted player
+            myHrp.CFrame = CFrame.lookAt(inFrontPosition.Position, targetHrp.Position)
+        end
+    else
+        if stickInFrontOn and not selectedPlayer then
+            stickInFrontOn = false
+        end
+    end
+end)
