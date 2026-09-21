@@ -38,8 +38,7 @@ local CombatTab = Window:CreateTab({ name = "Combat", icon = 4483362458 })
 local AutoFarmTab = Window:CreateTab({ name = "Auto Farm", icon = 4483362458 })
 local ESPTab = Window:CreateTab({ name = "ESP", icon = 4483362458 })
 local UtilityTab = Window:CreateTab({ name = "Movement & Misc", icon = 4483362458 })
-local TeleportTab = Window:CreateTab({ name = "Teleporter", icon = 44833624
-58 })
+local TeleportTab = Window:CreateTab({ name = "Teleporter", icon = 4483362458 })
 
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
