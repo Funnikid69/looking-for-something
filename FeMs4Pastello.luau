@@ -1141,10 +1141,10 @@ UtilityTab:CreateButton({
    end,
 })
 --------------------------------------------------------------------------------
--- PART 5: LOW HEALTH PROTECTION & PLAYER TELEPORTER
+-- PART 5: LOW HEALTH PROTECTION & PLAYER TELEPORTER TAB
 --------------------------------------------------------------------------------
 
--- 1. LOW HEALTH PROTECTION (Appended to UtilityTab)
+-- 1. LOW HEALTH PROTECTION (In Movement & Misc Tab)
 local lowHealthProtectionOn = false
 local healthThreshold = 40
 local protectionPlatform = nil
@@ -1200,7 +1200,7 @@ task.spawn(function()
     end
 end)
 
--- 2. PLAYER TELEPORTER & STICK IN FRONT (Appended to UtilityTab)
+-- 2. DEDICATED PLAYER TELEPORTER TAB
 local selectedPlayer = nil
 local stickInFrontOn = false
 local stickOffset = 5.5
@@ -1227,9 +1227,9 @@ end
 
 updatePlayerList()
 
-UtilityTab:CreateSection("Player Teleporter")
+TeleportTab:CreateSection("Player Teleporter")
 
-local PlayerDropdown = UtilityTab:CreateDropdown({
+local PlayerDropdown = TeleportTab:CreateDropdown({
    name = "Select Target Player",
    options = playerDropdownOptions,
    currentOption = playerDropdownOptions[1] or "No Other Players",
@@ -1255,7 +1255,7 @@ Players.PlayerRemoving:Connect(function(p)
     refreshDropdown()
 end)
 
-UtilityTab:CreateButton({
+TeleportTab:CreateButton({
    name = "Teleport to Player",
    callback = function()
       if selectedPlayer and selectedPlayer.Character then
@@ -1268,7 +1268,7 @@ UtilityTab:CreateButton({
    end,
 })
 
-UtilityTab:CreateToggle({
+TeleportTab:CreateToggle({
    name = "Stick in Front of Player",
    currentValue = false,
    callback = function(value)
@@ -1276,7 +1276,7 @@ UtilityTab:CreateToggle({
    end,
 })
 
-UtilityTab:CreateSlider({
+TeleportTab:CreateSlider({
    name = "Stick Distance Offset",
    range = {2, 25},
    increment = 0.5,
