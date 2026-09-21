@@ -1141,52 +1141,36 @@ UtilityTab:CreateButton({
    end,
 })
 --------------------------------------------------------------------------------
--- MISC TAB & PLAYER TELEPORTER (PART 5)
+-- PART 5: LOW HEALTH PROTECTION & PLAYER TELEPORTER
 --------------------------------------------------------------------------------
 
--- Reference your existing Rayfield Window (adjust 'Window' name if yours is different)
-local MiscTab = Window:CreateTab({
-   Name = "Misc",
-   Icon = 4483362458 -- Optional Rayfield icon ID
-})
-
-local TeleportTab = Window:CreateTab({
-   Name = "Teleporter",
-   Icon = 4483362458
-})
-
---------------------------------------------------------------------------------
--- LOW HEALTH TELEPORT PROTECTION (MISC TAB)
---------------------------------------------------------------------------------
+-- 1. LOW HEALTH PROTECTION (Appended to UtilityTab)
 local lowHealthProtectionOn = false
 local healthThreshold = 40
 local protectionPlatform = nil
 local safePosition = Vector3.new(-1119.03, 894.94, -85.90)
 
-MiscTab:CreateSection("Safety & Protection")
+UtilityTab:CreateSection("Safety & Protection")
 
-MiscTab:CreateToggle({
-   Name = "Low Health Auto-Teleport",
-   CurrentValue = false,
-   Flag = "LowHealthProtectionToggle",
-   Callback = function(Value)
-      lowHealthProtectionOn = Value
+UtilityTab:CreateToggle({
+   name = "Low Health Auto-Teleport",
+   currentValue = false,
+   callback = function(value)
+      lowHealthProtectionOn = value
    end,
 })
 
-MiscTab:CreateSlider({
-   Name = "Health Threshold",
-   Range = {10, 80},
-   Increment = 5,
-   Suffix = " HP",
-   CurrentValue = 40,
-   Flag = "HealthThresholdSlider",
-   Callback = function(Value)
-      healthThreshold = Value
+UtilityTab:CreateSlider({
+   name = "Health Threshold",
+   range = {10, 80},
+   increment = 5,
+   suffix = " HP",
+   currentValue = 40,
+   callback = function(value)
+      healthThreshold = value
    end,
 })
 
--- Protection Loop
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -1197,7 +1181,6 @@ task.spawn(function()
                 local hrp = character:FindFirstChild("HumanoidRootPart")
 
                 if humanoid and hrp and humanoid.Health > 0 and humanoid.Health <= healthThreshold then
-                    -- Create dynamic safety baseplate if it doesn't exist
                     if not protectionPlatform or not protectionPlatform.Parent then
                         protectionPlatform = Instance.new("Part")
                         protectionPlatform.Size = Vector3.new(60, 5, 60)
@@ -1209,10 +1192,7 @@ task.spawn(function()
                         protectionPlatform.Parent = workspace
                     end
 
-                    -- Teleport safely above baseplate
                     hrp.CFrame = CFrame.new(safePosition + Vector3.new(0, 6, 0))
-                    
-                    -- Turn off to prevent infinite teleport loop while healing
                     lowHealthProtectionOn = false
                 end
             end
@@ -1220,12 +1200,10 @@ task.spawn(function()
     end
 end)
 
---------------------------------------------------------------------------------
--- PLAYER TELEPORTER & STICK IN FRONT (TELEPORTER TAB)
---------------------------------------------------------------------------------
+-- 2. PLAYER TELEPORTER & STICK IN FRONT (Appended to UtilityTab)
 local selectedPlayer = nil
 local stickInFrontOn = false
-local stickOffset = 5.5 -- Dynamic distance in front of target player
+local stickOffset = 5.5
 
 local playerDropdownOptions = {}
 local playerMap = {}
@@ -1249,25 +1227,22 @@ end
 
 updatePlayerList()
 
-TeleportTab:CreateSection("Target Selector")
+UtilityTab:CreateSection("Player Teleporter")
 
-local PlayerDropdown = TeleportTab:CreateDropdown({
-   Name = "Select Target Player",
-   Options = playerDropdownOptions,
-   CurrentOption = playerDropdownOptions[1] or "No Other Players",
-   MultipleOptions = false,
-   Flag = "TargetPlayerDropdown",
-   Callback = function(Option)
-      local selected = typeof(Option) == "table" and Option[1] or Option
+local PlayerDropdown = UtilityTab:CreateDropdown({
+   name = "Select Target Player",
+   options = playerDropdownOptions,
+   currentOption = playerDropdownOptions[1] or "No Other Players",
+   callback = function(option)
+      local selected = typeof(option) == "table" and option[1] or option
       selectedPlayer = playerMap[selected]
    end,
 })
 
--- Auto-update dropdown options when players join or leave
 local function refreshDropdown()
     updatePlayerList()
-    if PlayerDropdown and PlayerDropdown.Set then
-        PlayerDropdown:Set(playerDropdownOptions)
+    if PlayerDropdown and PlayerDropdown.Refresh then
+        PlayerDropdown:Refresh(playerDropdownOptions, playerDropdownOptions[1])
     end
 end
 
@@ -1280,9 +1255,9 @@ Players.PlayerRemoving:Connect(function(p)
     refreshDropdown()
 end)
 
-TeleportTab:CreateButton({
-   Name = "Teleport to Player",
-   Callback = function()
+UtilityTab:CreateButton({
+   name = "Teleport to Player",
+   callback = function()
       if selectedPlayer and selectedPlayer.Character then
          local targetHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
          local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -1293,28 +1268,25 @@ TeleportTab:CreateButton({
    end,
 })
 
-TeleportTab:CreateToggle({
-   Name = "Stick in Front of Player",
-   CurrentValue = false,
-   Flag = "StickInFrontToggle",
-   Callback = function(Value)
-      stickInFrontOn = Value
+UtilityTab:CreateToggle({
+   name = "Stick in Front of Player",
+   currentValue = false,
+   callback = function(value)
+      stickInFrontOn = value
    end,
 })
 
-TeleportTab:CreateSlider({
-   Name = "Stick Distance Offset",
-   Range = {2, 25},
-   Increment = 0.5,
-   Suffix = " studs",
-   CurrentValue = 5.5,
-   Flag = "StickOffsetSlider",
-   Callback = function(Value)
-      stickOffset = Value
+UtilityTab:CreateSlider({
+   name = "Stick Distance Offset",
+   range = {2, 25},
+   increment = 0.5,
+   suffix = " studs",
+   currentValue = 5.5,
+   callback = function(value)
+      stickOffset = value
    end,
 })
 
--- Stick in Front render loop
 RS.RenderStepped:Connect(function()
     if stickInFrontOn and selectedPlayer and selectedPlayer.Character then
         local targetChar = selectedPlayer.Character
@@ -1324,7 +1296,6 @@ RS.RenderStepped:Connect(function()
         local myChar = player.Character
         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
-        -- Target died or invalid state check
         if not targetHrp or not targetHum or targetHum.Health <= 0 then
             stickInFrontOn = false
             selectedPlayer = nil
@@ -1332,11 +1303,8 @@ RS.RenderStepped:Connect(function()
         end
 
         if myHrp then
-            -- Positions you in front using the dynamic stickOffset value
             local targetCFrame = targetHrp.CFrame
             local inFrontPosition = targetCFrame * CFrame.new(0, 0, -stickOffset)
-            
-            -- Face directly at the targeted player
             myHrp.CFrame = CFrame.lookAt(inFrontPosition.Position, targetHrp.Position)
         end
     else
@@ -1345,4 +1313,3 @@ RS.RenderStepped:Connect(function()
         end
     end
 end)
-
