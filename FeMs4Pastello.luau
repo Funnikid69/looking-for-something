@@ -1316,95 +1316,6 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 CONTROLLER (TEMPORARY MODULE)
---------------------------------------------------------------------------------
-
--- Remote Event/Function Finder for Guest1337
-local function findRemote(possibleNames)
-    for _, name in ipairs(possibleNames) do
-        local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-        if charAbilities then
-            local guestFolder = charAbilities:FindFirstChild("Guest1337", true)
-            if guestFolder then
-                local obj = guestFolder:FindFirstChild(name, true)
-                if obj then return obj end
-            end
-        end
-
-        local obj = ReplicatedStorage:FindFirstChild(name, true)
-        if obj then return obj end
-    end
-    return nil
-end
-
-local punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"})
-local chargeRemote = findRemote({"ChargeRemote", "Charge"})
-
--- State variables
-local isPunchLooping = false
-local isChargeLooping = false
-local isComboLooping = false
-local isAimingEnabled = false
-local loopDelay = 0
-local targetSpeed = 16
-
--- Helper to find nearest player character
-local function getNearestPlayer()
-    local myChar = player.Character
-    if not myChar then return nil end
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return nil end
-
-    local nearestTarget = nil
-    local shortestDistance = math.huge
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local targetHrp = p.Character:FindFirstChild("HumanoidRootPart")
-            local targetHumanoid = p.Character:FindFirstChildOfClass("Humanoid")
-            
-            if targetHrp and targetHumanoid and targetHumanoid.Health > 0 then
-                local distance = (targetHrp.Position - myHrp.Position).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    nearestTarget = targetHrp
-                end
-            end
-        end
-    end
-
-    return nearestTarget
-end
-
--- Aim at nearest target
-local function faceNearestPlayer()
-    if not isAimingEnabled then return end
-    if not (isPunchLooping or isChargeLooping or isComboLooping) then return end
-    
-    local myChar = player.Character
-    if not myChar then return end
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    local targetHrp = getNearestPlayer()
-
-    if myHrp and targetHrp then
-        local lookPos = Vector3.new(targetHrp.Position.X, myHrp.Position.Y, targetHrp.Position.Z)
-        myHrp.CFrame = CFrame.lookAt(myHrp.Position, lookPos)
-    end
-end
-
--- Helper to execute remote safely based on class type
-local function safeTriggerRemote(remoteObj)
-    if not remoteObj then return end
-    faceNearestPlayer()
-
-    if remoteObj:IsA("RemoteEvent") then
-        remoteObj:FireServer()
-    elseif remoteObj:IsA("RemoteFunction") then
-        task.spawn(function()
-            remoteObj:InvokeServer()
-        end)
-    end
---------------------------------------------------------------------------------
 -- PART 6: GUEST1337 CONTROLLER (GUEST1337 TAB)
 --------------------------------------------------------------------------------
 
@@ -1558,29 +1469,29 @@ task.spawn(function()
     end
 end)
 
--- UI Setup (Guest1337 Tab)
+-- UI Setup (Rayfield Gen 2 Standard)
 GuestTab:CreateSection("Guest Loops")
 
 GuestTab:CreateToggle({
-   name = "Punch Loop",
-   currentValue = false,
-   callback = function(value)
+   Name = "Punch Loop",
+   CurrentValue = false,
+   Callback = function(value)
       isPunchLooping = value
    end,
 })
 
 GuestTab:CreateToggle({
-   name = "Charge Loop",
-   currentValue = false,
-   callback = function(value)
+   Name = "Charge Loop",
+   CurrentValue = false,
+   Callback = function(value)
       isChargeLooping = value
    end,
 })
 
 GuestTab:CreateToggle({
-   name = "Both Loop (Combo)",
-   currentValue = false,
-   callback = function(value)
+   Name = "Both Loop (Combo)",
+   CurrentValue = false,
+   Callback = function(value)
       isComboLooping = value
    end,
 })
@@ -1588,18 +1499,18 @@ GuestTab:CreateToggle({
 GuestTab:CreateSection("Targeting & Delay")
 
 GuestTab:CreateToggle({
-   name = "Aim Nearest",
-   currentValue = false,
-   callback = function(value)
+   Name = "Aim Nearest",
+   CurrentValue = false,
+   Callback = function(value)
       isAimingEnabled = value
    end,
 })
 
 GuestTab:CreateInput({
-   name = "Loop Delay (Seconds)",
-   placeholderText = "0",
-   removeTextOnFocus = false,
-   callback = function(text)
+   Name = "Loop Delay (Seconds)",
+   PlaceholderText = "0",
+   RemoveTextOnFocus = false,
+   Callback = function(text)
       local newDelay = tonumber(text)
       if newDelay and newDelay >= 0 then
          loopDelay = newDelay
