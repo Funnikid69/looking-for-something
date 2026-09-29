@@ -39,8 +39,8 @@ local AutoFarmTab = Window:CreateTab({ name = "Auto Farm", icon = 4483362458 })
 local ESPTab = Window:CreateTab({ name = "ESP", icon = 4483362458 })
 local UtilityTab = Window:CreateTab({ name = "Movement & Misc", icon = 4483362458 })
 local TeleportTab = Window:CreateTab({ name = "Teleporter", icon = 4483362458 })
-local GuestTab = Window:CreateTab({ name = "Guest1337", icon = 4483362458 }) -- Added Part 
-6 Tab
+local GuestTab = Window:CreateTab({ name = "Guest1337", icon = 4483362458 })
+
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
 --------------------------------------------------------------------------------
@@ -1519,3 +1519,4 @@ GuestTab:CreateInput({
       end
    end,
 })
+
