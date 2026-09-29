@@ -6,6 +6,7 @@ local ALLOWED_PLACE_IDS = {
 	[99585784721880]  = true,
 	[99055603649009]  = true,
 	[70444122688316]  = true,
+    [80367872454439]  = true,
 }
 
 if not ALLOWED_PLACE_IDS[game.PlaceId] then
