@@ -1405,14 +1405,8 @@ local function safeTriggerRemote(remoteObj)
         end)
     end
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 CONTROLLER (TEMPORARY MODULE)
+-- PART 6: GUEST1337 CONTROLLER (GUEST1337 TAB)
 --------------------------------------------------------------------------------
-
--- Fallback Service Declarations
-local Players = game:GetService("Players")
-local RS = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local player = Players.LocalPlayer
 
 -- Remote Event/Function Finder for Guest1337
 local function findRemote(possibleNames)
@@ -1564,31 +1558,29 @@ task.spawn(function()
     end
 end)
 
---------------------------------------------------------------------------------
--- RAYFIELD UI ELEMENTS (GUEST1337 TAB)
---------------------------------------------------------------------------------
+-- UI Setup (Guest1337 Tab)
 GuestTab:CreateSection("Guest Loops")
 
 GuestTab:CreateToggle({
-   Name = "Punch Loop",
-   CurrentValue = false,
-   Callback = function(value)
+   name = "Punch Loop",
+   currentValue = false,
+   callback = function(value)
       isPunchLooping = value
    end,
 })
 
 GuestTab:CreateToggle({
-   Name = "Charge Loop",
-   CurrentValue = false,
-   Callback = function(value)
+   name = "Charge Loop",
+   currentValue = false,
+   callback = function(value)
       isChargeLooping = value
    end,
 })
 
 GuestTab:CreateToggle({
-   Name = "Both Loop (Combo)",
-   CurrentValue = false,
-   Callback = function(value)
+   name = "Both Loop (Combo)",
+   currentValue = false,
+   callback = function(value)
       isComboLooping = value
    end,
 })
@@ -1596,18 +1588,18 @@ GuestTab:CreateToggle({
 GuestTab:CreateSection("Targeting & Delay")
 
 GuestTab:CreateToggle({
-   Name = "Aim Nearest",
-   CurrentValue = false,
-   Callback = function(value)
+   name = "Aim Nearest",
+   currentValue = false,
+   callback = function(value)
       isAimingEnabled = value
    end,
 })
 
 GuestTab:CreateInput({
-   Name = "Loop Delay (Seconds)",
-   PlaceholderText = "0",
-   RemoveTextOnFocus = false,
-   Callback = function(text)
+   name = "Loop Delay (Seconds)",
+   placeholderText = "0",
+   removeTextOnFocus = false,
+   callback = function(text)
       local newDelay = tonumber(text)
       if newDelay and newDelay >= 0 then
          loopDelay = newDelay
