@@ -39,7 +39,8 @@ local AutoFarmTab = Window:CreateTab({ name = "Auto Farm", icon = 4483362458 })
 local ESPTab = Window:CreateTab({ name = "ESP", icon = 4483362458 })
 local UtilityTab = Window:CreateTab({ name = "Movement & Misc", icon = 4483362458 })
 local TeleportTab = Window:CreateTab({ name = "Teleporter", icon = 4483362458 })
-
+local GuestTab = Window:CreateTab({ name = "Guest1337", icon = 4483362458 }) -- Added Part 
+6 Tab
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
 --------------------------------------------------------------------------------
@@ -1314,3 +1315,207 @@ RS.RenderStepped:Connect(function()
         end
     end
 end)
+--------------------------------------------------------------------------------
+-- PART 6: GUEST1337 CONTROLLER (TEMPORARY MODULE)
+--------------------------------------------------------------------------------
+
+-- Remote Event/Function Finder for Guest1337
+local function findRemote(possibleNames)
+    for _, name in ipairs(possibleNames) do
+        local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+        if charAbilities then
+            local guestFolder = charAbilities:FindFirstChild("Guest1337", true)
+            if guestFolder then
+                local obj = guestFolder:FindFirstChild(name, true)
+                if obj then return obj end
+            end
+        end
+
+        local obj = ReplicatedStorage:FindFirstChild(name, true)
+        if obj then return obj end
+    end
+    return nil
+end
+
+local punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"})
+local chargeRemote = findRemote({"ChargeRemote", "Charge"})
+
+-- State variables
+local isPunchLooping = false
+local isChargeLooping = false
+local isComboLooping = false
+local isAimingEnabled = false
+local loopDelay = 0
+local targetSpeed = 16
+
+-- Helper to find nearest player character
+local function getNearestPlayer()
+    local myChar = player.Character
+    if not myChar then return nil end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil end
+
+    local nearestTarget = nil
+    local shortestDistance = math.huge
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local targetHrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = p.Character:FindFirstChildOfClass("Humanoid")
+            
+            if targetHrp and targetHumanoid and targetHumanoid.Health > 0 then
+                local distance = (targetHrp.Position - myHrp.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestTarget = targetHrp
+                end
+            end
+        end
+    end
+
+    return nearestTarget
+end
+
+-- Aim at nearest target
+local function faceNearestPlayer()
+    if not isAimingEnabled then return end
+    if not (isPunchLooping or isChargeLooping or isComboLooping) then return end
+    
+    local myChar = player.Character
+    if not myChar then return end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    local targetHrp = getNearestPlayer()
+
+    if myHrp and targetHrp then
+        local lookPos = Vector3.new(targetHrp.Position.X, myHrp.Position.Y, targetHrp.Position.Z)
+        myHrp.CFrame = CFrame.lookAt(myHrp.Position, lookPos)
+    end
+end
+
+-- Helper to execute remote safely based on class type
+local function safeTriggerRemote(remoteObj)
+    if not remoteObj then return end
+    faceNearestPlayer()
+
+    if remoteObj:IsA("RemoteEvent") then
+        remoteObj:FireServer()
+    elseif remoteObj:IsA("RemoteFunction") then
+        task.spawn(function()
+            remoteObj:InvokeServer()
+        end)
+    end
+end
+
+-- Movement Enforcement
+RS.RenderStepped:Connect(function(deltaTime)
+    if not (isPunchLooping or isComboLooping) then return end
+
+    local character = player.Character
+    if not character then return end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not hrp then return end
+
+    humanoid.WalkSpeed = targetSpeed
+
+    for _, attr in ipairs({"SpeedMultiplier", "Slowed", "WalkSpeedModifier", "DisableMovement"}) do
+        if character:GetAttribute(attr) ~= nil then
+            character:SetAttribute(attr, nil)
+        end
+        if humanoid:GetAttribute(attr) ~= nil then
+            humanoid:SetAttribute(attr, nil)
+        end
+    end
+
+    if humanoid.MoveDirection.Magnitude > 0 then
+        local moveVector = humanoid.MoveDirection * targetSpeed * deltaTime
+        hrp.CFrame = hrp.CFrame + Vector3.new(moveVector.X, 0, moveVector.Z)
+    end
+end)
+
+-- Loop Tasks
+task.spawn(function()
+    while true do
+        if isPunchLooping then
+            if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"}) end
+            safeTriggerRemote(punchRemote)
+        end
+        if loopDelay > 0 then task.wait(loopDelay) else task.wait() end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if isChargeLooping then
+            if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge"}) end
+            safeTriggerRemote(chargeRemote)
+        end
+        if loopDelay > 0 then task.wait(loopDelay) else task.wait() end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if isComboLooping then
+            if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"}) end
+            if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge"}) end
+            
+            safeTriggerRemote(chargeRemote)
+            safeTriggerRemote(punchRemote)
+        end
+        if loopDelay > 0 then task.wait(loopDelay) else task.wait() end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- RAYFIELD UI ELEMENTS (GUEST1337 TAB)
+--------------------------------------------------------------------------------
+GuestTab:CreateSection("Guest Loops")
+
+GuestTab:CreateToggle({
+   name = "Punch Loop",
+   currentValue = false,
+   callback = function(value)
+      isPunchLooping = value
+   end,
+})
+
+GuestTab:CreateToggle({
+   name = "Charge Loop",
+   currentValue = false,
+   callback = function(value)
+      isChargeLooping = value
+   end,
+})
+
+GuestTab:CreateToggle({
+   name = "Both Loop (Combo)",
+   currentValue = false,
+   callback = function(value)
+      isComboLooping = value
+   end,
+})
+
+GuestTab:CreateSection("Targeting & Delay")
+
+GuestTab:CreateToggle({
+   name = "Aim Nearest",
+   currentValue = false,
+   callback = function(value)
+      isAimingEnabled = value
+   end,
+})
+
+GuestTab:CreateInput({
+   name = "Loop Delay (Seconds)",
+   placeholderText = "0",
+   removeTextOnFocus = false,
+   callback = function(text)
+      local newDelay = tonumber(text)
+      if newDelay and newDelay >= 0 then
+         loopDelay = newDelay
+      end
+   end,
+})
