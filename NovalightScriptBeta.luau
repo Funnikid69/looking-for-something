@@ -16,7 +16,7 @@ end
 --------------------------------------------------------------------------------
 -- WINDUI SETUP
 --------------------------------------------------------------------------------
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua"))()
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local player = game.Players.LocalPlayer
 local Players = game:GetService("Players")
@@ -1142,7 +1142,7 @@ CombatTab:Toggle({
    Value = false,
    Callback = function(value)
       auto1x4On = value
-      if value and not remote1x4 me remote1x4 = find1x4Remote() end
+      if value and not remote1x4 then remote1x4 = find1x4Remote() end
    end,
 })
 
