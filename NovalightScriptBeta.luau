@@ -16,7 +16,7 @@ end
 --------------------------------------------------------------------------------
 -- WINDUI SETUP
 --------------------------------------------------------------------------------
-local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/UI/WindUI"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 local player = game.Players.LocalPlayer
 local Players = game:GetService("Players")
@@ -160,7 +160,6 @@ local function canUseCharacter()
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType == "Shedletsky" then
 		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
-
 	end
 	return true
 end
