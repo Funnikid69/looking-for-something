@@ -16,7 +16,7 @@ end
 --------------------------------------------------------------------------------
 -- WINDUI SETUP
 --------------------------------------------------------------------------------
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local WindUI = loadstring(game:HttpGet("https://tree-hub.vercel.app/api/UI/WindUI"))()
 
 local player = game.Players.LocalPlayer
 local Players = game:GetService("Players")
@@ -33,25 +33,16 @@ local Window = WindUI:CreateWindow({
     Folder = "NovalightConfig",
     Size = UDim2.fromOffset(580, 460),
     Theme = "Dark",
-    SideBarWidth = 180,
-    OpenButton = {
-        Title = "Open Hub",
-        CornerRadius = UDim2.new(1, 0),
-        Enabled = true,
-        Draggable = true,
-    }
+    Transparent = false
 })
 
---// TABS SETUP (Correct Method Syntax)
+--// TABS SETUP
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local AutoFarmTab = Window:Tab({ Title = "Auto Farm", Icon = "crosshair" })
 local ESPTab = Window:Tab({ Title = "ESP", Icon = "eye" })
 local UtilityTab = Window:Tab({ Title = "Movement & Misc", Icon = "zap" })
 local TeleportTab = Window:Tab({ Title = "Teleporter", Icon = "map-pin" })
 local GuestTab = Window:Tab({ Title = "Guest1337", Icon = "user" })
-
--- Select default active tab
-Window:SelectTab(1)
 
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
@@ -117,7 +108,7 @@ antiVoidPart.Touched:Connect(function(hit)
 end)
 
 --------------------------------------------------------------------------------
--- CHARACTER ABILITY CONFIGURATIONS (JASON, SHEDLETSKY & NOLI)
+-- CHARACTER ABILITY CONFIGURATIONS
 --------------------------------------------------------------------------------
 local charAbilitiesFolder = ReplicatedStorage:WaitForChild("CharacterAbilities", 5)
 local jasonFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Jason")
@@ -125,52 +116,20 @@ local shedFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("S
 local noliFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Noli")
 
 local JasonAbilities = {
-	["MainAbility"] = {
-		["Cooldown"] = 1.9,
-		["LastUsed"] = 0,
-		["Remote"] = jasonFolder and jasonFolder:FindFirstChild("JasonAttackRemote")
-	},
-	["AltAbility1"] = {
-		["Cooldown"] = 15,
-		["LastUsed"] = 0,
-		["Remote"] = jasonFolder and jasonFolder:FindFirstChild("Behead")
-	},
-	["AltAbility2"] = {
-		["Cooldown"] = 25,
-		["LastUsed"] = 0,
-		["Remote"] = jasonFolder and jasonFolder:FindFirstChild("GashingWound")
-	},
-	["AltAbility3"] = {
-		["Cooldown"] = 20,
-		["LastUsed"] = 0,
-		["Remote"] = jasonFolder and jasonFolder:FindFirstChild("Enraged")
-	}
+	["MainAbility"] = { Cooldown = 1.9, LastUsed = 0, Remote = jasonFolder and jasonFolder:FindFirstChild("JasonAttackRemote") },
+	["AltAbility1"] = { Cooldown = 15, LastUsed = 0, Remote = jasonFolder and jasonFolder:FindFirstChild("Behead") },
+	["AltAbility2"] = { Cooldown = 25, LastUsed = 0, Remote = jasonFolder and jasonFolder:FindFirstChild("GashingWound") },
+	["AltAbility3"] = { Cooldown = 20, LastUsed = 0, Remote = jasonFolder and jasonFolder:FindFirstChild("Enraged") }
 }
 
 local ShedletskyAbilities = {
-	["Slash"] = {
-		["Cooldown"] = 15,
-		["LastUsed"] = 0,
-		["Remote"] = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
-	},
-	["Fried Chicken"] = {
-		["Cooldown"] = 15,
-		["LastUsed"] = 0,
-		["Remote"] = shedFolder and shedFolder:FindFirstChild("ShedletskyChickenRemote")
-	}
+	["Slash"] = { Cooldown = 15, LastUsed = 0, Remote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote") },
+	["Fried Chicken"] = { Cooldown = 15, LastUsed = 0, Remote = shedFolder and shedFolder:FindFirstChild("ShedletskyChickenRemote") }
 }
 
 local NoliAbilities = {
-	["MainAbility"] = {
-		["Cooldown"] = 1.8,
-		["LastUsed"] = 0,
-		["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliAttackRemote")
-	},
-	["AltAbility2"] = {
-		["Cooldown"] = 0,
-		["LastUsed"] = 0,
-		["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
-	}
+	["MainAbility"] = { Cooldown = 1.8, LastUsed = 0, Remote = noliFolder and noliFolder:FindFirstChild("NoliAttackRemote") },
+	["AltAbility2"] = { Cooldown = 0, LastUsed = 0, Remote = noliFolder and noliFolder:FindFirstChild("NoliNova") }
 }
 
 local JASON_AUTO_ABILITIES = { "MainAbility", "AltAbility1", "AltAbility2" }
@@ -186,13 +145,8 @@ local hitDistanceOffset = 3
 local MAX_ABILITY_DISTANCE = 15
 
 local currentLockedTarget = nil
+local LowHpToggle, AllPlayersToggle
 
-local LowHpToggle
-local AllPlayersToggle
-
---------------------------------------------------------------------------------
--- CHARACTER STATE CHECKS
---------------------------------------------------------------------------------
 local function getCurrentCharacterType()
 	if not char then return nil end
 	return char:GetAttribute("Character")
@@ -206,14 +160,14 @@ local function canUseCharacter()
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType == "Shedletsky" then
 		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
+
 	end
 	return true
 end
---------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
 
--- ANIMATION & ACTION HANDLER
 local function playShedletskyAnim()
 	if not char or not hum then return end
 	local anim = Instance.new("Animation")
@@ -301,9 +255,6 @@ local function castCharacterAction(actionName, targetPosition)
 	end
 end
 
---------------------------------------------------------------------------------
--- TARGET DETECTION & POSITIONING
---------------------------------------------------------------------------------
 local function isTargetAliveAndValid(p)
 	if not p or not p.Parent or not p.Character or p == player then return false end
 	local tHum = p.Character:FindFirstChild("Humanoid")
@@ -384,9 +335,6 @@ local function positionAtTarget(targetPlayer)
 	end
 end
 
---------------------------------------------------------------------------------
--- UNBROKEN STICKY POSITIONING LOOP (STEPS EVERY FRAME)
---------------------------------------------------------------------------------
 RS.Stepped:Connect(function()
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 	if not char or not hum or hum.Health <= 0 then return end
@@ -404,9 +352,6 @@ RS.Stepped:Connect(function()
 	end
 end)
 
---------------------------------------------------------------------------------
--- AUTO FARM HEARTBEAT LOOP (FIRE ABILITIES ONLY WHEN NEARBY)
---------------------------------------------------------------------------------
 RS.Heartbeat:Connect(function()
 	if char and getCurrentCharacterType() == "Shedletsky" then
 		char:SetAttribute("CanRun", true)
@@ -463,31 +408,31 @@ RS.Heartbeat:Connect(function()
 end)
 
 --------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (WINDUI SYNTAX)
+-- AUTO FARM TAB ELEMENTS
 --------------------------------------------------------------------------------
-AutoFarmTab:Section({ Title = "Targeting Options" })
+local SectionTarget = AutoFarmTab:Section({ Title = "Targeting Options" })
 
-AutoFarmTab:Toggle({
+SectionTarget:Toggle({
    Title = "Lock in Front of Person",
-   Value = false,
+   Default = false,
    Callback = function(value)
       lockInFrontOn = value
    end,
 })
 
-AutoFarmTab:Toggle({
+SectionTarget:Toggle({
    Title = "Stick to Person?",
-   Value = false,
+   Default = false,
    Callback = function(value)
       stickToPersonOn = value
       if not value then currentLockedTarget = nil end
    end,
 })
 
-AutoFarmTab:Dropdown({
+SectionTarget:Dropdown({
    Title = "Position Offset (Hit Range)",
    Values = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
-   Value = "Close (~3 studs)",
+   Default = "Close (~3 studs)",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       if selected:find("Slightly Far") then
@@ -500,11 +445,11 @@ AutoFarmTab:Dropdown({
    end,
 })
 
-AutoFarmTab:Section({ Title = "Auto Farm Automation" })
+local SectionAuto = AutoFarmTab:Section({ Title = "Auto Farm Automation" })
 
-LowHpToggle = AutoFarmTab:Toggle({
+LowHpToggle = SectionAuto:Toggle({
    Title = "Auto Farm Low Health Players",
-   Value = false,
+   Default = false,
    Callback = function(value)
       autoFarmLowHpOn = value
       if value and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
@@ -512,9 +457,9 @@ LowHpToggle = AutoFarmTab:Toggle({
    end,
 })
 
-AllPlayersToggle = AutoFarmTab:Toggle({
+AllPlayersToggle = SectionAuto:Toggle({
    Title = "Auto Farm All Players",
-   Value = false,
+   Default = false,
    Callback = function(value)
       autoFarmAllOn = value
       if value and LowHpToggle then LowHpToggle:SetValue(false) end
@@ -522,10 +467,10 @@ AllPlayersToggle = AutoFarmTab:Toggle({
    end,
 })
 
-AutoFarmTab:Dropdown({
+SectionAuto:Dropdown({
    Title = "Low HP Target Threshold",
    Values = {"10 HP", "20 HP", "30 HP", "50 HP"},
-   Value = "20 HP",
+   Default = "20 HP",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       local val = tonumber(string.match(selected, "%d+"))
@@ -533,22 +478,21 @@ AutoFarmTab:Dropdown({
    end,
 })
 
-AutoFarmTab:Section({ Title = "Emergency Safety" })
+local SectionSafety = AutoFarmTab:Section({ Title = "Emergency Safety" })
 
-AutoFarmTab:Button({
+SectionSafety:Button({
    Title = "Teleport to Safe Space",
    Callback = function()
       teleportToSafeSpace()
    end,
 })
 --------------------------------------------------------------------------------
--- PART 3: ROLE-BASED DYNAMIC ESP (SURVIVORS & KILLERS)
+-- PART 3: ROLE-BASED DYNAMIC ESP
 --------------------------------------------------------------------------------
 
 local espOn = false
 local activeESP = {}
 
--- Character Role Sets
 local SURVIVOR_CLASSES = {
     ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
     ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
@@ -563,7 +507,6 @@ local KILLER_CLASSES = {
     ["azure"] = true
 }
 
--- Determine Role Colors (Blue = Survivor, Red = Killer)
 local function getRoleColor(targetChar)
     if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor" end
 
@@ -571,12 +514,12 @@ local function getRoleColor(targetChar)
     local charType = string.lower(tostring(rawCharType))
 
     if SURVIVOR_CLASSES[charType] then
-        return Color3.fromRGB(0, 150, 255), "Survivor" -- Blue
+        return Color3.fromRGB(0, 150, 255), "Survivor"
     elseif KILLER_CLASSES[charType] then
-        return Color3.fromRGB(255, 35, 35), "Killer"   -- Red
+        return Color3.fromRGB(255, 35, 35), "Killer"
     end
 
-    return Color3.fromRGB(0, 150, 255), "Survivor" -- Default Fallback
+    return Color3.fromRGB(0, 150, 255), "Survivor"
 end
 
 local function removeESP(plr)
@@ -655,13 +598,13 @@ local function applyESP(plr)
 end
 
 --------------------------------------------------------------------------------
--- WINDUI ELEMENTS (ESP TAB)
+-- ESP TAB ELEMENTS
 --------------------------------------------------------------------------------
-ESPTab:Section({ Title = "ESP Visuals" })
+local SectionESP = ESPTab:Section({ Title = "ESP Visuals" })
 
-ESPTab:Toggle({
+SectionESP:Toggle({
    Title = "Role ESP (Blue Survivor / Red Killer)",
-   Value = false,
+   Default = false,
    Callback = function(value)
       espOn = value
       if espOn then
@@ -684,13 +627,11 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- COMBAT TAB
+-- PART 4: COMBAT TAB & UTILITY TAB
 --------------------------------------------------------------------------------
 
--- Maximum distance (in studs) required for auto-aim to trigger
 local AIM_DISTANCE = 30 
 
--- Helper function to verify if the player's current character matches a name/type
 local function isMatchingCharacter(charName)
     local character = player.Character
     if not character then return false end
@@ -710,7 +651,6 @@ local function isMatchingCharacter(charName)
     end
 end
 
--- Helper function to find the closest valid target player
 local function getClosestTarget()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
@@ -737,7 +677,6 @@ local function getClosestTarget()
     return closestTarget
 end
 
--- Helper to make the player automatically face the target ONLY if within close distance
 local function aimAtTarget(targetChar)
     local character = player.Character
     if character and character:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
@@ -753,7 +692,9 @@ local function aimAtTarget(targetChar)
     return false
 end
 
--- 1. Auto Attack (Slasher M1)
+local SectionCombat1 = CombatTab:Section({ Title = "Main Attacks" })
+
+-- Auto Attack
 local autoAttackOn = false
 local function findRemote()
     local remote = ReplicatedStorage:FindFirstChild("JasonAttackRemote", true)
@@ -786,16 +727,16 @@ task.spawn(function()
     end
 end)
 
-CombatTab:Toggle({
-   Title = "Auto Attack (Slasher M1 - OP)",
-   Value = false,
+SectionCombat1:Toggle({
+   Title = "Auto Attack (Slasher M1)",
+   Default = false,
    Callback = function(value)
       autoAttackOn = value
       if value and not attackRemote then attackRemote = findRemote() end
    end,
 })
 
--- 2. Jason Behead
+-- Jason Behead
 local autoBeheadOn = false
 local function findBeheadRemote()
     local remote = ReplicatedStorage:FindFirstChild("Behead", true)
@@ -828,16 +769,16 @@ task.spawn(function()
     end
 end)
 
-CombatTab:Toggle({
+SectionCombat1:Toggle({
    Title = "Jason Behead",
-   Value = false,
+   Default = false,
    Callback = function(value)
       autoBeheadOn = value
       if value and not beheadRemote then beheadRemote = findBeheadRemote() end
    end,
 })
 
--- 3. Subject_0 Attack
+-- Subject_0 Attack
 local autoSubjectOn = false
 local function findSubjectRemote()
     local remote = ReplicatedStorage:FindFirstChild("SubjectAttackRemote", true)
@@ -870,147 +811,19 @@ task.spawn(function()
     end
 end)
 
-CombatTab:Toggle({
+SectionCombat1:Toggle({
    Title = "Subject_0 Attack",
-   Value = false,
+   Default = false,
    Callback = function(value)
       autoSubjectOn = value
       if value and not subjectRemote then subjectRemote = findSubjectRemote() end
    end,
 })
 
--- 4. Noli Attack
-local autoNoliOn = false
-local function findNoliRemote()
-    local remote = ReplicatedStorage:FindFirstChild("NoliAttackRemote", true)
-    if remote then return remote end
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities then
-        local noliFolder = charAbilities:FindFirstChild("Noli", true)
-        if noliFolder then return noliFolder:FindFirstChild("NoliAttackRemote", true) end
-    end
-    return nil
-end
-local noliRemote = findNoliRemote()
-
-task.spawn(function()
-    while true do
-        if autoNoliOn and isMatchingCharacter("Noli") then
-            local target = getClosestTarget()
-            local isClose = target and aimAtTarget(target)
-
-            if not noliRemote then noliRemote = findNoliRemote() end
-            if noliRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    noliRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    noliRemote:FireServer()
-                end
-            end
-        end
-        task.wait(0.2)
-    end
-end)
-
-CombatTab:Toggle({
-   Title = "Noli Attack",
-   Value = false,
-   Callback = function(value)
-      autoNoliOn = value
-      if value and not noliRemote then noliRemote = findNoliRemote() end
-   end,
-})
-
--- 5. John Doe Attack
-local autoJohnDoeOn = false
-local function findJohnDoeRemote()
-    local remote = ReplicatedStorage:FindFirstChild("JohnDoeAttackRemote", true)
-    if remote then return remote end
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities then
-        local johnDoeFolder = charAbilities:FindFirstChild("JohnDoe", true)
-        if johnDoeFolder then return johnDoeFolder:FindFirstChild("JohnDoeAttackRemote", true) end
-    end
-    return nil
-end
-local johnDoeRemote = findJohnDoeRemote()
-
-task.spawn(function()
-    while true do
-        if autoJohnDoeOn and isMatchingCharacter("JohnDoe") then
-            local target = getClosestTarget()
-            local isClose = target and aimAtTarget(target)
-
-            if not johnDoeRemote then johnDoeRemote = findJohnDoeRemote() end
-            if johnDoeRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    johnDoeRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    johnDoeRemote:FireServer()
-                end
-            end
-        end
-        task.wait(0.2)
-    end
-end)
-
-CombatTab:Toggle({
-   Title = "John Doe Attack",
-   Value = false,
-   Callback = function(value)
-      autoJohnDoeOn = value
-      if value and not johnDoeRemote then johnDoeRemote = findJohnDoeRemote() end
-   end,
-})
-
--- 6. Auto 1x4 Mass Infection
-local autoMassInfectionOn = false
-local function findMassInfectionRemote()
-    local remote = ReplicatedStorage:FindFirstChild("MassInfection", true)
-    if remote then return remote end
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities then
-        local folder1x4 = charAbilities:FindFirstChild("1x4", true)
-        if folder1x4 then return folder1x4:FindFirstChild("MassInfection", true) end
-    end
-    return nil
-end
-local massInfectionRemote = findMassInfectionRemote()
-
-task.spawn(function()
-    while true do
-        if autoMassInfectionOn and isMatchingCharacter("1x4") then
-            local target = getClosestTarget()
-            local isClose = target and aimAtTarget(target)
-
-            if not massInfectionRemote then massInfectionRemote = findMassInfectionRemote() end
-            if massInfectionRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    massInfectionRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    massInfectionRemote:FireServer()
-                end
-            end
-        end
-        task.wait(0.2)
-    end
-end)
-
-CombatTab:Toggle({
-   Title = "Auto 1x4 Mass Infection",
-   Value = false,
-   Callback = function(value)
-      autoMassInfectionOn = value
-      if value and not massInfectionRemote then massInfectionRemote = findMassInfectionRemote() end
-   end,
-})
-
--- 7. Camlock Target Focus
-local ACTIVATION_DISTANCE = 25
+-- Camlock
 local DROP_DISTANCE = 35
 local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
 local TURN_SMOOTHNESS = 0.35
-
 local currentTarget = nil
 local isLocked = false
 
@@ -1055,121 +868,36 @@ local function enableLock()
 	end)
 end
 
-CombatTab:Toggle({
+SectionCombat1:Toggle({
    Title = "Camlock Target Focus",
-   Value = false,
+   Default = false,
    Callback = function(value)
       if value then enableLock() else disableLock() end
    end,
 })
 
--- 8. Additional Attack Loops (Coolkid & 1x4 Fast Cast)
-CombatTab:Section({ Title = "Additional Attack Loops" })
-
-local coolkidAutoOn = false
-local auto1x4On = false
-
-local function findCoolkidRemote()
-    local remote = ReplicatedStorage:FindFirstChild("CoolkidAttackRemote", true)
-    if remote then return remote end
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities then
-        local coolkidFolder = charAbilities:FindFirstChild("Coolkid", true)
-        if coolkidFolder then return coolkidFolder:FindFirstChild("CoolkidAttackRemote", true) end
-    end
-    return nil
-end
-
-local function find1x4Remote()
-    local remote = ReplicatedStorage:FindFirstChild("1x4AttackRemote", true)
-    if remote then return remote end
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities then
-        local folder1x4 = charAbilities:FindFirstChild("1x4", true)
-        if folder1x4 then return folder1x4:FindFirstChild("1x4AttackRemote", true) end
-    end
-    return nil
-end
-
-local coolkidRemote = findCoolkidRemote()
-local remote1x4 = find1x4Remote()
-
-task.spawn(function()
-    while true do
-        if coolkidAutoOn and isMatchingCharacter("Coolkid") then
-            local target = getClosestTarget()
-            local isClose = target and aimAtTarget(target)
-            
-            if not coolkidRemote then coolkidRemote = findCoolkidRemote() end
-            if coolkidRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    coolkidRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    coolkidRemote:FireServer()
-                end
-            end
-        end
-        task.wait(0.2)
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if auto1x4On and isMatchingCharacter("1x4") then
-            local target = getClosestTarget()
-            local isClose = target and aimAtTarget(target)
-
-            if not remote1x4 then remote1x4 = find1x4Remote() end
-            if remote1x4 then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    remote1x4:FireServer(target.HumanoidRootPart.Position)
-                else
-                    remote1x4:FireServer()
-                end
-            end
-        end
-        task.wait(0.2)
-    end
-end)
-
-CombatTab:Toggle({
-   Title = "Coolkid Fast Cast",
-   Value = false,
-   Callback = function(value)
-      coolkidAutoOn = value
-      if value and not coolkidRemote then coolkidRemote = findCoolkidRemote() end
-   end,
-})
-
-CombatTab:Toggle({
-   Title = "1x4 Fast Cast",
-   Value = false,
-   Callback = function(value)
-      auto1x4On = value
-      if value and not remote1x4 then remote1x4 = find1x4Remote() end
-   end,
-})
-
 --------------------------------------------------------------------------------
--- UTILITY TAB
+-- UTILITY TAB ELEMENTS
 --------------------------------------------------------------------------------
+local SectionMovement = UtilityTab:Section({ Title = "Movement Mods" })
+
 local tpwalkOn = false
 local speed = 1
 
-UtilityTab:Toggle({
+SectionMovement:Toggle({
    Title = "TpWalk",
-   Value = false,
+   Default = false,
    Callback = function(value)
       tpwalkOn = value
    end,
 })
 
-UtilityTab:Slider({
+SectionMovement:Slider({
    Title = "TpWalk Speed",
    Min = 1,
    Max = 10,
    Step = 1,
-   Value = 1,
+   Default = 1,
    Callback = function(value)
       speed = value
    end,
@@ -1183,10 +911,10 @@ RS.RenderStepped:Connect(function()
     end
 end)
 
-local savedPos = Vector3.new(-1119.03076171875, 894.944580078125, -85.89985656738281)
+local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
 local platform
 
-UtilityTab:Button({
+SectionMovement:Button({
    Title = "Save Place (Platform TP)",
    Callback = function()
       local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -1205,31 +933,30 @@ UtilityTab:Button({
    end,
 })
 --------------------------------------------------------------------------------
--- PART 5: LOW HEALTH PROTECTION & TELEPORTER TAB
+-- PART 5: PROTECTION & TELEPORTER
 --------------------------------------------------------------------------------
 
--- 1. LOW HEALTH PROTECTION (Movement & Misc Tab)
 local lowHealthProtectionOn = false
 local healthThreshold = 40
 local protectionPlatform = nil
 local safePosition = Vector3.new(-1119.03, 894.94, -85.90)
 
-UtilityTab:Section({ Title = "Safety & Protection" })
+local SectionSafety = UtilityTab:Section({ Title = "Safety & Protection" })
 
-UtilityTab:Toggle({
+SectionSafety:Toggle({
    Title = "Low Health Auto-Teleport",
-   Value = false,
+   Default = false,
    Callback = function(value)
       lowHealthProtectionOn = value
    end,
 })
 
-UtilityTab:Slider({
+SectionSafety:Slider({
    Title = "Health Threshold",
    Min = 10,
    Max = 80,
    Step = 5,
-   Value = 40,
+   Default = 40,
    Callback = function(value)
       healthThreshold = value
    end,
@@ -1264,7 +991,11 @@ task.spawn(function()
     end
 end)
 
--- 2. PLAYER TELEPORTER (Dedicated TeleportTab)
+--------------------------------------------------------------------------------
+-- TELEPORT TAB ELEMENTS
+--------------------------------------------------------------------------------
+local SectionTeleport = TeleportTab:Section({ Title = "Player Teleporter" })
+
 local selectedPlayer = nil
 local stickInFrontOn = false
 local stickOffset = 5.5
@@ -1291,35 +1022,17 @@ end
 
 updatePlayerList()
 
-TeleportTab:Section({ Title = "Player Teleporter" })
-
-local PlayerDropdown = TeleportTab:Dropdown({
+local PlayerDropdown = SectionTeleport:Dropdown({
    Title = "Select Target Player",
    Values = playerDropdownOptions,
-   Value = playerDropdownOptions[1] or "No Other Players",
+   Default = playerDropdownOptions[1] or "No Other Players",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       selectedPlayer = playerMap[selected]
    end,
 })
 
-local function refreshDropdown()
-    updatePlayerList()
-    if PlayerDropdown and PlayerDropdown.Refresh then
-        PlayerDropdown:Refresh(playerDropdownOptions, playerDropdownOptions[1])
-    end
-end
-
-Players.PlayerAdded:Connect(refreshDropdown)
-Players.PlayerRemoving:Connect(function(p)
-    if selectedPlayer == p then
-        selectedPlayer = nil
-        stickInFrontOn = false
-    end
-    refreshDropdown()
-end)
-
-TeleportTab:Button({
+SectionTeleport:Button({
    Title = "Teleport to Player",
    Callback = function()
       if selectedPlayer and selectedPlayer.Character then
@@ -1332,20 +1045,20 @@ TeleportTab:Button({
    end,
 })
 
-TeleportTab:Toggle({
+SectionTeleport:Toggle({
    Title = "Stick in Front of Player",
-   Value = false,
+   Default = false,
    Callback = function(value)
       stickInFrontOn = value
    end,
 })
 
-TeleportTab:Slider({
+SectionTeleport:Slider({
    Title = "Stick Distance Offset",
    Min = 2,
    Max = 25,
    Step = 0.5,
-   Value = 5.5,
+   Default = 5.5,
    Callback = function(value)
       stickOffset = value
    end,
@@ -1378,11 +1091,10 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 CONTROLLER (GUEST1337 TAB)
+-- PART 6: GUEST1337 CONTROLLER
 --------------------------------------------------------------------------------
 
--- Remote Event/Function Finder for Guest1337
-local function findRemote(possibleNames)
+local function findGuestRemote(possibleNames)
     for _, name in ipairs(possibleNames) do
         local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
         if charAbilities then
@@ -1399,10 +1111,9 @@ local function findRemote(possibleNames)
     return nil
 end
 
-local punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"})
-local chargeRemote = findRemote({"ChargeRemote", "Charge"})
+local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack"})
+local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
 
--- State variables
 local isPunchLooping = false
 local isChargeLooping = false
 local isComboLooping = false
@@ -1410,7 +1121,6 @@ local isAimingEnabled = false
 local loopDelay = 0
 local targetSpeed = 16
 
--- Helper to find nearest player character
 local function getNearestPlayer()
     local myChar = player.Character
     if not myChar then return nil end
@@ -1438,7 +1148,6 @@ local function getNearestPlayer()
     return nearestTarget
 end
 
--- Aim at nearest target
 local function faceNearestPlayer()
     if not isAimingEnabled then return end
     if not (isPunchLooping or isChargeLooping or isComboLooping) then return end
@@ -1454,7 +1163,6 @@ local function faceNearestPlayer()
     end
 end
 
--- Helper to execute remote safely based on class type
 local function safeTriggerRemote(remoteObj)
     if not remoteObj then return end
     faceNearestPlayer()
@@ -1468,7 +1176,6 @@ local function safeTriggerRemote(remoteObj)
     end
 end
 
--- Movement Enforcement
 RS.RenderStepped:Connect(function(deltaTime)
     if not (isPunchLooping or isComboLooping) then return end
 
@@ -1497,11 +1204,10 @@ RS.RenderStepped:Connect(function(deltaTime)
     end
 end)
 
--- Loop Tasks
 task.spawn(function()
     while true do
         if isPunchLooping then
-            if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"}) end
+            if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack"}) end
             safeTriggerRemote(punchRemote)
         end
         if loopDelay > 0 then task.wait(loopDelay) else task.wait(0.05) end
@@ -1511,7 +1217,7 @@ end)
 task.spawn(function()
     while true do
         if isChargeLooping then
-            if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge"}) end
+            if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
             safeTriggerRemote(chargeRemote)
         end
         if loopDelay > 0 then task.wait(loopDelay) else task.wait(0.05) end
@@ -1521,8 +1227,8 @@ end)
 task.spawn(function()
     while true do
         if isComboLooping then
-            if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack"}) end
-            if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge"}) end
+            if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack"}) end
+            if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
             
             safeTriggerRemote(chargeRemote)
             safeTriggerRemote(punchRemote)
@@ -1531,44 +1237,46 @@ task.spawn(function()
     end
 end)
 
--- UI Setup (WindUI Standard)
-GuestTab:Section({ Title = "Guest Loops" })
+--------------------------------------------------------------------------------
+-- GUEST TAB ELEMENTS
+--------------------------------------------------------------------------------
+local SectionLoops = GuestTab:Section({ Title = "Guest Loops" })
 
-GuestTab:Toggle({
+SectionLoops:Toggle({
    Title = "Punch Loop",
-   Value = false,
+   Default = false,
    Callback = function(value)
       isPunchLooping = value
    end,
 })
 
-GuestTab:Toggle({
+SectionLoops:Toggle({
    Title = "Charge Loop",
-   Value = false,
+   Default = false,
    Callback = function(value)
       isChargeLooping = value
    end,
 })
 
-GuestTab:Toggle({
+SectionLoops:Toggle({
    Title = "Both Loop (Combo)",
-   Value = false,
+   Default = false,
    Callback = function(value)
       isComboLooping = value
    end,
 })
 
-GuestTab:Section({ Title = "Targeting & Delay" })
+local SectionTargeting = GuestTab:Section({ Title = "Targeting & Delay" })
 
-GuestTab:Toggle({
+SectionTargeting:Toggle({
    Title = "Aim Nearest",
-   Value = false,
+   Default = false,
    Callback = function(value)
       isAimingEnabled = value
    end,
 })
 
-GuestTab:Input({
+SectionTargeting:Input({
    Title = "Loop Delay (Seconds)",
    Placeholder = "0",
    Callback = function(text)
