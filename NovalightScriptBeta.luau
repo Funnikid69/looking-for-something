@@ -33,6 +33,7 @@ local Window = WindUI:CreateWindow({
     Folder = "NovalightConfig",
     Size = UDim2.fromOffset(580, 460),
     Theme = "Dark",
+    SideBarWidth = 180,
     OpenButton = {
         Title = "Open Hub",
         CornerRadius = UDim2.new(1, 0),
@@ -41,13 +42,16 @@ local Window = WindUI:CreateWindow({
     }
 })
 
---// TABS
+--// TABS SETUP (Correct Method Syntax)
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local AutoFarmTab = Window:Tab({ Title = "Auto Farm", Icon = "crosshair" })
 local ESPTab = Window:Tab({ Title = "ESP", Icon = "eye" })
 local UtilityTab = Window:Tab({ Title = "Movement & Misc", Icon = "zap" })
 local TeleportTab = Window:Tab({ Title = "Teleporter", Icon = "map-pin" })
 local GuestTab = Window:Tab({ Title = "Guest1337", Icon = "user" })
+
+-- Select default active tab
+Window:SelectTab(1)
 
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
@@ -157,12 +161,12 @@ local ShedletskyAbilities = {
 }
 
 local NoliAbilities = {
-	["MainAbility"] = { -- Slash
+	["MainAbility"] = {
 		["Cooldown"] = 1.8,
 		["LastUsed"] = 0,
 		["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliAttackRemote")
 	},
-	["AltAbility2"] = { -- Nova
+	["AltAbility2"] = {
 		["Cooldown"] = 0,
 		["LastUsed"] = 0,
 		["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
@@ -205,7 +209,7 @@ local function canUseCharacter()
 	end
 	return true
 end
---------------------------------------------------------------------------------
+--------------------------------------------------------
 -- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
 
