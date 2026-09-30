@@ -198,8 +198,10 @@ local function canUseCharacter()
 	return true
 end
 --------------------------------------------------------------------------------
--- ANIMATION & ACTION HANDLER
+-- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
+
+-- ANIMATION & ACTION HANDLER
 local function playShedletskyAnim()
 	if not char or not hum then return end
 	local anim = Instance.new("Animation")
@@ -447,31 +449,34 @@ RS.Heartbeat:Connect(function()
 		teleportToSafeSpace()
 	end
 end)
+
 --------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (GEN 2 PREVIEW SYNTAX)
+-- AUTO FARM TAB ELEMENTS (RAYFIELD GEN 2 SYNTAX)
 --------------------------------------------------------------------------------
+AutoFarmTab:CreateSection("Targeting Options")
+
 AutoFarmTab:CreateToggle({
-   name = "Lock in Front of Person",
-   currentValue = false,
-   callback = function(value)
+   Name = "Lock in Front of Person",
+   CurrentValue = false,
+   Callback = function(value)
       lockInFrontOn = value
    end,
 })
 
 AutoFarmTab:CreateToggle({
-   name = "Stick to Person?",
-   currentValue = false,
-   callback = function(value)
+   Name = "Stick to Person?",
+   CurrentValue = false,
+   Callback = function(value)
       stickToPersonOn = value
       if not value then currentLockedTarget = nil end
    end,
 })
 
 AutoFarmTab:CreateDropdown({
-   name = "Position Offset (Hit Range)",
-   options = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
-   currentOption = "Close (~3 studs)",
-   callback = function(option)
+   Name = "Position Offset (Hit Range)",
+   Options = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
+   CurrentOption = "Close (~3 studs)",
+   Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       if selected:find("Slightly Far") then
          hitDistanceOffset = 5.5
@@ -483,10 +488,12 @@ AutoFarmTab:CreateDropdown({
    end,
 })
 
+AutoFarmTab:CreateSection("Auto Farm Automation")
+
 LowHpToggle = AutoFarmTab:CreateToggle({
-   name = "Auto Farm Low Health Players",
-   currentValue = false,
-   callback = function(value)
+   Name = "Auto Farm Low Health Players",
+   CurrentValue = false,
+   Callback = function(value)
       autoFarmLowHpOn = value
       if value and AllPlayersToggle then AllPlayersToggle:Set(false) end
       if not value then currentLockedTarget = nil end
@@ -494,9 +501,9 @@ LowHpToggle = AutoFarmTab:CreateToggle({
 })
 
 AllPlayersToggle = AutoFarmTab:CreateToggle({
-   name = "Auto Farm All Players",
-   currentValue = false,
-   callback = function(value)
+   Name = "Auto Farm All Players",
+   CurrentValue = false,
+   Callback = function(value)
       autoFarmAllOn = value
       if value and LowHpToggle then LowHpToggle:Set(false) end
       if not value then currentLockedTarget = nil end
@@ -504,28 +511,61 @@ AllPlayersToggle = AutoFarmTab:CreateToggle({
 })
 
 AutoFarmTab:CreateDropdown({
-   name = "Low HP Target Threshold",
-   options = {"10 HP", "20 HP", "30 HP", "50 HP"},
-   currentOption = "20 HP",
-   callback = function(option)
+   Name = "Low HP Target Threshold",
+   Options = {"10 HP", "20 HP", "30 HP", "50 HP"},
+   CurrentOption = "20 HP",
+   Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       local val = tonumber(string.match(selected, "%d+"))
       if val then targetHealthThreshold = val end
    end,
 })
 
+AutoFarmTab:CreateSection("Emergency Safety")
+
 AutoFarmTab:CreateButton({
-   name = "Teleport to Safe Space",
-   callback = function()
+   Name = "Teleport to Safe Space",
+   Callback = function()
       teleportToSafeSpace()
    end,
 })
+--------------------------------------------------------------------------------
+-- PART 3: ROLE-BASED DYNAMIC ESP (SURVIVORS & KILLERS)
+--------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
--- RELIABLE BLUE HIGHLIGHT + TEXT ESP
---------------------------------------------------------------------------------
 local espOn = false
 local activeESP = {}
+
+-- Character Role Sets
+local SURVIVOR_CLASSES = {
+    ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
+    ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
+    ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true,
+    ["janedoe"] = true, ["messi"] = true, ["noob"] = true
+}
+
+local KILLER_CLASSES = {
+    ["slasher"] = true, ["jason"] = true, ["coolkid"] = true,
+    ["1x4"] = true, ["noli"] = true, ["swordsmaster"] = true,
+    ["guest666"] = true, ["2011x"] = true, ["johndoe"] = true,
+    ["azure"] = true
+}
+
+-- Determine Role Colors (Blue = Survivor, Red = Killer)
+local function getRoleColor(targetChar)
+    if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor" end
+
+    local rawCharType = targetChar:GetAttribute("Character") or targetChar.Name
+    local charType = string.lower(tostring(rawCharType))
+
+    if SURVIVOR_CLASSES[charType] then
+        return Color3.fromRGB(0, 150, 255), "Survivor" -- Blue
+    elseif KILLER_CLASSES[charType] then
+        return Color3.fromRGB(255, 35, 35), "Killer"   -- Red
+    end
+
+    return Color3.fromRGB(0, 150, 255), "Survivor" -- Default Fallback
+end
 
 local function removeESP(plr)
     if activeESP[plr] then
@@ -549,9 +589,11 @@ local function applyESP(plr)
         
         if not root or not targetHum then return end
 
+        local roleColor, roleName = getRoleColor(targetChar)
+
         local highlight = Instance.new("Highlight")
         highlight.Name = "ESP_Highlight"
-        highlight.FillColor = Color3.fromRGB(0, 150, 255)
+        highlight.FillColor = roleColor
         highlight.FillTransparency = 0.5
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.OutlineTransparency = 0
@@ -569,7 +611,7 @@ local function applyESP(plr)
         local label = Instance.new("TextLabel", billboard)
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextColor3 = roleColor
         label.TextStrokeTransparency = 0
         label.Font = Enum.Font.SourceSansBold
         label.TextSize = 14
@@ -579,9 +621,13 @@ local function applyESP(plr)
                 highlight.Enabled = false
                 billboard.Enabled = false
             else
+                local updatedColor, updatedRole = getRoleColor(targetChar)
+                highlight.FillColor = updatedColor
+                label.TextColor3 = updatedColor
+
                 highlight.Enabled = true
                 billboard.Enabled = true
-                label.Text = plr.Name .. " | " .. math.floor(targetHum.Health) .. " HP"
+                label.Text = string.format("%s [%s] | %d HP", plr.Name, updatedRole, math.floor(targetHum.Health))
             end
         end)
 
@@ -596,10 +642,15 @@ local function applyESP(plr)
     plr.CharacterAdded:Connect(setupChar)
 end
 
+--------------------------------------------------------------------------------
+-- RAYFIELD GEN 2 UI ELEMENTS (ESP TAB)
+--------------------------------------------------------------------------------
+ESPTab:CreateSection("ESP Visuals")
+
 ESPTab:CreateToggle({
-   name = "Blue Highlight & Box ESP",
-   currentValue = false,
-   callback = function(value)
+   Name = "Role ESP (Blue Survivor / Red Killer)",
+   CurrentValue = false,
+   Callback = function(value)
       espOn = value
       if espOn then
          for _, p in ipairs(Players:GetPlayers()) do
@@ -1517,4 +1568,3 @@ GuestTab:CreateInput({
       end
    end,
 })
-
