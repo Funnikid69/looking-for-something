@@ -6,7 +6,6 @@ local ALLOWED_PLACE_IDS = {
 	[99585784721880]  = true,
 	[99055603649009]  = true,
 	[70444122688316]  = true,
-    [80367872454439]  = true,
 }
 
 if not ALLOWED_PLACE_IDS[game.PlaceId] then
@@ -29,18 +28,18 @@ local camera = workspace.CurrentCamera
 
 --// RAYFIELD WINDOW SETUP (GEN 2)
 local Window = Rayfield:CreateWindow({
-   name = "FLUXUSSAKEN FREE FOR ALL",
-   subtitle = "by PASTWAY",
-   sidebarLayout = true,
+   Name = "Novalight Beta",
+   Subtitle = "by Chwaa",
+   SidebarLayout = true,
 })
 
 --// TABS (GEN 2 SYNTAX)
-local CombatTab = Window:CreateTab({ name = "Combat", icon = 4483362458 })
-local AutoFarmTab = Window:CreateTab({ name = "Auto Farm", icon = 4483362458 })
-local ESPTab = Window:CreateTab({ name = "ESP", icon = 4483362458 })
-local UtilityTab = Window:CreateTab({ name = "Movement & Misc", icon = 4483362458 })
-local TeleportTab = Window:CreateTab({ name = "Teleporter", icon = 4483362458 })
-local GuestTab = Window:CreateTab({ name = "Guest1337", icon = 4483362458 })
+local CombatTab = Window:CreateTab({ Name = "Combat", Icon = 4483362458 })
+local AutoFarmTab = Window:CreateTab({ Name = "Auto Farm", Icon = 4483362458 })
+local ESPTab = Window:CreateTab({ Name = "ESP", Icon = 4483362458 })
+local UtilityTab = Window:CreateTab({ Name = "Movement & Misc", Icon = 4483362458 })
+local TeleportTab = Window:CreateTab({ Name = "Teleporter", Icon = 4483362458 })
+local GuestTab = Window:CreateTab({ Name = "Guest1337", Icon = 4483362458 })
 
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
@@ -1518,3 +1517,4 @@ GuestTab:CreateInput({
       end
    end,
 })
+
