@@ -168,7 +168,12 @@ end
 --------------------------------------------------------------------------------
 
 local function playShedletskyAnim()
-	if not char or not hum then return end
+	if not char or not hum or hum.Health <= 0 then return end
+	
+	-- Verify Shedletsky specific attributes before executing
+	if char:GetAttribute("Character") ~= "Shedletsky" then return end
+	if char:GetAttribute("CanAttack") == false or char:GetAttribute("AbilitiesDisabled") == true then return end
+
 	local anim = Instance.new("Animation")
 	local skin = char:GetAttribute("Skin")
 	local actualSkin = char:GetAttribute("ActualSkin")
@@ -191,18 +196,10 @@ local function playShedletskyAnim()
 	elseif skin == "VIPShed" then anim.AnimationId = "rbxassetid://80100528383027"
 	else anim.AnimationId = "rbxassetid://107302018639039" end
 
-	local track = hum:LoadAnimation(anim)
-	track:Play()
-
-	local conn
-	conn = char:GetAttributeChangedSignal("HitSlash"):Connect(function()
-		if char:GetAttribute("HitSlash") and skin ~= "Blega" then
-			track:Stop()
-			local hitAnim = Instance.new("Animation")
-			hitAnim.AnimationId = "rbxassetid://104029412142861"
-			hum:LoadAnimation(hitAnim):Play()
-			if conn then conn:Disconnect() end
-		end
+	-- Play anim safely without blocking remote execution
+	task.spawn(function()
+		local track = hum:LoadAnimation(anim)
+		track:Play()
 	end)
 end
 
@@ -238,6 +235,12 @@ local function castCharacterAction(actionName, targetPosition)
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
 
+			-- Orient towards target if available before executing attack
+			if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
+				local myRoot = char.HumanoidRootPart
+				myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
+			end
+
 			if cType == "Shedletsky" and actionName == "Slash" then
 				playShedletskyAnim()
 			elseif cType == "Noli" and actionName == "MainAbility" then
@@ -246,9 +249,17 @@ local function castCharacterAction(actionName, targetPosition)
 
 			if cType == "Noli" and actionName == "AltAbility2" then
 				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-				data.Remote:FireServer(aimPos, true)
+				if data.Remote:IsA("RemoteEvent") then
+					data.Remote:FireServer(aimPos, true)
+				elseif data.Remote:IsA("RemoteFunction") then
+					data.Remote:InvokeServer(aimPos, true)
+				end
 			else
-				data.Remote:FireServer()
+				if data.Remote:IsA("RemoteEvent") then
+					data.Remote:FireServer()
+				elseif data.Remote:IsA("RemoteFunction") then
+					data.Remote:InvokeServer()
+				end
 			end
 		end
 	end
