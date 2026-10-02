@@ -167,10 +167,12 @@ end
 -- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
 
+-- Direct Remote References
+local shedletskyRemote = game:GetService("ReplicatedStorage").CharacterAbilities.Shedletsky.ShedletskyAttackRemote
+
 local function playShedletskyAnim()
 	if not char or not hum or hum.Health <= 0 then return end
 	
-	-- Verify Shedletsky specific attributes before executing
 	if char:GetAttribute("Character") ~= "Shedletsky" then return end
 	if char:GetAttribute("CanAttack") == false or char:GetAttribute("AbilitiesDisabled") == true then return end
 
@@ -196,7 +198,6 @@ local function playShedletskyAnim()
 	elseif skin == "VIPShed" then anim.AnimationId = "rbxassetid://80100528383027"
 	else anim.AnimationId = "rbxassetid://107302018639039" end
 
-	-- Play anim safely without blocking remote execution
 	task.spawn(function()
 		local track = hum:LoadAnimation(anim)
 		track:Play()
@@ -230,12 +231,16 @@ local function castCharacterAction(actionName, targetPosition)
 	if not abilityTable then return end
 	local data = abilityTable[actionName]
 
-	if data and data.Remote then
+	if data then
+		-- Override remote reference for Shedletsky Slash to ensure direct path
+		local targetRemote = (cType == "Shedletsky" and actionName == "Slash") and shedletskyRemote or data.Remote
+		if not targetRemote then return end
+
 		local now = os.clock()
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
 
-			-- Orient towards target if available before executing attack
+			-- Aim at target
 			if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
 				local myRoot = char.HumanoidRootPart
 				myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
@@ -249,16 +254,16 @@ local function castCharacterAction(actionName, targetPosition)
 
 			if cType == "Noli" and actionName == "AltAbility2" then
 				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-				if data.Remote:IsA("RemoteEvent") then
-					data.Remote:FireServer(aimPos, true)
-				elseif data.Remote:IsA("RemoteFunction") then
-					data.Remote:InvokeServer(aimPos, true)
+				if targetRemote:IsA("RemoteEvent") then
+					targetRemote:FireServer(aimPos, true)
+				elseif targetRemote:IsA("RemoteFunction") then
+					targetRemote:InvokeServer(aimPos, true)
 				end
 			else
-				if data.Remote:IsA("RemoteEvent") then
-					data.Remote:FireServer()
-				elseif data.Remote:IsA("RemoteFunction") then
-					data.Remote:InvokeServer()
+				if targetRemote:IsA("RemoteEvent") then
+					targetRemote:FireServer()
+				elseif targetRemote:IsA("RemoteFunction") then
+					targetRemote:InvokeServer()
 				end
 			end
 		end
