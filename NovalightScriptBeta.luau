@@ -80,39 +80,6 @@ local function teleportToSafeSpace()
 end
 
 --------------------------------------------------------------------------------
--- MOVEMENT / TPWALK SYSTEM (FIXED FOR WINDUI)
---------------------------------------------------------------------------------
-local SectionMovement = UtilityTab:Section({ Title = "Movement Modifications" })
-
-local tpWalkEnabled = false
-local tpWalkSpeed = 16
-
-SectionMovement:Toggle({
-   Title = "Enable TP Walk",
-   Default = false,
-   Callback = function(value)
-      tpWalkEnabled = value
-   end,
-})
-
-SectionMovement:Slider({
-   Title = "TP Walk Speed",
-   Value = { Min = 16, Max = 150, Default = 16, Step = 1 },
-   Callback = function(value)
-      tpWalkSpeed = tonumber(value) or 16
-   end,
-})
-
-RS.Heartbeat:Connect(function(delta)
-    if tpWalkEnabled and char and hum and hum.Health > 0 then
-        local myRoot = char:FindFirstChild("HumanoidRootPart")
-        if myRoot and hum.MoveDirection.Magnitude > 0 then
-            myRoot.CFrame = myRoot.CFrame + (hum.MoveDirection * (tpWalkSpeed * delta))
-        end
-    end
-end)
-
---------------------------------------------------------------------------------
 -- ANTI-VOID SYSTEM
 --------------------------------------------------------------------------------
 local ANTI_VOID_HEIGHT = -150
@@ -192,7 +159,8 @@ local function canUseCharacter()
 	if cType == "Jason" or cType == "Slasher" or cType == "Noli" then
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType == "Shedletsky" then
-		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
+		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= tru
+e
 	end
 	return true
 end
@@ -783,7 +751,7 @@ SectionCombat1:Toggle({
 })
 
 --------------------------------------------------------------------------------
--- UTILITY TAB ELEMENTS
+-- UTILITY TAB ELEMENTS (FIXED FOR WINDUI)
 --------------------------------------------------------------------------------
 local SectionMovement = UtilityTab:Section({ Title = "Movement Mods" })
 
@@ -798,22 +766,22 @@ SectionMovement:Toggle({
    end,
 })
 
+-- Fixed WindUI Slider format
 SectionMovement:Slider({
    Title = "TpWalk Speed",
-   Min = 1,
-   Max = 10,
-   Step = 1,
-   Default = 1,
+   Value = { Min = 1, Max = 10, Default = 1, Step = 1 },
    Callback = function(value)
-      speed = value
+      speed = tonumber(value) or 1
    end,
 })
 
-RS.RenderStepped:Connect(function()
+RS.Heartbeat:Connect(function()
     if tpwalkOn and char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
         local hrp = char.HumanoidRootPart
         local move = char.Humanoid.MoveDirection
-        hrp.CFrame = hrp.CFrame + (move * speed)
+        if move.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (move * speed)
+        end
     end
 end)
 
@@ -825,7 +793,7 @@ SectionMovement:Button({
    Callback = function()
       local hrp = char and char:FindFirstChild("HumanoidRootPart")
       if not hrp then return end
-      if not platform then
+      if not platform or not platform.Parent then
           platform = Instance.new("Part")
           platform.Size = Vector3.new(60, 5, 60)
           platform.Position = savedPos
