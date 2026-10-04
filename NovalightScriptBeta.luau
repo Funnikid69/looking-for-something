@@ -80,7 +80,7 @@ local function teleportToSafeSpace()
 end
 
 --------------------------------------------------------------------------------
--- MOVEMENT / TPWALK SYSTEM
+-- MOVEMENT / TPWALK SYSTEM (FIXED FOR WINDUI)
 --------------------------------------------------------------------------------
 local SectionMovement = UtilityTab:Section({ Title = "Movement Modifications" })
 
@@ -99,14 +99,14 @@ SectionMovement:Slider({
    Title = "TP Walk Speed",
    Value = { Min = 16, Max = 150, Default = 16, Step = 1 },
    Callback = function(value)
-      tpWalkSpeed = value
+      tpWalkSpeed = tonumber(value) or 16
    end,
 })
 
-RS.RenderStepped:Connect(function(delta)
-    if tpWalkEnabled and char and hum and hum.MoveDirection.Magnitude > 0 then
+RS.Heartbeat:Connect(function(delta)
+    if tpWalkEnabled and char and hum and hum.Health > 0 then
         local myRoot = char:FindFirstChild("HumanoidRootPart")
-        if myRoot then
+        if myRoot and hum.MoveDirection.Magnitude > 0 then
             myRoot.CFrame = myRoot.CFrame + (hum.MoveDirection * (tpWalkSpeed * delta))
         end
     end
@@ -1187,3 +1187,4 @@ SectionTargeting:Input({
       end
    end,
 })
+
