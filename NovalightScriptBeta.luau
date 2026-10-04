@@ -232,7 +232,6 @@ local function castCharacterAction(actionName, targetPosition)
 	local data = abilityTable[actionName]
 
 	if data then
-		-- Override remote reference for Shedletsky Slash to ensure direct path
 		local targetRemote = (cType == "Shedletsky" and actionName == "Slash") and shedletskyRemote or data.Remote
 		if not targetRemote then return end
 
@@ -240,7 +239,6 @@ local function castCharacterAction(actionName, targetPosition)
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
 
-			-- Aim at target
 			if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
 				local myRoot = char.HumanoidRootPart
 				myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
@@ -350,9 +348,28 @@ local function positionAtTarget(targetPlayer)
 	end
 end
 
+local function triggerEmergencySafety()
+	autoFarmLowHpOn = false
+	autoFarmAllOn = false
+	currentLockedTarget = nil
+
+	if LowHpToggle then LowHpToggle:SetValue(false) end
+	if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
+
+	task.defer(function()
+		teleportToSafeSpace()
+	end)
+end
+
 RS.Stepped:Connect(function()
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 	if not char or not hum or hum.Health <= 0 then return end
+
+	-- Check low health threshold during movement step
+	if hum.Health <= 30 then
+		triggerEmergencySafety()
+		return
+	end
 
 	local activeTarget = nil
 
@@ -378,13 +395,9 @@ RS.Heartbeat:Connect(function()
 
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
+	-- Check low health threshold during action step
 	if hum and hum.Health <= 30 then
-		if autoFarmLowHpOn and LowHpToggle then LowHpToggle:SetValue(false) end
-		if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
-		autoFarmLowHpOn = false
-		autoFarmAllOn = false
-		currentLockedTarget = nil
-		teleportToSafeSpace()
+		triggerEmergencySafety()
 		return
 	end
 
@@ -418,7 +431,6 @@ RS.Heartbeat:Connect(function()
 		end
 	else
 		currentLockedTarget = nil
-		teleportToSafeSpace()
 	end
 end)
 
@@ -958,7 +970,7 @@ local safePosition = Vector3.new(-1119.03, 894.94, -85.90)
 
 local SectionSafety = UtilityTab:Section({ Title = "Safety & Protection" })
 
-SectionSafety:Toggle({
+local ProtectionToggle = SectionSafety:Toggle({
    Title = "Low Health Auto-Teleport",
    Default = false,
    Callback = function(value)
@@ -968,10 +980,7 @@ SectionSafety:Toggle({
 
 SectionSafety:Slider({
    Title = "Health Threshold",
-   Min = 10,
-   Max = 80,
-   Step = 5,
-   Default = 40,
+   Value = { Min = 10, Max = 80, Default = 40, Step = 5 },
    Callback = function(value)
       healthThreshold = value
    end,
@@ -1000,6 +1009,7 @@ task.spawn(function()
 
                     hrp.CFrame = CFrame.new(safePosition + Vector3.new(0, 6, 0))
                     lowHealthProtectionOn = false
+                    if ProtectionToggle then ProtectionToggle:SetValue(false) end
                 end
             end
         end
@@ -1070,10 +1080,7 @@ SectionTeleport:Toggle({
 
 SectionTeleport:Slider({
    Title = "Stick Distance Offset",
-   Min = 2,
-   Max = 25,
-   Step = 0.5,
-   Default = 5.5,
+   Value = { Min = 2, Max = 25, Default = 5.5, Step = 0.5 },
    Callback = function(value)
       stickOffset = value
    end,
