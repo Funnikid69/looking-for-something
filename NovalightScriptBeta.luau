@@ -160,31 +160,109 @@ local function canUseCharacter()
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType == "Shedletsky" then
 		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
+
 	end
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: AUTO FARM & TARGETING SYSTEM
+-- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
 
-local function isTargetAliveAndValid(target)
-	if not target or target == player then return false end
-	local targetChar = target.Character
-	if not targetChar then return false end
+local function playShedletskyAnim()
+	if not char or not hum then return end
+	local anim = Instance.new("Animation")
+	local skin = char:GetAttribute("Skin")
+	local actualSkin = char:GetAttribute("ActualSkin")
 
-	local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-	local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+	if skin == "RetroShed" then anim.AnimationId = "rbxassetid://84906874339359"
+	elseif skin == "M100Shed" or skin == "M75Shed" then anim.AnimationId = "rbxassetid://72661064392418"
+	elseif skin == "BusterShedletsky" then anim.AnimationId = "rbxassetid://102735588255002"
+	elseif skin == "ButcherShedletsky" then anim.AnimationId = "rbxassetid://83703568665249"
+	elseif skin == "NessShedletsky" or skin == "Scout" then anim.AnimationId = "rbxassetid://117635960799966"
+	elseif skin == "Targetman" then anim.AnimationId = "rbxassetid://117814766896269"
+	elseif skin == "SCP" then anim.AnimationId = "rbxassetid://113516249240896"
+	elseif skin == "Snyfort" or skin == "Pastelbeat" or skin == "Upbeat" or skin == "SoapyDX" or skin == "SoapyDXLegacy" or skin == "DownTunes" then anim.AnimationId = "rbxassetid://115680124099922"
+	elseif skin == "Pastello" and (actualSkin ~= "Pastello3" and actualSkin ~= "Pastello4") then anim.AnimationId = "rbxassetid://79130710510782"
+	elseif skin == "Pastello" and actualSkin == "Pastello3" then anim.AnimationId = "rbxassetid://99539026106525"
+	elseif skin == "Pastello" and actualSkin == "Pastello4" then anim.AnimationId = "rbxassetid://115470481199645"
+	elseif skin == "GoldenShedletsky" then anim.AnimationId = "rbxassetid://94865308722467"
+	elseif skin == "TillDawnShedletsky" then anim.AnimationId = "rbxassetid://112474546068323"
+	elseif skin == "Blega" then anim.AnimationId = "rbxassetid://74816403474613"
+	elseif skin == "SoapyDX4" then anim.AnimationId = "rbxassetid://122628818808958"
+	elseif skin == "VIPShed" then anim.AnimationId = "rbxassetid://80100528383027"
+	else anim.AnimationId = "rbxassetid://107302018639039" end
 
-	if not targetHum or not targetHrp or targetHum.Health <= 0 then
-		return false
-	end
+	local track = hum:LoadAnimation(anim)
+	track:Play()
 
-	return true
+	local conn
+	conn = char:GetAttributeChangedSignal("HitSlash"):Connect(function()
+		if char:GetAttribute("HitSlash") and skin ~= "Blega" then
+			track:Stop()
+			local hitAnim = Instance.new("Animation")
+			hitAnim.AnimationId = "rbxassetid://104029412142861"
+			hum:LoadAnimation(hitAnim):Play()
+			if conn then conn:Disconnect() end
+		end
+	end)
 end
 
---// LOW HP TARGET SELECTOR (With Safe Space Wait Logic)
+local function playNoliAnim()
+	if not char or not hum then return end
+	local anim = Instance.new("Animation")
+	local skin = char:GetAttribute("Skin")
+
+	if skin == "RetroNoli" then anim.AnimationId = "rbxassetid://120515916154475"
+	elseif skin == "Clockwork" then anim.AnimationId = "rbxassetid://108021827965381"
+	elseif skin == "NarratorNoli" then anim.AnimationId = "rbxassetid://128744951510910"
+	elseif skin == "Noli4" then anim.AnimationId = "rbxassetid://98438228576241"
+	elseif skin == "EvilTeh" then anim.AnimationId = "rbxassetid://97930480559280"
+	elseif skin == "AdminNoli" then anim.AnimationId = "rbxassetid://126706312443717"
+	elseif skin == "Pastway" or skin == "Fleatway" then anim.AnimationId = "rbxassetid://105540391527912"
+	else anim.AnimationId = "rbxassetid://133721031387826" end
+
+	local track = hum:LoadAnimation(anim)
+	track:Play()
+	track:AdjustSpeed(1.5)
+end
+
+local function castCharacterAction(actionName, targetPosition)
+	if not canUseCharacter() then return end
+	local cType = getCurrentCharacterType()
+	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType == "Shedletsky" and ShedletskyAbilities) or (cType == "Noli" and NoliAbilities)
+
+	if not abilityTable then return end
+	local data = abilityTable[actionName]
+
+	if data and data.Remote then
+		local now = os.clock()
+		if now - data.LastUsed >= data.Cooldown then
+			data.LastUsed = now
+
+			if cType == "Shedletsky" and actionName == "Slash" then
+				playShedletskyAnim()
+			elseif cType == "Noli" and actionName == "MainAbility" then
+				playNoliAnim()
+			end
+
+			if cType == "Noli" and actionName == "AltAbility2" then
+				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
+				data.Remote:FireServer(aimPos, true)
+			else
+				data.Remote:FireServer()
+			end
+		end
+	end
+end
+
+local function isTargetAliveAndValid(p)
+	if not p or not p.Parent or not p.Character or p == player then return false end
+	local tHum = p.Character:FindFirstChild("Humanoid")
+	local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+	return tHum and tRoot and tHum.Health > 0 and p.Character:IsDescendantOf(workspace)
+end
+
 local function getLowHpTarget(maxHp)
-	-- If locking onto a specific person, keep target if still valid
 	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget) then
 		return currentLockedTarget
 	end
@@ -195,7 +273,6 @@ local function getLowHpTarget(maxHp)
 	local lowestHp = maxHp or targetHealthThreshold
 	local targetPlayer = nil
 
-	-- Search for players at or below health threshold
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player and isTargetAliveAndValid(p) then
 			local tHum = p.Character.Humanoid
@@ -206,17 +283,11 @@ local function getLowHpTarget(maxHp)
 		end
 	end
 
-	-- IF NO LOW-HP TARGET IS FOUND: Teleport to Safe Space and wait
-	if not targetPlayer and autoFarmLowHpOn then
-		teleportToSafeSpace()
-	end
-
 	currentLockedTarget = targetPlayer
 	return targetPlayer
 end
 
---// ALL PLAYERS TARGET SELECTOR
-local function getAllPlayersTarget()
+local function getAnyTarget()
 	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget) then
 		return currentLockedTarget
 	end
@@ -229,8 +300,8 @@ local function getAllPlayersTarget()
 
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player and isTargetAliveAndValid(p) then
-			local tHrp = p.Character.HumanoidRootPart
-			local dist = (myRoot.Position - tHrp.Position).Magnitude
+			local tRoot = p.Character.HumanoidRootPart
+			local dist = (tRoot.Position - myRoot.Position).Magnitude
 			if dist < closestDist then
 				closestDist = dist
 				targetPlayer = p
@@ -242,123 +313,181 @@ local function getAllPlayersTarget()
 	return targetPlayer
 end
 
+local function positionAtTarget(targetPlayer)
+	if not targetPlayer or not targetPlayer.Character then return end
+	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+	local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+	if not myRoot or not targetRoot then return end
+
+	for _, part in ipairs(char:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+		end
+	end
+
+	local offset = hitDistanceOffset
+
+	if lockInFrontOn then
+		myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -offset) * CFrame.Angles(0, math.pi, 0)
+	else
+		myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, offset)
+	end
+end
+
+-- Continuous Sticking & Noclip loop
+RS.Stepped:Connect(function()
+	if not autoFarmLowHpOn and not autoFarmAllOn then return end
+	if not char or not hum or hum.Health <= 0 then return end
+
+	local activeTarget = nil
+
+	if autoFarmLowHpOn then
+		activeTarget = getLowHpTarget(targetHealthThreshold)
+	elseif autoFarmAllOn then
+		activeTarget = getAnyTarget()
+	end
+
+	if activeTarget and isTargetAliveAndValid(activeTarget) then
+		positionAtTarget(activeTarget)
+	end
+end)
+
+-- Ability casting & safety check loop
+RS.Heartbeat:Connect(function()
+	if char and getCurrentCharacterType() == "Shedletsky" then
+		char:SetAttribute("CanRun", true)
+		char:SetAttribute("Slowed", false)
+		if hum and hum.WalkSpeed < 16 then
+			hum.WalkSpeed = 16
+		end
+	end
+
+	if not autoFarmLowHpOn and not autoFarmAllOn then return end
+
+	if hum and hum.Health <= 30 then
+		if autoFarmLowHpOn and LowHpToggle then LowHpToggle:SetValue(false) end
+		if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
+		autoFarmLowHpOn = false
+		autoFarmAllOn = false
+		currentLockedTarget = nil
+		teleportToSafeSpace()
+		return
+	end
+
+	local cType = getCurrentCharacterType()
+	local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
+		or (cType == "Shedletsky" and SHEDLETSKY_AUTO_ABILITIES) 
+		or (cType == "Noli" and NOLI_AUTO_ABILITIES) 
+		or {}
+
+	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) 
+		or (cType == "Shedletsky" and ShedletskyAbilities) 
+		or (cType == "Noli" and NoliAbilities) 
+		or {}
+
+	local targetP = currentLockedTarget
+	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+
+	if targetP and isTargetAliveAndValid(targetP) and myRoot then
+		local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
+		if tRoot then
+			local distance = (tRoot.Position - myRoot.Position).Magnitude
+
+			if distance <= MAX_ABILITY_DISTANCE and canUseCharacter() then
+				for _, abilityName in ipairs(autoList) do
+					local data = abilityTable[abilityName]
+					if data and (os.clock() - data.LastUsed >= data.Cooldown) then
+						castCharacterAction(abilityName, tRoot.Position)
+					end
+				end
+			end
+		end
+	else
+		currentLockedTarget = nil
+		teleportToSafeSpace()
+	end
+end)
+
 --------------------------------------------------------------------------------
 -- AUTO FARM TAB ELEMENTS
 --------------------------------------------------------------------------------
-local SectionAutoFarm = AutoFarmTab:Section({ Title = "Auto Farm Controls" })
+local SectionTarget = AutoFarmTab:Section({ Title = "Targeting Options" })
 
-LowHpToggle = SectionAutoFarm:Toggle({
-   Title = "Auto Farm Low HP Players",
-   Default = false,
-   Callback = function(value)
-      autoFarmLowHpOn = value
-      if value and AllPlayersToggle then
-         autoFarmAllOn = false
-         AllPlayersToggle:SetValue(false)
-      end
-   end,
-})
-
-AllPlayersToggle = SectionAutoFarm:Toggle({
-   Title = "Auto Farm All Players",
-   Default = false,
-   Callback = function(value)
-      autoFarmAllOn = value
-      if value and LowHpToggle then
-         autoFarmLowHpOn = false
-         LowHpToggle:SetValue(false)
-      end
-   end,
-})
-
-SectionAutoFarm:Slider({
-   Title = "Low HP Threshold",
-   Value = { Min = 5, Max = 100, Default = 20, Step = 1 },
-   Callback = function(value)
-      targetHealthThreshold = value
-   end,
-})
-
-SectionAutoFarm:Slider({
-   Title = "Hit Distance Offset",
-   Value = { Min = 1, Max = 15, Default = 3, Step = 0.5 },
-   Callback = function(value)
-      hitDistanceOffset = value
-   end,
-})
-
-SectionAutoFarm:Toggle({
-   Title = "Lock Target in Front",
+SectionTarget:Toggle({
+   Title = "Lock in Front of Person",
    Default = false,
    Callback = function(value)
       lockInFrontOn = value
    end,
 })
 
-SectionAutoFarm:Toggle({
-   Title = "Stick to Current Target",
+SectionTarget:Toggle({
+   Title = "Stick to Person?",
    Default = false,
    Callback = function(value)
       stickToPersonOn = value
+      if not value then currentLockedTarget = nil end
    end,
 })
 
---------------------------------------------------------------------------------
--- ABILITY EXECUTION LOOP
---------------------------------------------------------------------------------
-local function useAbility(abilityData)
-	if not abilityData or not abilityData.Remote then return end
-	local now = tick()
-	if now - abilityData.LastUsed >= abilityData.Cooldown then
-		abilityData.LastUsed = now
-		task.spawn(function()
-			abilityData.Remote:FireServer()
-		end)
-	end
-end
+SectionTarget:Dropdown({
+   Title = "Position Offset (Hit Range)",
+   Values = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
+   Default = "Close (~3 studs)",
+   Callback = function(option)
+      local selected = typeof(option) == "table" and option[1] or option
+      if selected:find("Slightly Far") then
+         hitDistanceOffset = 5.5
+      elseif selected:find("Far") then
+         hitDistanceOffset = 8
+      else
+         hitDistanceOffset = 3
+      end
+   end,
+})
 
-RS.Heartbeat:Connect(function()
-	if not canUseCharacter() then return end
+local SectionAuto = AutoFarmTab:Section({ Title = "Auto Farm Automation" })
 
-	local cType = getCurrentCharacterType()
-	local activeTarget = nil
+LowHpToggle = SectionAuto:Toggle({
+   Title = "Auto Farm Low Health Players",
+   Default = false,
+   Callback = function(value)
+      autoFarmLowHpOn = value
+      if value and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
+      if not value then currentLockedTarget = nil end
+   end,
+})
 
-	if autoFarmLowHpOn then
-		activeTarget = getLowHpTarget(targetHealthThreshold)
-	elseif autoFarmAllOn then
-		activeTarget = getAllPlayersTarget()
-	end
+AllPlayersToggle = SectionAuto:Toggle({
+   Title = "Auto Farm All Players",
+   Default = false,
+   Callback = function(value)
+      autoFarmAllOn = value
+      if value and LowHpToggle then LowHpToggle:SetValue(false) end
+      if not value then currentLockedTarget = nil end
+   end,
+})
 
-	if not activeTarget or not isTargetAliveAndValid(activeTarget) then return end
+SectionAuto:Dropdown({
+   Title = "Low HP Target Threshold",
+   Values = {"10 HP", "20 HP", "30 HP", "50 HP"},
+   Default = "20 HP",
+   Callback = function(option)
+      local selected = typeof(option) == "table" and option[1] or option
+      local val = tonumber(string.match(selected, "%d+"))
+      if val then targetHealthThreshold = val end
+   end,
+})
 
-	local myHrp = char:FindFirstChild("HumanoidRootPart")
-	local targetHrp = activeTarget.Character:FindFirstChild("HumanoidRootPart")
-	if not myHrp or not targetHrp then return end
+local SectionSafety = AutoFarmTab:Section({ Title = "Emergency Safety" })
 
-	-- Position positioning/sticking
-	if lockInFrontOn then
-		local targetCFrame = targetHrp.CFrame
-		local posInFront = targetCFrame * CFrame.new(0, 0, -hitDistanceOffset)
-		myHrp.CFrame = CFrame.lookAt(posInFront.Position, targetHrp.Position)
-	end
-
-	local dist = (myHrp.Position - targetHrp.Position).Magnitude
-	if dist <= MAX_ABILITY_DISTANCE then
-		if cType == "Jason" or cType == "Slasher" then
-			for _, name in ipairs(JASON_AUTO_ABILITIES) do
-				useAbility(JasonAbilities[name])
-			end
-		elseif cType == "Shedletsky" then
-			for _, name in ipairs(SHEDLETSKY_AUTO_ABILITIES) do
-				useAbility(ShedletskyAbilities[name])
-			end
-		elseif cType == "Noli" then
-			for _, name in ipairs(NOLI_AUTO_ABILITIES) do
-				useAbility(NoliAbilities[name])
-			end
-		end
-	end
-end)
+SectionSafety:Button({
+   Title = "Teleport to Safe Space",
+   Callback = function()
+      teleportToSafeSpace()
+   end,
+})
 --------------------------------------------------------------------------------
 -- PART 3: ROLE-BASED DYNAMIC ESP
 --------------------------------------------------------------------------------
