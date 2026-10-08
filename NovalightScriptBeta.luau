@@ -363,17 +363,20 @@ RS.Heartbeat:Connect(function()
 		end
 	end
 
-	if not autoFarmLowHpOn and not autoFarmAllOn then return end
-
+	-- Emergency low health detection (30 HP or below)
 	if hum and hum.Health <= 30 then
-		if autoFarmLowHpOn and LowHpToggle then LowHpToggle:SetValue(false) end
-		if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
-		autoFarmLowHpOn = false
-		autoFarmAllOn = false
-		currentLockedTarget = nil
-		teleportToSafeSpace()
+		if autoFarmLowHpOn or autoFarmAllOn then
+			autoFarmLowHpOn = false
+			autoFarmAllOn = false
+			currentLockedTarget = nil
+			if LowHpToggle then LowHpToggle:SetValue(false) end
+			if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
+			teleportToSafeSpace()
+		end
 		return
 	end
+
+	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
 	local cType = getCurrentCharacterType()
 	local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
@@ -453,6 +456,16 @@ LowHpToggle = SectionAuto:Toggle({
    Title = "Auto Farm Low Health Players",
    Default = false,
    Callback = function(value)
+      -- Block enabling if HP is <= 30
+      if value and hum and hum.Health <= 30 then
+         autoFarmLowHpOn = false
+         task.spawn(function()
+            if LowHpToggle then LowHpToggle:SetValue(false) end
+         end)
+         teleportToSafeSpace()
+         return
+      end
+
       autoFarmLowHpOn = value
       if value and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
       if not value then currentLockedTarget = nil end
@@ -463,6 +476,16 @@ AllPlayersToggle = SectionAuto:Toggle({
    Title = "Auto Farm All Players",
    Default = false,
    Callback = function(value)
+      -- Block enabling if HP is <= 30
+      if value and hum and hum.Health <= 30 then
+         autoFarmAllOn = false
+         task.spawn(function()
+            if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
+         end)
+         teleportToSafeSpace()
+         return
+      end
+
       autoFarmAllOn = value
       if value and LowHpToggle then LowHpToggle:SetValue(false) end
       if not value then currentLockedTarget = nil end
@@ -634,6 +657,10 @@ end)
 
 local AIM_DISTANCE = 30 
 
+-- Hitbox Expander / Lunge Boost Variables
+local hitboxExpanderOn = false
+local lungeRange = 9.6
+
 local function isMatchingCharacter(charName)
     local character = player.Character
     if not character then return false end
@@ -694,7 +721,59 @@ local function aimAtTarget(targetChar)
     return false
 end
 
-local SectionCombat1 = CombatTab:Section({ Title = "Main Attacks" })
+local SectionCombat1 = CombatTab:Section({ Title = "Main Attacks & Modifiers" })
+
+--------------------------------------------------------------------------------
+-- HITBOX EXPANDER / LUNGE BOOST LOGIC
+--------------------------------------------------------------------------------
+SectionCombat1:Toggle({
+   Title = "Hitbox Expander (Lunge Boost)",
+   Default = false,
+   Callback = function(value)
+      hitboxExpanderOn = value
+   end,
+})
+
+SectionCombat1:Slider({
+   Title = "Lunge Boost Range",
+   Value = { Min = 1, Max = 50, Default = 9.6, Step = 0.5 },
+   Callback = function(value)
+      lungeRange = tonumber(value) or 9.6
+   end,
+})
+
+RS.Heartbeat:Connect(function()
+    if not hitboxExpanderOn then return end
+    
+    local myChar = player.Character
+    if not myChar then return end
+    
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    
+    if not myHum or not myRoot then return end
+
+    for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
+        local name = track.Animation.Name:lower()
+
+        local looksLikeAttack = name:find("attack")
+            or name:find("slash")
+            or name:find("swing")
+            or (track.Length > 0.3 and track.Length <= 1.5)
+
+        if looksLikeAttack and (track.TimePosition / track.Length) < 0.75 then
+            local oldVelocity = myRoot.Velocity
+            myRoot.Velocity = oldVelocity + myRoot.CFrame.LookVector * lungeRange
+            RS.RenderStepped:Wait()
+            myRoot.Velocity = oldVelocity
+            break
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- AUTOMATED ATTACKS
+--------------------------------------------------------------------------------
 
 -- Auto Attack
 local autoAttackOn = false
@@ -879,7 +958,7 @@ SectionCombat1:Toggle({
 })
 
 --------------------------------------------------------------------------------
--- UTILITY TAB ELEMENTS (FIXED FOR WINDUI)
+-- UTILITY TAB ELEMENTS
 --------------------------------------------------------------------------------
 local SectionMovement = UtilityTab:Section({ Title = "Movement Mods" })
 
@@ -894,7 +973,6 @@ SectionMovement:Toggle({
    end,
 })
 
--- Fixed WindUI Slider format
 SectionMovement:Slider({
    Title = "TpWalk Speed",
    Value = { Min = 1, Max = 10, Default = 1, Step = 1 },
@@ -999,38 +1077,83 @@ local SectionTeleport = TeleportTab:Section({ Title = "Player Teleporter" })
 local selectedPlayer = nil
 local stickInFrontOn = false
 local stickOffset = 5.5
+local searchQuery = ""
 
 local playerDropdownOptions = {}
 local playerMap = {}
 
-local function updatePlayerList()
+local PlayerDropdown
+
+-- Function to rebuild player list & filter options based on search query
+local function refreshPlayerDropdown()
     playerDropdownOptions = {}
     playerMap = {}
 
+    local queryLower = string.lower(searchQuery)
+
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
-            local displayNameFormat = p.DisplayName .. " (@" .. p.Name .. ")"
-            table.insert(playerDropdownOptions, displayNameFormat)
-            playerMap[displayNameFormat] = p
+            local displayName = p.DisplayName
+            local username = p.Name
+            
+            -- Filter check for display name or username match
+            if queryLower == "" 
+               or string.find(string.lower(displayName), queryLower, 1, true) 
+               or string.find(string.lower(username), queryLower, 1, true) then
+               
+                local formattedName = displayName .. " (@" .. username .. ")"
+                table.insert(playerDropdownOptions, formattedName)
+                playerMap[formattedName] = p
+            end
         end
     end
 
     if #playerDropdownOptions == 0 then
-        playerDropdownOptions = {"No Other Players"}
+        playerDropdownOptions = {"No Players Found"}
+    end
+
+    if PlayerDropdown then
+        PlayerDropdown:SetValues(playerDropdownOptions)
     end
 end
 
-updatePlayerList()
+-- Search Input Bar
+SectionTeleport:Input({
+   Title = "Search Player (Name / Username)",
+   Placeholder = "Type to filter players...",
+   Callback = function(text)
+      searchQuery = text or ""
+      refreshPlayerDropdown()
+   end,
+})
 
-local PlayerDropdown = SectionTeleport:Dropdown({
+-- Target Player Dropdown
+PlayerDropdown = SectionTeleport:Dropdown({
    Title = "Select Target Player",
-   Values = playerDropdownOptions,
-   Default = playerDropdownOptions[1] or "No Other Players",
+   Values = {"Loading..."},
+   Default = "Loading...",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       selectedPlayer = playerMap[selected]
    end,
 })
+
+-- Initialize List
+refreshPlayerDropdown()
+
+-- Listen for Players Joining / Leaving dynamically
+Players.PlayerAdded:Connect(function()
+    task.wait(0.5)
+    refreshPlayerDropdown()
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if selectedPlayer == p then
+        selectedPlayer = nil
+        stickInFrontOn = false
+    end
+    refreshPlayerDropdown()
+end)
 
 SectionTeleport:Button({
    Title = "Teleport to Player",
