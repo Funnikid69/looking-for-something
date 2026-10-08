@@ -36,6 +36,18 @@ local Window = WindUI:CreateWindow({
     Transparent = false
 })
 
+--// PC / LAPTOP TOGGLE KEYBIND (RIGHT SHIFT)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	-- Ignore keybinds if user is typing in chat or a TextBox
+	if gameProcessed or UserInputService:GetFocusedTextBox() then return end
+	
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		if Window then
+			Window:Toggle()
+		end
+	end
+end)
+
 --// TABS SETUP
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local AutoFarmTab = Window:Tab({ Title = "Auto Farm", Icon = "crosshair" })
@@ -160,7 +172,6 @@ local function canUseCharacter()
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType == "Shedletsky" then
 		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
-
 	end
 	return true
 end
