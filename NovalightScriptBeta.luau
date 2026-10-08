@@ -255,6 +255,9 @@ local function castCharacterAction(actionName, targetPosition)
 	end
 end
 
+--------------------------------------------------------------------------------
+-- TARGET DETECTION & POSITIONING
+--------------------------------------------------------------------------------
 local function isTargetAliveAndValid(p)
 	if not p or not p.Parent or not p.Character or p == player then return false end
 	local tHum = p.Character:FindFirstChild("Humanoid")
@@ -335,8 +338,32 @@ local function positionAtTarget(targetPlayer)
 	end
 end
 
--- Continuous Sticking & Noclip loop
+--------------------------------------------------------------------------------
+-- EMERGENCY SAFETY DISABLER FUNCTION
+--------------------------------------------------------------------------------
+local function checkEmergencyHealth()
+	local currentHum = char and char:FindFirstChildOfClass("Humanoid")
+	if currentHum and currentHum.Health <= 30 then
+		if autoFarmLowHpOn or autoFarmAllOn then
+			autoFarmLowHpOn = false
+			autoFarmAllOn = false
+			currentLockedTarget = nil
+			
+			if LowHpToggle then LowHpToggle:SetValue(false) end
+			if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
+			
+			teleportToSafeSpace()
+		end
+		return true
+	end
+	return false
+end
+
+--------------------------------------------------------------------------------
+-- UNBROKEN STICKY POSITIONING LOOP (STEPS EVERY FRAME)
+--------------------------------------------------------------------------------
 RS.Stepped:Connect(function()
+	if checkEmergencyHealth() then return end
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 	if not char or not hum or hum.Health <= 0 then return end
 
@@ -353,7 +380,9 @@ RS.Stepped:Connect(function()
 	end
 end)
 
--- Ability casting & safety check loop
+--------------------------------------------------------------------------------
+-- AUTO FARM HEARTBEAT LOOP (FIRE ABILITIES ONLY WHEN NEARBY)
+--------------------------------------------------------------------------------
 RS.Heartbeat:Connect(function()
 	if char and getCurrentCharacterType() == "Shedletsky" then
 		char:SetAttribute("CanRun", true)
@@ -363,19 +392,7 @@ RS.Heartbeat:Connect(function()
 		end
 	end
 
-	-- Emergency low health detection (30 HP or below)
-	if hum and hum.Health <= 30 then
-		if autoFarmLowHpOn or autoFarmAllOn then
-			autoFarmLowHpOn = false
-			autoFarmAllOn = false
-			currentLockedTarget = nil
-			if LowHpToggle then LowHpToggle:SetValue(false) end
-			if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
-			teleportToSafeSpace()
-		end
-		return
-	end
-
+	if checkEmergencyHealth() then return end
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
 	local cType = getCurrentCharacterType()
@@ -413,7 +430,7 @@ RS.Heartbeat:Connect(function()
 end)
 
 --------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS
+-- AUTO FARM TAB ELEMENTS (WINDUI SYNTAX)
 --------------------------------------------------------------------------------
 local SectionTarget = AutoFarmTab:Section({ Title = "Targeting Options" })
 
@@ -456,8 +473,8 @@ LowHpToggle = SectionAuto:Toggle({
    Title = "Auto Farm Low Health Players",
    Default = false,
    Callback = function(value)
-      -- Block enabling if HP is <= 30
-      if value and hum and hum.Health <= 30 then
+      local currentHum = char and char:FindFirstChildOfClass("Humanoid")
+      if value and currentHum and currentHum.Health <= 30 then
          autoFarmLowHpOn = false
          task.spawn(function()
             if LowHpToggle then LowHpToggle:SetValue(false) end
@@ -476,8 +493,8 @@ AllPlayersToggle = SectionAuto:Toggle({
    Title = "Auto Farm All Players",
    Default = false,
    Callback = function(value)
-      -- Block enabling if HP is <= 30
-      if value and hum and hum.Health <= 30 then
+      local currentHum = char and char:FindFirstChildOfClass("Humanoid")
+      if value and currentHum and currentHum.Health <= 30 then
          autoFarmAllOn = false
          task.spawn(function()
             if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
@@ -1113,7 +1130,8 @@ local function refreshPlayerDropdown()
     end
 
     if PlayerDropdown then
-        PlayerDropdown:SetValues(playerDropdownOptions)
+        -- WindUI uses :Refresh() to update dropdown choices
+        PlayerDropdown:Refresh(playerDropdownOptions)
     end
 end
 
@@ -1134,12 +1152,18 @@ PlayerDropdown = SectionTeleport:Dropdown({
    Default = "Loading...",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
-      selectedPlayer = playerMap[selected]
+      if playerMap[selected] then
+         selectedPlayer = playerMap[selected]
+      else
+         selectedPlayer = nil
+      end
    end,
 })
 
--- Initialize List
-refreshPlayerDropdown()
+-- Defer initial refresh to allow WindUI to component instantiation
+task.defer(function()
+    refreshPlayerDropdown()
+end)
 
 -- Listen for Players Joining / Leaving dynamically
 Players.PlayerAdded:Connect(function()
