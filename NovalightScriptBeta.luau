@@ -1,6 +1,7 @@
 --------------------------------------------------------------------------------
--- GAME ID CHECKER
+-- PART 1: CORE SETUP, WINDOW & STATE MANAGEMENT
 --------------------------------------------------------------------------------
+
 local ALLOWED_PLACE_IDS = {
 	[100039707794702] = true,
 	[99585784721880]  = true,
@@ -13,12 +14,6 @@ if not ALLOWED_PLACE_IDS[game.PlaceId] then
 	return
 end
 
---------------------------------------------------------------------------------
--- WINDUI SETUP
---------------------------------------------------------------------------------
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-
-local player = game.Players.LocalPlayer
 local Players = game:GetService("Players")
 local RS = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -26,7 +21,10 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local camera = workspace.CurrentCamera
 
---// WINDUI WINDOW SETUP
+local player = Players.LocalPlayer
+
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
 local Window = WindUI:CreateWindow({
     Title = "Novalight Beta",
     Author = "by Chwaa",
@@ -36,19 +34,13 @@ local Window = WindUI:CreateWindow({
     Transparent = false
 })
 
---// PC / LAPTOP TOGGLE KEYBIND (RIGHT SHIFT)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	-- Ignore keybinds if user is typing in chat or a TextBox
 	if gameProcessed or UserInputService:GetFocusedTextBox() then return end
-	
 	if input.KeyCode == Enum.KeyCode.RightShift then
-		if Window then
-			Window:Toggle()
-		end
+		if Window then Window:Toggle() end
 	end
 end)
 
---// TABS SETUP
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local AutoFarmTab = Window:Tab({ Title = "Auto Farm", Icon = "crosshair" })
 local ESPTab = Window:Tab({ Title = "ESP", Icon = "eye" })
@@ -56,9 +48,6 @@ local UtilityTab = Window:Tab({ Title = "Movement & Misc", Icon = "zap" })
 local TeleportTab = Window:Tab({ Title = "Teleporter", Icon = "map-pin" })
 local GuestTab = Window:Tab({ Title = "Guest1337", Icon = "user" })
 
---------------------------------------------------------------------------------
--- CHARACTER & STATE TRACKING
---------------------------------------------------------------------------------
 local char = player.Character or player.CharacterAdded:Wait()
 local hum = char:WaitForChild("Humanoid")
 
@@ -67,9 +56,6 @@ player.CharacterAdded:Connect(function(c)
 	hum = c:WaitForChild("Humanoid")
 end)
 
---------------------------------------------------------------------------------
--- SAFE SPACE SETUP
---------------------------------------------------------------------------------
 local SAFE_SPACE_CFRAME = CFrame.new(0, 5000, 0)
 local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
 
@@ -91,9 +77,6 @@ local function teleportToSafeSpace()
 	end
 end
 
---------------------------------------------------------------------------------
--- ANTI-VOID SYSTEM
---------------------------------------------------------------------------------
 local ANTI_VOID_HEIGHT = -150
 local antiVoidPart = workspace:FindFirstChild("AntiVoidPlate")
 
@@ -119,9 +102,6 @@ antiVoidPart.Touched:Connect(function(hit)
 	end
 end)
 
---------------------------------------------------------------------------------
--- CHARACTER ABILITY CONFIGURATIONS
---------------------------------------------------------------------------------
 local charAbilitiesFolder = ReplicatedStorage:WaitForChild("CharacterAbilities", 5)
 local jasonFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Jason")
 local shedFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Shedletsky")
@@ -134,7 +114,6 @@ local JasonAbilities = {
 	["AltAbility3"] = { Cooldown = 20, LastUsed = 0, Remote = jasonFolder and jasonFolder:FindFirstChild("Enraged") }
 }
 
--- Simplified Shedletsky Setup (Slash only)
 local ShedletskyAbilities = {
 	["Slash"] = { Cooldown = 15, LastUsed = 0, Remote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote") }
 }
@@ -145,7 +124,6 @@ local NoliAbilities = {
 }
 
 local JASON_AUTO_ABILITIES = { "MainAbility", "AltAbility1", "AltAbility2" }
-local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
 local NOLI_AUTO_ABILITIES = { "MainAbility", "AltAbility2" }
 
 local autoFarmLowHpOn = false
@@ -170,20 +148,20 @@ local function canUseCharacter()
 
 	if cType == "Jason" or cType == "Slasher" or cType == "Noli" then
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
-	elseif cType == "Shedletsky" then
-		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= tr
-ue
+	elseif cType and cType:lower():find("shedletsky") then
+		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= 
+true
 	end
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ACTION & AUTO-FARM SYSTEM (OPTIMIZED & FIXED)
+-- PART 2: ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
 
 local function castCharacterAction(actionName, targetPosition)
 	if not canUseCharacter() then return end
 	local cType = getCurrentCharacterType()
-	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType == "Shedletsky" and ShedletskyAbilities) or (cType == "Noli" and NoliAbilities)
+	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType and cType:lower():find("shedletsky") and ShedletskyAbilities) or (cType == "Noli" and NoliAbilities)
 
 	if not abilityTable then return end
 	local data = abilityTable[actionName]
@@ -193,7 +171,7 @@ local function castCharacterAction(actionName, targetPosition)
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
 
-			if cType == "Shedletsky" and actionName == "Slash" then
+			if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
 				if targetPosition then
 					data.Remote:FireServer(targetPosition)
 				else
@@ -209,9 +187,6 @@ local function castCharacterAction(actionName, targetPosition)
 	end
 end
 
---------------------------------------------------------------------------------
--- TARGET DETECTION & POSITIONING
---------------------------------------------------------------------------------
 local function isTargetAliveAndValid(p)
 	if not p or not p.Parent or not p.Character or p == player then return false end
 	local tHum = p.Character:FindFirstChild("Humanoid")
@@ -278,13 +253,10 @@ local function positionAtTarget(targetPlayer)
 	if not myRoot or not targetRoot then return end
 
 	for _, part in ipairs(char:GetDescendants()) do
-		if part:IsA("BasePart") then
-			part.CanCollide = false
-		end
+		if part:IsA("BasePart") then part.CanCollide = false end
 	end
 
 	local offset = hitDistanceOffset
-
 	if lockInFrontOn then
 		myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -offset) * CFrame.Angles(0, math.pi, 0)
 	else
@@ -292,9 +264,6 @@ local function positionAtTarget(targetPlayer)
 	end
 end
 
---------------------------------------------------------------------------------
--- EMERGENCY SAFETY DISABLER & TELEPORTER (EVENT-DRIVEN)
---------------------------------------------------------------------------------
 local function triggerEmergencySafety()
 	if autoFarmLowHpOn or autoFarmAllOn then
 		autoFarmLowHpOn = false
@@ -325,47 +294,30 @@ end
 if char then hookCharacterHealth(char) end
 player.CharacterAdded:Connect(hookCharacterHealth)
 
---------------------------------------------------------------------------------
--- POSITIONING LOOP (STEPS EVERY FRAME)
---------------------------------------------------------------------------------
 RS.Stepped:Connect(function()
 	if hum and hum.Health <= 30 then return end
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 	if not char or not hum or hum.Health <= 0 then return end
 
-	local activeTarget = nil
-
-	if autoFarmLowHpOn then
-		activeTarget = getLowHpTarget(targetHealthThreshold)
-	elseif autoFarmAllOn then
-		activeTarget = getAnyTarget()
-	end
-
+	local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
 	if activeTarget and isTargetAliveAndValid(activeTarget) then
 		positionAtTarget(activeTarget)
 	end
 end)
 
---------------------------------------------------------------------------------
--- AUTO FARM HEARTBEAT LOOP (FIRE ABILITIES ONLY WHEN NEARBY)
---------------------------------------------------------------------------------
 RS.Heartbeat:Connect(function()
 	if hum and hum.Health <= 30 then return end
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
 	local cType = getCurrentCharacterType()
-	local autoList = {}
-	local abilityTable = {}
+	local autoList, abilityTable = {}, {}
 
 	if cType == "Jason" or cType == "Slasher" then
-		autoList = JASON_AUTO_ABILITIES
-		abilityTable = JasonAbilities
+		autoList, abilityTable = JASON_AUTO_ABILITIES, JasonAbilities
 	elseif cType and cType:lower():find("shedletsky") then
-		autoList = {"Slash"}
-		abilityTable = ShedletskyAbilities
+		autoList, abilityTable = {"Slash"}, ShedletskyAbilities
 	elseif cType == "Noli" then
-		autoList = NOLI_AUTO_ABILITIES
-		abilityTable = NoliAbilities
+		autoList, abilityTable = NOLI_AUTO_ABILITIES, NoliAbilities
 	end
 
 	local targetP = currentLockedTarget
@@ -373,15 +325,11 @@ RS.Heartbeat:Connect(function()
 
 	if targetP and isTargetAliveAndValid(targetP) and myRoot then
 		local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
-		if tRoot then
-			local distance = (tRoot.Position - myRoot.Position).Magnitude
-
-			if distance <= MAX_ABILITY_DISTANCE then
-				for _, abilityName in ipairs(autoList) do
-					local data = abilityTable[abilityName]
-					if data and (os.clock() - data.LastUsed >= data.Cooldown) then
-						castCharacterAction(abilityName, tRoot.Position)
-					end
+		if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
+			for _, abilityName in ipairs(autoList) do
+				local data = abilityTable[abilityName]
+				if data and (os.clock() - data.LastUsed >= data.Cooldown) then
+					castCharacterAction(abilityName, tRoot.Position)
 				end
 			end
 		end
@@ -390,60 +338,30 @@ RS.Heartbeat:Connect(function()
 	end
 end)
 
---------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (WINDUI SYNTAX)
---------------------------------------------------------------------------------
 local SectionTarget = AutoFarmTab:Section({ Title = "Targeting Options" })
-
-SectionTarget:Toggle({
-   Title = "Lock in Front of Person",
-   Default = false,
-   Callback = function(value)
-      lockInFrontOn = value
-   end,
-})
-
-SectionTarget:Toggle({
-   Title = "Stick to Person?",
-   Default = false,
-   Callback = function(value)
-      stickToPersonOn = value
-      if not value then currentLockedTarget = nil end
-   end,
-})
-
+SectionTarget:Toggle({ Title = "Lock in Front of Person", Default = false, Callback = function(v) lockInFrontOn = v end })
+SectionTarget:Toggle({ Title = "Stick to Person?", Default = false, Callback = function(v) stickToPersonOn = v if not v then currentLockedTarget = nil end end })
 SectionTarget:Dropdown({
    Title = "Position Offset (Hit Range)",
    Values = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
    Default = "Close (~3 studs)",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
-      if selected:find("Slightly Far") then
-         hitDistanceOffset = 5.5
-      elseif selected:find("Far") then
-         hitDistanceOffset = 8
-      else
-         hitDistanceOffset = 3
-      end
+      hitDistanceOffset = selected:find("Slightly Far") and 5.5 or (selected:find("Far") and 8 or 3)
    end,
 })
 
 local SectionAuto = AutoFarmTab:Section({ Title = "Auto Farm Automation" })
-
 LowHpToggle = SectionAuto:Toggle({
    Title = "Auto Farm Low Health Players",
    Default = false,
    Callback = function(value)
-      local currentHum = char and char:FindFirstChildOfClass("Humanoid")
-      if value and currentHum and currentHum.Health <= 30 then
+      if value and hum and hum.Health <= 30 then
          autoFarmLowHpOn = false
-         task.spawn(function()
-            if LowHpToggle then LowHpToggle:SetValue(false) end
-         end)
+         task.spawn(function() if LowHpToggle then LowHpToggle:SetValue(false) end end)
          teleportToSafeSpace()
          return
       end
-
       autoFarmLowHpOn = value
       if value and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
       if not value then currentLockedTarget = nil end
@@ -454,16 +372,12 @@ AllPlayersToggle = SectionAuto:Toggle({
    Title = "Auto Farm All Players",
    Default = false,
    Callback = function(value)
-      local currentHum = char and char:FindFirstChildOfClass("Humanoid")
-      if value and currentHum and currentHum.Health <= 30 then
+      if value and hum and hum.Health <= 30 then
          autoFarmAllOn = false
-         task.spawn(function()
-            if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
-         end)
+         task.spawn(function() if AllPlayersToggle then AllPlayersToggle:SetValue(false) end end)
          teleportToSafeSpace()
          return
       end
-
       autoFarmAllOn = value
       if value and LowHpToggle then LowHpToggle:SetValue(false) end
       if not value then currentLockedTarget = nil end
@@ -482,46 +396,21 @@ SectionAuto:Dropdown({
 })
 
 local SectionSafety = AutoFarmTab:Section({ Title = "Emergency Safety" })
-
-SectionSafety:Button({
-   Title = "Teleport to Safe Space",
-   Callback = function()
-      teleportToSafeSpace()
-   end,
-})
+SectionSafety:Button({ Title = "Teleport to Safe Space", Callback = function() teleportToSafeSpace() end })
 --------------------------------------------------------------------------------
--- PART 3: ROLE-BASED DYNAMIC ESP
+-- PART 3: DYNAMIC ROLE ESP
 --------------------------------------------------------------------------------
 
 local espOn = false
 local activeESP = {}
-
-local SURVIVOR_CLASSES = {
-    ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
-    ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
-    ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true,
-    ["janedoe"] = true, ["messi"] = true, ["noob"] = true
-}
-
-local KILLER_CLASSES = {
-    ["slasher"] = true, ["jason"] = true, ["coolkid"] = true,
-    ["1x4"] = true, ["noli"] = true, ["swordsmaster"] = true,
-    ["guest666"] = true, ["2011x"] = true, ["johndoe"] = true,
-    ["azure"] = true
-}
+local SURVIVOR_CLASSES = { ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true, ["martialartist"] = true, ["chance"] = true, ["twotime"] = true, ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true, ["janedoe"] = true, ["messi"] = true, ["noob"] = true }
+local KILLER_CLASSES = { ["slasher"] = true, ["jason"] = true, ["coolkid"] = true, ["1x4"] = true, ["noli"] = true, ["swordsmaster"] = true, ["guest666"] = true, ["2011x"] = true, ["johndoe"] = true, ["azure"] = true }
 
 local function getRoleColor(targetChar)
     if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor" end
-
-    local rawCharType = targetChar:GetAttribute("Character") or targetChar.Name
-    local charType = string.lower(tostring(rawCharType))
-
-    if SURVIVOR_CLASSES[charType] then
-        return Color3.fromRGB(0, 150, 255), "Survivor"
-    elseif KILLER_CLASSES[charType] then
-        return Color3.fromRGB(255, 35, 35), "Killer"
-    end
-
+    local charType = string.lower(tostring(targetChar:GetAttribute("Character") or targetChar.Name))
+    if SURVIVOR_CLASSES[charType] then return Color3.fromRGB(0, 150, 255), "Survivor" end
+    if KILLER_CLASSES[charType] then return Color3.fromRGB(255, 35, 35), "Killer" end
     return Color3.fromRGB(0, 150, 255), "Survivor"
 end
 
@@ -537,42 +426,22 @@ end
 local function applyESP(plr)
     if plr == player then return end
     removeESP(plr)
-
     local function setupChar(targetChar)
         if not targetChar then return end
-        
         local root = targetChar:WaitForChild("HumanoidRootPart", 5)
         local targetHum = targetChar:WaitForChild("Humanoid", 5)
         local head = targetChar:WaitForChild("Head", 5) or root
-        
         if not root or not targetHum then return end
 
-        local roleColor, roleName = getRoleColor(targetChar)
+        local roleColor = getRoleColor(targetChar)
+        local highlight = Instance.new("Highlight", targetChar)
+        highlight.Name, highlight.FillColor, highlight.FillTransparency, highlight.Adornee = "ESP_Highlight", roleColor, 0.5, targetChar
 
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "ESP_Highlight"
-        highlight.FillColor = roleColor
-        highlight.FillTransparency = 0.5
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.OutlineTransparency = 0
-        highlight.Adornee = targetChar
-        highlight.Parent = targetChar
-
-        local billboard = Instance.new("BillboardGui")
-        billboard.Name = "ESP_Billboard"
-        billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 200, 0, 30)
-        billboard.StudsOffset = Vector3.new(0, 3, 0)
-        billboard.Adornee = head
-        billboard.Parent = targetChar
+        local billboard = Instance.new("BillboardGui", targetChar)
+        billboard.Name, billboard.AlwaysOnTop, billboard.Size, billboard.StudsOffset, billboard.Adornee = "ESP_Billboard", true, UDim2.new(0, 200, 0, 30), Vector3.new(0, 3, 0), head
 
         local label = Instance.new("TextLabel", billboard)
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = roleColor
-        label.TextStrokeTransparency = 0
-        label.Font = Enum.Font.SourceSansBold
-        label.TextSize = 14
+        label.Size, label.BackgroundTransparency, label.TextColor3, label.TextStrokeTransparency, label.Font, label.TextSize = UDim2.new(1, 0, 1, 0), 1, roleColor, 0, Enum.Font.SourceSansBold, 14
 
         local conn = RS.RenderStepped:Connect(function()
             if not espOn or not targetChar or not targetChar.Parent or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
@@ -580,73 +449,42 @@ local function applyESP(plr)
                 if billboard then billboard.Enabled = false end
             else
                 local updatedColor, updatedRole = getRoleColor(targetChar)
-                highlight.FillColor = updatedColor
-                label.TextColor3 = updatedColor
-
-                highlight.Enabled = true
-                billboard.Enabled = true
+                highlight.FillColor, label.TextColor3 = updatedColor, updatedColor
+                highlight.Enabled, billboard.Enabled = true, true
                 label.Text = string.format("%s [%s] | %d HP", plr.Name, updatedRole, math.floor(targetHum.Health))
             end
         end)
-
-        activeESP[plr] = {
-            Highlight = highlight,
-            Billboard = billboard,
-            Connection = conn
-        }
+        activeESP[plr] = { Highlight = highlight, Billboard = billboard, Connection = conn }
     end
-
     if plr.Character then setupChar(plr.Character) end
     plr.CharacterAdded:Connect(setupChar)
 end
 
---------------------------------------------------------------------------------
--- ESP TAB ELEMENTS
---------------------------------------------------------------------------------
 local SectionESP = ESPTab:Section({ Title = "ESP Visuals" })
-
 SectionESP:Toggle({
    Title = "Role ESP (Blue Survivor / Red Killer)",
    Default = false,
    Callback = function(value)
       espOn = value
-      if espOn then
-         for _, p in ipairs(Players:GetPlayers()) do
-            applyESP(p)
-         end
-      else
-         for p, _ in pairs(activeESP) do
-            removeESP(p)
-         end
-      end
+      if espOn then for _, p in ipairs(Players:GetPlayers()) do applyESP(p) end
+      else for p, _ in pairs(activeESP) do removeESP(p) end end
    end,
 })
-
-Players.PlayerAdded:Connect(function(p)
-    if espOn then applyESP(p) end
-end)
-
-Players.PlayerRemoving:Connect(function(p)
-    removeESP(p)
-end)
+Players.PlayerAdded:Connect(function(p) if espOn then applyESP(p) end end)
+Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
 --------------------------------------------------------------------------------
 -- PART 4: COMBAT TAB & UTILITY TAB
 --------------------------------------------------------------------------------
 
-local AIM_DISTANCE = 30 
-
+local AIM_DISTANCE = 30
 local function isMatchingCharacter(charName)
     local character = player.Character
     if not character then return false end
-    
     local currentName = character.Name
     local charAttr = character:GetAttribute("Character") or character:GetAttribute("CharacterType")
-    
     if type(charName) == "table" then
         for _, name in ipairs(charName) do
-            if currentName:find(name) or (charAttr and tostring(charAttr):find(name)) then
-                return true
-            end
+            if currentName:find(name) or (charAttr and tostring(charAttr):find(name)) then return true end
         end
         return false
     else
@@ -657,23 +495,14 @@ end
 local function getClosestTarget()
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
-    
     local myRoot = character.HumanoidRootPart
-    local closestTarget = nil
-    local shortestDistance = math.huge
-
+    local closestTarget, shortestDistance = nil, math.huge
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and p.Character then
-            local targetChar = p.Character
-            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-            
+            local targetChar, targetRoot, targetHumanoid = p.Character, p.Character:FindFirstChild("HumanoidRootPart"), p.Character:FindFirstChildOfClass("Humanoid")
             if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
                 local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    closestTarget = targetChar
-                end
+                if distance < shortestDistance then shortestDistance, closestTarget = distance, targetChar end
             end
         end
     end
@@ -685,9 +514,7 @@ local function aimAtTarget(targetChar)
     if character and character:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
         local myRoot = character.HumanoidRootPart
         local targetPos = targetChar.HumanoidRootPart.Position
-        local distance = (myRoot.Position - targetPos).Magnitude
-
-        if distance <= AIM_DISTANCE then
+        if (myRoot.Position - targetPos).Magnitude <= AIM_DISTANCE then
             myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
             return true
         end
@@ -697,11 +524,6 @@ end
 
 local SectionCombat1 = CombatTab:Section({ Title = "Main Attacks" })
 
---------------------------------------------------------------------------------
--- AUTOMATED ATTACKS
---------------------------------------------------------------------------------
-
--- Auto Attack
 local autoAttackOn = false
 local function findRemote()
     local remote = ReplicatedStorage:FindFirstChild("JasonAttackRemote", true)
@@ -720,30 +542,17 @@ task.spawn(function()
         if autoAttackOn and isMatchingCharacter({"Jason", "Slasher"}) then
             local target = getClosestTarget()
             local isClose = target and aimAtTarget(target)
-            
             if not attackRemote then attackRemote = findRemote() end
-            if attackRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    attackRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    attackRemote:FireServer()
-                end
+            if attackRemote then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then attackRemote:FireServer(target.HumanoidRootPart.Position)
+                else attackRemote:FireServer() end
             end
         end
         task.wait(0.1)
     end
 end)
+SectionCombat1:Toggle({ Title = "Auto Attack (Slasher M1)", Default = false, Callback = function(v) autoAttackOn = v if v and not attackRemote then attackRemote = findRemote() end end })
 
-SectionCombat1:Toggle({
-   Title = "Auto Attack (Slasher M1)",
-   Default = false,
-   Callback = function(value)
-      autoAttackOn = value
-      if value and not attackRemote then attackRemote = findRemote() end
-   end,
-})
-
--- Jason Behead
 local autoBeheadOn = false
 local function findBeheadRemote()
     local remote = ReplicatedStorage:FindFirstChild("Behead", true)
@@ -762,30 +571,17 @@ task.spawn(function()
         if autoBeheadOn and isMatchingCharacter({"Jason", "Slasher"}) then
             local target = getClosestTarget()
             local isClose = target and aimAtTarget(target)
-
             if not beheadRemote then beheadRemote = findBeheadRemote() end
-            if beheadRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    beheadRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    beheadRemote:FireServer()
-                end
+            if beheadRemote then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then beheadRemote:FireServer(target.HumanoidRootPart.Position)
+                else beheadRemote:FireServer() end
             end
         end
         task.wait(0.1)
     end
 end)
+SectionCombat1:Toggle({ Title = "Jason Behead", Default = false, Callback = function(v) autoBeheadOn = v if v and not beheadRemote then beheadRemote = findBeheadRemote() end end })
 
-SectionCombat1:Toggle({
-   Title = "Jason Behead",
-   Default = false,
-   Callback = function(value)
-      autoBeheadOn = value
-      if value and not beheadRemote then beheadRemote = findBeheadRemote() end
-   end,
-})
-
--- Subject_0 Attack
 local autoSubjectOn = false
 local function findSubjectRemote()
     local remote = ReplicatedStorage:FindFirstChild("SubjectAttackRemote", true)
@@ -804,35 +600,21 @@ task.spawn(function()
         if autoSubjectOn and isMatchingCharacter("Subject") then
             local target = getClosestTarget()
             local isClose = target and aimAtTarget(target)
-
             if not subjectRemote then subjectRemote = findSubjectRemote() end
-            if subjectRemote then 
-                if isClose and target:FindFirstChild("HumanoidRootPart") then
-                    subjectRemote:FireServer(target.HumanoidRootPart.Position)
-                else
-                    subjectRemote:FireServer()
-                end
+            if subjectRemote then
+                if isClose and target:FindFirstChild("HumanoidRootPart") then subjectRemote:FireServer(target.HumanoidRootPart.Position)
+                else subjectRemote:FireServer() end
             end
         end
         task.wait(0.2)
     end
 end)
+SectionCombat1:Toggle({ Title = "Subject_0 Attack", Default = false, Callback = function(v) autoSubjectOn = v if v and not subjectRemote then subjectRemote = findSubjectRemote() end end })
 
-SectionCombat1:Toggle({
-   Title = "Subject_0 Attack",
-   Default = false,
-   Callback = function(value)
-      autoSubjectOn = value
-      if value and not subjectRemote then subjectRemote = findSubjectRemote() end
-   end,
-})
-
--- Camlock
 local DROP_DISTANCE = 35
-local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
+local CAMERA_OFFSET = Vector3.new(0, 4.5, 10)
 local TURN_SMOOTHNESS = 0.35
-local currentTarget = nil
-local isLocked = false
+local currentTarget, isLocked = nil, false
 
 local function isTargetValid(targetChar)
 	if not targetChar or not targetChar.Parent or not targetChar:FindFirstChild("HumanoidRootPart") then return false end
@@ -840,18 +622,12 @@ local function isTargetValid(targetChar)
 	if not targetHumanoid or targetHumanoid.Health <= 0 then return false end
 	local myChar = player.Character
 	if myChar and myChar:FindFirstChild("HumanoidRootPart") then
-		local distance = (myChar.HumanoidRootPart.Position - targetChar.HumanoidRootPart.Position).Magnitude
-		if distance > DROP_DISTANCE then return false end
+		if (myChar.HumanoidRootPart.Position - targetChar.HumanoidRootPart.Position).Magnitude > DROP_DISTANCE then return false end
 	end
 	return true
 end
 
-local function disableLock()
-	isLocked = false
-	currentTarget = nil
-	RS:UnbindFromRenderStep("CamAndCharLockLoop")
-end
-
+local function disableLock() isLocked, currentTarget = false, nil RS:UnbindFromRenderStep("CamAndCharLockLoop") end
 local function enableLock()
 	isLocked = true
 	RS:BindToRenderStep("CamAndCharLockLoop", Enum.RenderPriority.Camera.Value + 1, function()
@@ -861,79 +637,37 @@ local function enableLock()
 		if not isTargetValid(currentTarget) then currentTarget = getClosestTarget() end
 		if currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
 			local myRoot = myChar.HumanoidRootPart
-			local myPos = myRoot.Position
-			local targetPos = currentTarget.HumanoidRootPart.Position
-			local targetAimPos = targetPos + Vector3.new(0, 1.5, 0)
-			local charLookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-			local charTargetCFrame = CFrame.lookAt(myPos, charLookTarget)
-			myRoot.CFrame = myRoot.CFrame:Lerp(charTargetCFrame, TURN_SMOOTHNESS)
+			local myPos, targetPos = myRoot.Position, currentTarget.HumanoidRootPart.Position
+			myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z)), TURN_SMOOTHNESS)
 			local flatDirection = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z).Unit
 			if flatDirection.Magnitude == 0 then flatDirection = Vector3.new(0, 0, 1) end
-			local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
-			camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
+			camera.CFrame = CFrame.lookAt(myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0), targetPos + Vector3.new(0, 1.5, 0))
 		end
 	end)
 end
+SectionCombat1:Toggle({ Title = "Camlock Target Focus", Default = false, Callback = function(v) if v then enableLock() else disableLock() end end })
 
-SectionCombat1:Toggle({
-   Title = "Camlock Target Focus",
-   Default = false,
-   Callback = function(value)
-      if value then enableLock() else disableLock() end
-   end,
-})
-
---------------------------------------------------------------------------------
--- UTILITY TAB ELEMENTS
---------------------------------------------------------------------------------
 local SectionMovement = UtilityTab:Section({ Title = "Movement Mods" })
-
-local tpwalkOn = false
-local speed = 1
-
-SectionMovement:Toggle({
-   Title = "TpWalk",
-   Default = false,
-   Callback = function(value)
-      tpwalkOn = value
-   end,
-})
-
-SectionMovement:Slider({
-   Title = "TpWalk Speed",
-   Value = { Min = 1, Max = 10, Default = 1, Step = 1 },
-   Callback = function(value)
-      speed = tonumber(value) or 1
-   end,
-})
-
+local tpwalkOn, speed = false, 1
+SectionMovement:Toggle({ Title = "TpWalk", Default = false, Callback = function(v) tpwalkOn = v end })
+SectionMovement:Slider({ Title = "TpWalk Speed", Value = { Min = 1, Max = 10, Default = 1, Step = 1 }, Callback = function(v) speed = tonumber(v) or 1 end })
 RS.Heartbeat:Connect(function()
     if tpwalkOn and char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
-        local hrp = char.HumanoidRootPart
         local move = char.Humanoid.MoveDirection
-        if move.Magnitude > 0 then
-            hrp.CFrame = hrp.CFrame + (move * speed)
-        end
+        if move.Magnitude > 0 then char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + (move * speed) end
     end
 end)
 
 local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
 local platform
-
 SectionMovement:Button({
    Title = "Save Place (Platform TP)",
    Callback = function()
       local hrp = char and char:FindFirstChild("HumanoidRootPart")
       if not hrp then return end
       if not platform or not platform.Parent then
-          platform = Instance.new("Part")
-          platform.Size = Vector3.new(60, 5, 60)
-          platform.Position = savedPos
-          platform.Anchored = true
-          platform.Color = Color3.fromRGB(120, 120, 120)
-          platform.Material = Enum.Material.SmoothPlastic
-          platform.Name = "SafePlatform"
-          platform.Parent = workspace
+          platform = Instance.new("Part", workspace)
+          platform.Size, platform.Position, platform.Anchored, platform.Color, platform.Material, platform.Name = Vector3.new(60, 5, 60), savedPos, true, Color3.fromRGB(120, 120, 120), Enum.Material.SmoothPlastic, "SafePlatform"
       end
       hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
    end,
@@ -942,414 +676,177 @@ SectionMovement:Button({
 -- PART 5: PROTECTION & TELEPORTER
 --------------------------------------------------------------------------------
 
-local lowHealthProtectionOn = false
-local healthThreshold = 40
-local protectionPlatform = nil
-local safePosition = Vector3.new(-1119.03, 894.94, -85.90)
-
+local lowHealthProtectionOn, healthThreshold, protectionPlatform = false, 40, nil
 local SectionSafety = UtilityTab:Section({ Title = "Safety & Protection" })
-
-local ProtectionToggle = SectionSafety:Toggle({
-   Title = "Low Health Auto-Teleport",
-   Default = false,
-   Callback = function(value)
-      lowHealthProtectionOn = value
-   end,
-})
-
-SectionSafety:Slider({
-   Title = "Health Threshold",
-   Value = { Min = 10, Max = 80, Default = 40, Step = 5 },
-   Callback = function(value)
-      healthThreshold = value
-   end,
-})
+SectionSafety:Toggle({ Title = "Low Health Auto-Teleport", Default = false, Callback = function(v) lowHealthProtectionOn = v end })
+SectionSafety:Slider({ Title = "Health Threshold", Value = { Min = 10, Max = 80, Default = 40, Step = 5 }, Callback = function(v) healthThreshold = v end })
 
 task.spawn(function()
     while true do
         task.wait(0.2)
-        if lowHealthProtectionOn then
-            local character = player.Character
-            if character then
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local hrp = character:FindFirstChild("HumanoidRootPart")
-
-                if humanoid and hrp and humanoid.Health > 0 and humanoid.Health <= healthThreshold then
-                    if not protectionPlatform or not protectionPlatform.Parent then
-                        protectionPlatform = Instance.new("Part")
-                        protectionPlatform.Size = Vector3.new(60, 5, 60)
-                        protectionPlatform.Position = safePosition
-                        protectionPlatform.Anchored = true
-                        protectionPlatform.Color = Color3.fromRGB(0, 200, 100)
-                        protectionPlatform.Material = Enum.Material.SmoothPlastic
-                        protectionPlatform.Name = "AutoProtectionBaseplate"
-                        protectionPlatform.Parent = workspace
-                    end
-
-                    hrp.CFrame = CFrame.new(safePosition + Vector3.new(0, 6, 0))
-                    lowHealthProtectionOn = false
-                    if ProtectionToggle then ProtectionToggle:SetValue(false) end
+        if lowHealthProtectionOn and char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if humanoid and hrp and humanoid.Health > 0 and humanoid.Health <= healthThreshold then
+                if not protectionPlatform or not protectionPlatform.Parent then
+                    protectionPlatform = Instance.new("Part", workspace)
+                    protectionPlatform.Size, protectionPlatform.Position, protectionPlatform.Anchored, protectionPlatform.Color, protectionPlatform.Material, protectionPlatform.Name = Vector3.new(60, 5, 60), savedPos, true, Color3.fromRGB(0, 200, 100), Enum.Material.SmoothPlastic, "AutoProtectionBaseplate"
                 end
+                hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
+                lowHealthProtectionOn = false
             end
         end
     end
 end)
 
---------------------------------------------------------------------------------
--- TELEPORT TAB ELEMENTS
---------------------------------------------------------------------------------
 local SectionTeleport = TeleportTab:Section({ Title = "Player Teleporter" })
+local selectedPlayer, stickInFrontOn, stickOffset, searchQuery = nil, false, 5.5, ""
+local playerDropdownOptions, playerMap, PlayerDropdown = {}, {}, nil
 
-local selectedPlayer = nil
-local stickInFrontOn = false
-local stickOffset = 5.5
-local searchQuery = ""
-
-local playerDropdownOptions = {}
-local playerMap = {}
-
-local PlayerDropdown
-
--- Function to rebuild player list & filter options based on search query
 local function refreshPlayerDropdown()
-    playerDropdownOptions = {}
-    playerMap = {}
-
+    playerDropdownOptions, playerMap = {}, {}
     local queryLower = string.lower(searchQuery)
-
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
-            local displayName = p.DisplayName
-            local username = p.Name
-            
-            -- Filter check for display name or username match
-            if queryLower == "" 
-               or string.find(string.lower(displayName), queryLower, 1, true) 
-               or string.find(string.lower(username), queryLower, 1, true) then
-               
+            local displayName, username = p.DisplayName, p.Name
+            if queryLower == "" or string.find(string.lower(displayName), queryLower, 1, true) or string.find(string.lower(username), queryLower, 1, true) then
                 local formattedName = displayName .. " (@" .. username .. ")"
                 table.insert(playerDropdownOptions, formattedName)
                 playerMap[formattedName] = p
             end
         end
     end
-
-    if #playerDropdownOptions == 0 then
-        playerDropdownOptions = {"No Players Found"}
-    end
-
-    if PlayerDropdown then
-        -- WindUI uses :Refresh() to update dropdown choices
-        PlayerDropdown:Refresh(playerDropdownOptions)
-    end
+    if #playerDropdownOptions == 0 then playerDropdownOptions = {"No Players Found"} end
+    if PlayerDropdown then PlayerDropdown:Refresh(playerDropdownOptions) end
 end
 
--- Search Input Bar
-SectionTeleport:Input({
-   Title = "Search Player (Name / Username)",
-   Placeholder = "Type to filter players...",
-   Callback = function(text)
-      searchQuery = text or ""
-      refreshPlayerDropdown()
-   end,
-})
-
--- Target Player Dropdown
+SectionTeleport:Input({ Title = "Search Player", Placeholder = "Type to filter...", Callback = function(text) searchQuery = text or "" refreshPlayerDropdown() end })
 PlayerDropdown = SectionTeleport:Dropdown({
    Title = "Select Target Player",
    Values = {"Loading..."},
    Default = "Loading...",
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
-      if playerMap[selected] then
-         selectedPlayer = playerMap[selected]
-      else
-         selectedPlayer = nil
-      end
+      selectedPlayer = playerMap[selected]
    end,
 })
 
--- Defer initial refresh to allow WindUI to component instantiation
-task.defer(function()
-    refreshPlayerDropdown()
-end)
-
--- Listen for Players Joining / Leaving dynamically
-Players.PlayerAdded:Connect(function()
-    task.wait(0.5)
-    refreshPlayerDropdown()
-end)
-
-Players.PlayerRemoving:Connect(function(p)
-    if selectedPlayer == p then
-        selectedPlayer = nil
-        stickInFrontOn = false
-    end
-    refreshPlayerDropdown()
-end)
+task.defer(function() refreshPlayerDropdown() end)
+Players.PlayerAdded:Connect(function() task.wait(0.5) refreshPlayerDropdown() end)
+Players.PlayerRemoving:Connect(function(p) if selectedPlayer == p then selectedPlayer = nil stickInFrontOn = false end refreshPlayerDropdown() end)
 
 SectionTeleport:Button({
    Title = "Teleport to Player",
    Callback = function()
       if selectedPlayer and selectedPlayer.Character then
-         local targetHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
-         local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-         if targetHrp and myHrp then
-            myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -3)
-         end
+         local targetHrp, myHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart"), player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+         if targetHrp and myHrp then myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -3) end
       end
    end,
 })
-
-SectionTeleport:Toggle({
-   Title = "Stick in Front of Player",
-   Default = false,
-   Callback = function(value)
-      stickInFrontOn = value
-   end,
-})
-
-SectionTeleport:Slider({
-   Title = "Stick Distance Offset",
-   Value = { Min = 2, Max = 25, Default = 5.5, Step = 0.5 },
-   Callback = function(value)
-      stickOffset = value
-   end,
-})
+SectionTeleport:Toggle({ Title = "Stick in Front of Player", Default = false, Callback = function(v) stickInFrontOn = v end })
+SectionTeleport:Slider({ Title = "Stick Distance Offset", Value = { Min = 2, Max = 25, Default = 5.5, Step = 0.5 }, Callback = function(v) stickOffset = v end })
 
 RS.RenderStepped:Connect(function()
     if stickInFrontOn and selectedPlayer and selectedPlayer.Character then
         local targetChar = selectedPlayer.Character
-        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-        
-        local myChar = player.Character
-        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
-        if not targetHrp or not targetHum or targetHum.Health <= 0 then
-            stickInFrontOn = false
-            selectedPlayer = nil
-            return
-        end
-
+        local targetHrp, targetHum = targetChar:FindFirstChild("HumanoidRootPart"), targetChar:FindFirstChildOfClass("Humanoid")
+        local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not targetHrp or not targetHum or targetHum.Health <= 0 then stickInFrontOn, selectedPlayer = false, nil return end
         if myHrp then
-            local targetCFrame = targetHrp.CFrame
-            local inFrontPosition = targetCFrame * CFrame.new(0, 0, -stickOffset)
-            myHrp.CFrame = CFrame.lookAt(inFrontPosition.Position, targetHrp.Position)
-        end
-    else
-        if stickInFrontOn and not selectedPlayer then
-            stickInFrontOn = false
+            local pos = targetHrp.CFrame * CFrame.new(0, 0, -stickOffset)
+            myHrp.CFrame = CFrame.lookAt(pos.Position, targetHrp.Position)
         end
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (WINDUI INTEGRATED)
+-- PART 6: GUEST1337 AUTO FARM
 --------------------------------------------------------------------------------
 
-local autoFarmLowHpOn = false
-local autoFarmAllOn = false
-local stickToTargetOn = true
-local targetHealthThreshold = 20
-local hitDistanceOffset = 5.5
-local targetSpeed = 16
-
+local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
 local currentHardLockedTarget = nil
+local ALLOWED_CHARACTERS = { ["guest1337"] = true, ["guest"] = true, ["shedletsky"] = true, ["dusekkar"] = true, ["martialartist"] = true, ["chance"] = true, ["twotime"] = true, ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true, ["janedoe"] = true, ["messi"] = true, ["noob"] = true }
 
-local ALLOWED_CHARACTERS = {
-    ["guest1337"]     = true,
-    ["guest"]         = true,
-    ["shedletsky"]    = true,
-    ["dusekkar"]      = true,
-    ["martialartist"] = true,
-    ["chance"]        = true,
-    ["twotime"]       = true,
-    ["007n7"]         = true,
-    ["elliot"]        = true,
-    ["veeronica"]     = true,
-    ["janedoe"]       = true,
-    ["messi"]         = true,
-    ["noob"]          = true,
-}
-
-local function isAllowedCharacter(playerTarget)
-    if not playerTarget or not playerTarget.Parent or not playerTarget.Character then return false end
-    local targetChar = playerTarget.Character
-
-    if ALLOWED_CHARACTERS[string.lower(targetChar.Name)] then return true end
-    if ALLOWED_CHARACTERS[string.lower(playerTarget.Name)] then return true end
-
-    for _, attrName in ipairs({"Character", "CharacterType", "Role", "Class", "Kit", "SelectedCharacter"}) do
-        local attrValue = targetChar:GetAttribute(attrName) or playerTarget:GetAttribute(attrName)
-        if attrValue and type(attrValue) == "string" then
-            if ALLOWED_CHARACTERS[string.lower(attrValue)] then return true end
-        end
-    end
-
-    for _, child in ipairs(targetChar:GetChildren()) do
-        if child:IsA("StringValue") and ALLOWED_CHARACTERS[string.lower(child.Value)] then return true end
-    end
-
-    local backpack = playerTarget:FindFirstChild("Backpack")
-    local itemsToCheck = {}
-    if backpack then for _, v in ipairs(backpack:GetChildren()) do table.insert(itemsToCheck, v.Name) end end
-    for _, v in ipairs(targetChar:GetChildren()) do if v:IsA("Tool") then table.insert(itemsToCheck, v.Name) end end
-
-    for _, itemName in ipairs(itemsToCheck) do
-        if ALLOWED_CHARACTERS[string.lower(itemName)] then return true end
-    end
-
+local function isAllowedCharacter(target)
+    if not target or not target.Character then return false end
+    local targetChar = target.Character
+    if ALLOWED_CHARACTERS[string.lower(targetChar.Name)] or ALLOWED_CHARACTERS[string.lower(target.Name)] then return true end
     return false
 end
 
-local function findRemote(possibleNames)
-    for _, name in ipairs(possibleNames) do
-        local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-        if charAbilities then
-            local guestFolder = charAbilities:FindFirstChild("Guest1337", true)
-            if guestFolder then
-                local obj = guestFolder:FindFirstChild(name, true)
-                if obj then return obj end
-            end
+local function findGuestRemote(names)
+    for _, name in ipairs(names) do
+        local abilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+        if abilities and abilities:FindFirstChild("Guest1337", true) then
+            local obj = abilities.Guest1337:FindFirstChild(name, true)
+            if obj then return obj end
         end
-
         local obj = ReplicatedStorage:FindFirstChild(name, true)
         if obj then return obj end
     end
     return nil
 end
 
-local punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
-local chargeRemote = findRemote({"ChargeRemote", "Charge"})
+local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
+local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
 
-local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
-    if not remoteObj then return end
-    pcall(function()
-        if remoteObj:IsA("RemoteEvent") then
-            remoteObj:FireServer()
-            if targetChar then remoteObj:FireServer(targetChar) end
-            if targetHrp then remoteObj:FireServer(targetHrp.Position) end
-        elseif remoteObj:IsA("RemoteFunction") then
-            task.spawn(function()
-                remoteObj:InvokeServer()
-            end)
-        end
-    end)
-end
-
-local function executeGuestAbilities(targetChar, targetHrp)
-    if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
-    if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge"}) end
-
-    safeTriggerRemote(chargeRemote, targetChar, targetHrp)
-    safeTriggerRemote(punchRemote, targetChar, targetHrp)
-end
-
--- Movement Enforcement Engine
 RS.RenderStepped:Connect(function(deltaTime)
-    if not (autoFarmLowHpOn or autoFarmAllOn) then return end
-
-    local character = player.Character
-    if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoid or not hrp then return end
-
-    humanoid.WalkSpeed = targetSpeed
-
-    for _, attr in ipairs({"SpeedMultiplier", "Slowed", "WalkSpeedModifier", "DisableMovement"}) do
-        if character:GetAttribute(attr) ~= nil then character:SetAttribute(attr, nil) end
-        if humanoid:GetAttribute(attr) ~= nil then humanoid:SetAttribute(attr, nil) end
-    end
-
-    if humanoid.MoveDirection.Magnitude > 0 then
-        local moveVector = humanoid.MoveDirection * targetSpeed * deltaTime
-        hrp.CFrame = hrp.CFrame + Vector3.new(moveVector.X, 0, moveVector.Z)
+    if not (guestAutoLowHp or guestAutoAll) then return end
+    local char = player.Character
+    if not char then return end
+    local hum, hrp = char:FindFirstChildOfClass("Humanoid"), char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return end
+    hum.WalkSpeed = guestSpeed
+    if hum.MoveDirection.Magnitude > 0 then
+        local move = hum.MoveDirection * guestSpeed * deltaTime
+        hrp.CFrame = hrp.CFrame + Vector3.new(move.X, 0, move.Z)
     end
 end)
 
-local function isTargetValid(targetPlayer, lowHpOnly)
-    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then return false end
-
-    local targetChar = targetPlayer.Character
-    local hrp = targetChar:FindFirstChild("HumanoidRootPart")
-    local hum = targetChar:FindFirstChildOfClass("Humanoid")
-
-    if not hrp or not hum or hum.Health <= 0 then
-        return false
-    end
-
-    if not isAllowedCharacter(targetPlayer) then
-        return false
-    end
-
-    if lowHpOnly and hum.Health > targetHealthThreshold then
-        return false
-    end
-
-    return true
-end
-
-local function getClosestValidPlayer(lowHpOnly)
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+local function getClosestGuestTarget(lowHpOnly)
+    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
-
-    local closestPlayer = nil
-    local shortestDist = math.huge
-
+    local closest, shortest = nil, math.huge
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and isTargetValid(p, lowHpOnly) then
-            local tChar = p.Character
-            local tHrp = tChar:FindFirstChild("HumanoidRootPart")
-            local dist = (tHrp.Position - myRoot.Position).Magnitude
-
-            if dist < shortestDist then
-                shortestDist = dist
-                closestPlayer = p
+        if p ~= player and p.Character then
+            local hrp, hum = p.Character:FindFirstChild("HumanoidRootPart"), p.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 and isAllowedCharacter(p) then
+                if not lowHpOnly or hum.Health <= guestThreshold then
+                    local dist = (hrp.Position - myRoot.Position).Magnitude
+                    if dist < shortest then shortest, closest = dist, p end
+                end
             end
         end
     end
-
-    return closestPlayer
+    return closest
 end
 
--- Main Execution Loop
 task.spawn(function()
     while true do
         task.wait(0.03)
-
-        if autoFarmLowHpOn or autoFarmAllOn then
-            local lowHpOnly = autoFarmLowHpOn and not autoFarmAllOn
-            local targetPlayer = nil
-
+        if guestAutoLowHp or guestAutoAll then
+            local lowHpOnly = guestAutoLowHp and not guestAutoAll
+            local target = nil
             if stickToTargetOn then
-                if currentHardLockedTarget and isTargetValid(currentHardLockedTarget, lowHpOnly) then
-                    targetPlayer = currentHardLockedTarget
+                if currentHardLockedTarget and currentHardLockedTarget.Character and currentHardLockedTarget.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+                    target = currentHardLockedTarget
                 else
-                    currentHardLockedTarget = getClosestValidPlayer(lowHpOnly)
-                    targetPlayer = currentHardLockedTarget
+                    currentHardLockedTarget = getClosestGuestTarget(lowHpOnly)
+                    target = currentHardLockedTarget
                 end
             else
                 currentHardLockedTarget = nil
-                targetPlayer = getClosestValidPlayer(lowHpOnly)
+                target = getClosestGuestTarget(lowHpOnly)
             end
 
-            if targetPlayer and targetPlayer.Character then
-                local targetChar = targetPlayer.Character
-                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-                local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-                local myChar = player.Character
-                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
-                if targetHrp and targetHum and targetHum.Health > 0 and myHrp then
-                    local lookAtPos = Vector3.new(targetHrp.Position.X, myHrp.Position.Y, targetHrp.Position.Z)
-                    local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -hitDistanceOffset)
-                    myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
-
-                    executeGuestAbilities(targetChar, targetHrp)
+            if target and target.Character then
+                local hrp, myHrp = target.Character:FindFirstChild("HumanoidRootPart"), player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and myHrp then
+                    myHrp.CFrame = CFrame.lookAt((hrp.CFrame * CFrame.new(0, 0, -guestHitOffset)).Position, hrp.Position)
+                    pcall(function()
+                        if punchRemote and punchRemote:IsA("RemoteEvent") then punchRemote:FireServer() end
+                        if chargeRemote and chargeRemote:IsA("RemoteEvent") then chargeRemote:FireServer() end
+                    end)
                 end
             end
         else
@@ -1358,68 +855,13 @@ task.spawn(function()
     end
 end)
 
---------------------------------------------------------------------------------
--- GUEST TAB ELEMENTS (WINDUI SYNTAX)
---------------------------------------------------------------------------------
 local SectionGuestAutomation = GuestTab:Section({ Title = "Guest Auto Farm" })
-
-local LowHpGuestToggle
-local AllGuestToggle
-
-LowHpGuestToggle = SectionGuestAutomation:Toggle({
-   Title = "Auto Farm Low HP Players",
-   Default = false,
-   Callback = function(value)
-      autoFarmLowHpOn = value
-      currentHardLockedTarget = nil
-      if value and AllGuestToggle then AllGuestToggle:SetValue(false) end
-   end,
-})
-
-AllGuestToggle = SectionGuestAutomation:Toggle({
-   Title = "Auto Farm All Players",
-   Default = false,
-   Callback = function(value)
-      autoFarmAllOn = value
-      currentHardLockedTarget = nil
-      if value and LowHpGuestToggle then LowHpGuestToggle:SetValue(false) end
-   end,
-})
-
-SectionGuestAutomation:Toggle({
-   Title = "Lock to Target (Permanent Stick)",
-   Default = true,
-   Callback = function(value)
-      stickToTargetOn = value
-      currentHardLockedTarget = nil
-   end,
-})
+local GuestLowHpToggle, GuestAllToggle
+GuestLowHpToggle = SectionGuestAutomation:Toggle({ Title = "Auto Farm Low HP Players", Default = false, Callback = function(v) guestAutoLowHp = v currentHardLockedTarget = nil if v and GuestAllToggle then GuestAllToggle:SetValue(false) end end })
+GuestAllToggle = SectionGuestAutomation:Toggle({ Title = "Auto Farm All Players", Default = false, Callback = function(v) guestAutoAll = v currentHardLockedTarget = nil if v and GuestLowHpToggle then GuestLowHpToggle:SetValue(false) end end })
+SectionGuestAutomation:Toggle({ Title = "Lock to Target", Default = true, Callback = function(v) stickToTargetOn = v currentHardLockedTarget = nil end })
 
 local SectionGuestSettings = GuestTab:Section({ Title = "Guest Parameters" })
-
-SectionGuestSettings:Input({
-   Title = "Low HP Threshold",
-   Placeholder = "20",
-   Callback = function(text)
-      local val = tonumber(text)
-      if val and val > 0 then targetHealthThreshold = val end
-   end,
-})
-
-SectionGuestSettings:Input({
-   Title = "Hit Distance Offset",
-   Placeholder = "5.5",
-   Callback = function(text)
-      local val = tonumber(text)
-      if val then hitDistanceOffset = val end
-   end,
-})
-
-SectionGuestSettings:Input({
-   Title = "Target Walk Speed",
-   Placeholder = "16",
-   Callback = function(text)
-      local val = tonumber(text)
-      if val and val > 0 then targetSpeed = val end
-   end,
-})
+SectionGuestSettings:Input({ Title = "Low HP Threshold", Placeholder = "20", Callback = function(t) local v = tonumber(t) if v then guestThreshold = v end end })
+SectionGuestSettings:Input({ Title = "Hit Distance Offset", Placeholder = "5.5", Callback = function(t) local v = tonumber(t) if v then guestHitOffset = v end end })
+SectionGuestSettings:Input({ Title = "Target Walk Speed", Placeholder = "16", Callback = function(t) local v = tonumber(t) if v then guestSpeed = v end end })
