@@ -685,10 +685,6 @@ end)
 
 local AIM_DISTANCE = 30 
 
--- Hitbox Expander / Lunge Boost Variables
-local hitboxExpanderOn = false
-local lungeRange = 9.6
-
 local function isMatchingCharacter(charName)
     local character = player.Character
     if not character then return false end
@@ -749,55 +745,7 @@ local function aimAtTarget(targetChar)
     return false
 end
 
-local SectionCombat1 = CombatTab:Section({ Title = "Main Attacks & Modifiers" })
-
---------------------------------------------------------------------------------
--- HITBOX EXPANDER / LUNGE BOOST LOGIC
---------------------------------------------------------------------------------
-SectionCombat1:Toggle({
-   Title = "Hitbox Expander (Lunge Boost)",
-   Default = false,
-   Callback = function(value)
-      hitboxExpanderOn = value
-   end,
-})
-
-SectionCombat1:Slider({
-   Title = "Lunge Boost Range",
-   Value = { Min = 1, Max = 50, Default = 9.6, Step = 0.5 },
-   Callback = function(value)
-      lungeRange = tonumber(value) or 9.6
-   end,
-})
-
-RS.Heartbeat:Connect(function()
-    if not hitboxExpanderOn then return end
-    
-    local myChar = player.Character
-    if not myChar then return end
-    
-    local myHum = myChar:FindFirstChildOfClass("Humanoid")
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    
-    if not myHum or not myRoot then return end
-
-    for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
-        local name = track.Animation.Name:lower()
-
-        local looksLikeAttack = name:find("attack")
-            or name:find("slash")
-            or name:find("swing")
-            or (track.Length > 0.3 and track.Length <= 1.5)
-
-        if looksLikeAttack and (track.TimePosition / track.Length) < 0.75 then
-            local oldVelocity = myRoot.Velocity
-            myRoot.Velocity = oldVelocity + myRoot.CFrame.LookVector * lungeRange
-            RS.RenderStepped:Wait()
-            myRoot.Velocity = oldVelocity
-            break
-        end
-    end
-end)
+local SectionCombat1 = CombatTab:Section({ Title = "Main Attacks" })
 
 --------------------------------------------------------------------------------
 -- AUTOMATED ATTACKS
