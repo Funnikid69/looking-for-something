@@ -459,19 +459,38 @@ SectionAuto:Dropdown({
 local SectionSafety = AutoFarmTab:Section({ Title = "Emergency Safety" })
 SectionSafety:Button({ Title = "Teleport to Safe Space", Callback = function() teleportToSafeSpace() end })
 --------------------------------------------------------------------------------
--- PART 3: DYNAMIC ROLE ESP
+-- PART 3: ROLE-BASED DYNAMIC ESP (OPTIMIZED)
 --------------------------------------------------------------------------------
 
 local espOn = false
 local activeESP = {}
-local SURVIVOR_CLASSES = { ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true, ["martialartist"] = true, ["chance"] = true, ["twotime"] = true, ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true, ["janedoe"] = true, ["messi"] = true, ["noob"] = true }
-local KILLER_CLASSES = { ["slasher"] = true, ["jason"] = true, ["coolkid"] = true, ["1x4"] = true, ["noli"] = true, ["swordsmaster"] = true, ["guest666"] = true, ["2011x"] = true, ["johndoe"] = true, ["azure"] = true }
+
+local SURVIVOR_CLASSES = {
+    ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
+    ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
+    ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true,
+    ["janedoe"] = true, ["messi"] = true, ["noob"] = true
+}
+
+local KILLER_CLASSES = {
+    ["slasher"] = true, ["jason"] = true, ["coolkid"] = true,
+    ["1x4"] = true, ["noli"] = true, ["swordsmaster"] = true,
+    ["guest666"] = true, ["2011x"] = true, ["johndoe"] = true,
+    ["azure"] = true
+}
 
 local function getRoleColor(targetChar)
     if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor" end
-    local charType = string.lower(tostring(targetChar:GetAttribute("Character") or targetChar.Name))
-    if SURVIVOR_CLASSES[charType] then return Color3.fromRGB(0, 150, 255), "Survivor" end
-    if KILLER_CLASSES[charType] then return Color3.fromRGB(255, 35, 35), "Killer" end
+
+    local rawCharType = targetChar:GetAttribute("Character") or targetChar.Name
+    local charType = string.lower(tostring(rawCharType))
+
+    if SURVIVOR_CLASSES[charType] then
+        return Color3.fromRGB(0, 150, 255), "Survivor"
+    elseif KILLER_CLASSES[charType] then
+        return Color3.fromRGB(255, 35, 35), "Killer"
+    end
+
     return Color3.fromRGB(0, 150, 255), "Survivor"
 end
 
@@ -487,52 +506,104 @@ end
 local function applyESP(plr)
     if plr == player then return end
     removeESP(plr)
+
     local function setupChar(targetChar)
         if not targetChar then return end
+        
         local root = targetChar:WaitForChild("HumanoidRootPart", 5)
         local targetHum = targetChar:WaitForChild("Humanoid", 5)
         local head = targetChar:WaitForChild("Head", 5) or root
+        
         if not root or not targetHum then return end
 
-        local roleColor = getRoleColor(targetChar)
-        local highlight = Instance.new("Highlight", targetChar)
-        highlight.Name, highlight.FillColor, highlight.FillTransparency, highlight.Adornee = "ESP_Highlight", roleColor, 0.5, targetChar
+        local roleColor, roleName = getRoleColor(targetChar)
 
-        local billboard = Instance.new("BillboardGui", targetChar)
-        billboard.Name, billboard.AlwaysOnTop, billboard.Size, billboard.StudsOffset, billboard.Adornee = "ESP_Billboard", true, UDim2.new(0, 200, 0, 30), Vector3.new(0, 3, 0), head
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.FillColor = roleColor
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineTransparency = 0
+        highlight.Adornee = targetChar
+        highlight.Parent = targetChar
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESP_Billboard"
+        billboard.AlwaysOnTop = true
+        billboard.Size = UDim2.new(0, 200, 0, 30)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.Adornee = head
+        billboard.Parent = targetChar
 
         local label = Instance.new("TextLabel", billboard)
-        label.Size, label.BackgroundTransparency, label.TextColor3, label.TextStrokeTransparency, label.Font, label.TextSize = UDim2.new(1, 0, 1, 0), 1, roleColor, 0, Enum.Font.SourceSansBold, 14
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = roleColor
+        label.TextStrokeTransparency = 0
+        label.Font = Enum.Font.SourceSansBold
+        label.TextSize = 14
 
-        local conn = RS.RenderStepped:Connect(function()
+        -- Throttled update loop (runs at ~10 FPS to eliminate heavy RenderStepped overhead)
+        local elapsed = 0
+        local conn = RS.RenderStepped:Connect(function(dt)
+            elapsed = elapsed + dt
+            if elapsed < 0.1 then return end
+            elapsed = 0
+
             if not espOn or not targetChar or not targetChar.Parent or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
                 if highlight then highlight.Enabled = false end
                 if billboard then billboard.Enabled = false end
             else
                 local updatedColor, updatedRole = getRoleColor(targetChar)
-                highlight.FillColor, label.TextColor3 = updatedColor, updatedColor
-                highlight.Enabled, billboard.Enabled = true, true
+                highlight.FillColor = updatedColor
+                label.TextColor3 = updatedColor
+
+                highlight.Enabled = true
+                billboard.Enabled = true
                 label.Text = string.format("%s [%s] | %d HP", plr.Name, updatedRole, math.floor(targetHum.Health))
             end
         end)
-        activeESP[plr] = { Highlight = highlight, Billboard = billboard, Connection = conn }
+
+        activeESP[plr] = {
+            Highlight = highlight,
+            Billboard = billboard,
+            Connection = conn
+        }
     end
+
     if plr.Character then setupChar(plr.Character) end
     plr.CharacterAdded:Connect(setupChar)
 end
 
+--------------------------------------------------------------------------------
+-- ESP TAB ELEMENTS
+--------------------------------------------------------------------------------
 local SectionESP = ESPTab:Section({ Title = "ESP Visuals" })
+
 SectionESP:Toggle({
    Title = "Role ESP (Blue Survivor / Red Killer)",
    Default = false,
    Callback = function(value)
       espOn = value
-      if espOn then for _, p in ipairs(Players:GetPlayers()) do applyESP(p) end
-      else for p, _ in pairs(activeESP) do removeESP(p) end end
+      if espOn then
+         for _, p in ipairs(Players:GetPlayers()) do
+            applyESP(p)
+         end
+      else
+         for p, _ in pairs(activeESP) do
+            removeESP(p)
+         end
+      end
    end,
 })
-Players.PlayerAdded:Connect(function(p) if espOn then applyESP(p) end end)
-Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
+
+Players.PlayerAdded:Connect(function(p)
+    if espOn then applyESP(p) end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    removeESP(p)
+end)
 --------------------------------------------------------------------------------
 -- PART 4: COMBAT TAB & UTILITY TAB
 --------------------------------------------------------------------------------
@@ -821,7 +892,7 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (STRICT SURVIVOR WHITELIST)
+-- PART 6: GUEST1337 AUTO FARM (OPTIMIZED THROTTLING)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
@@ -851,14 +922,9 @@ local function isAllowedCharacter(playerTarget)
 
     if not hum or not hrp or hum.Health <= 0 then return false end
 
-    -- Check character name or attributes against survivor list strictly
     local charType = string.lower(tostring(char:GetAttribute("Character") or char:GetAttribute("CharacterType") or char.Name))
     if SURVIVOR_CLASSES[charType] or SURVIVOR_CLASSES[string.lower(playerTarget.Name)] then 
         return true 
-    end
-
-    for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("StringValue") and SURVIVOR_CLASSES[string.lower(child.Value)] then return true end
     end
 
     return false
@@ -884,29 +950,7 @@ end
 local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
 local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
 
-local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
-    if not remoteObj then return end
-    pcall(function()
-        if remoteObj:IsA("RemoteEvent") then
-            remoteObj:FireServer()
-            if targetChar then remoteObj:FireServer(targetChar) end
-            if targetHrp then remoteObj:FireServer(targetHrp.Position) end
-        elseif remoteObj:IsA("RemoteFunction") then
-            task.spawn(function()
-                remoteObj:InvokeServer()
-            end)
-        end
-    end)
-end
-
-local function executeGuestAbilities(targetChar, targetHrp)
-    if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
-    if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
-
-    safeTriggerRemote(chargeRemote, targetChar, targetHrp)
-    safeTriggerRemote(punchRemote, targetChar, targetHrp)
-end
-
+-- Movement enforcement
 RS.RenderStepped:Connect(function(deltaTime)
     if not (guestAutoLowHp or guestAutoAll) then return end
 
@@ -977,9 +1021,10 @@ local function getClosestValidPlayer(lowHpOnly)
     return closestPlayer
 end
 
+-- Throttled Main Execution Loop (Safe 0.1s yield to avoid CPU bottleneck)
 task.spawn(function()
     while true do
-        task.wait(0.03)
+        task.wait(0.1)
 
         if guestAutoLowHp or guestAutoAll then
             local lowHpOnly = guestAutoLowHp and not guestAutoAll
@@ -1009,7 +1054,13 @@ task.spawn(function()
                     local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -guestHitOffset)
                     myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
 
-                    executeGuestAbilities(targetChar, targetHrp)
+                    if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
+                    if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
+
+                    pcall(function()
+                        if chargeRemote and chargeRemote:IsA("RemoteEvent") then chargeRemote:FireServer() end
+                        if punchRemote and punchRemote:IsA("RemoteEvent") then punchRemote:FireServer() end
+                    end)
                 end
             end
         else
