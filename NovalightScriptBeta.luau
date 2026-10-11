@@ -149,35 +149,72 @@ local function canUseCharacter()
 	if cType == "Jason" or cType == "Slasher" or cType == "Noli" then
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType and cType:lower():find("shedletsky") then
-		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= 
-true
+		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	end
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ACTION & AUTO-FARM SYSTEM
+-- PART 2: ACTION & AUTO-FARM SYSTEM (FIXED SHEDLETSKY ATTACHMENT)
 --------------------------------------------------------------------------------
 
+local function findShedletskyRemote()
+	local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+	if charAbilities then
+		local shedFolder = charAbilities:FindFirstChild("Shedletsky", true)
+		if shedFolder then
+			return shedFolder:FindFirstChild("ShedletskyAttackRemote", true)
+		end
+	end
+	return ReplicatedStorage:FindFirstChild("ShedletskyAttackRemote", true)
+end
+
+local shedRemote = findShedletskyRemote()
+
 local function castCharacterAction(actionName, targetPosition)
-	if not canUseCharacter() then return end
 	local cType = getCurrentCharacterType()
-	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType and cType:lower():find("shedletsky") and ShedletskyAbilities) or (cType == "Noli" and NoliAbilities)
+	
+	-- Shedletsky Slash Logic
+	if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
+		if not shedRemote then shedRemote = findShedletskyRemote() end
+		local data = ShedletskyAbilities["Slash"]
+		
+		if data then
+			local now = os.clock()
+			if now - data.LastUsed >= data.Cooldown then
+				data.LastUsed = now
+				
+				-- Ensure character states allow attack execution
+				if char then
+					char:SetAttribute("CanAttack", true)
+					char:SetAttribute("CanRun", true)
+				end
 
+				if shedRemote then
+					pcall(function()
+						-- Fire remote with position and empty fallback
+						if targetPosition then
+							shedRemote:FireServer(targetPosition)
+						else
+							shedRemote:FireServer()
+						end
+					end)
+				end
+			end
+		end
+		return
+	end
+
+	-- Fallback for Jason / Slasher / Noli
+	if not canUseCharacter() then return end
+	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType == "Noli" and NoliAbilities)
 	if not abilityTable then return end
-	local data = abilityTable[actionName]
 
+	local data = abilityTable[actionName]
 	if data and data.Remote then
 		local now = os.clock()
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
-
-			if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
-				if targetPosition then
-					data.Remote:FireServer(targetPosition)
-				else
-					data.Remote:FireServer()
-				end
-			elseif cType == "Noli" and actionName == "AltAbility2" then
+			if cType == "Noli" and actionName == "AltAbility2" then
 				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
 				data.Remote:FireServer(aimPos, true)
 			else
@@ -315,7 +352,8 @@ RS.Heartbeat:Connect(function()
 	if cType == "Jason" or cType == "Slasher" then
 		autoList, abilityTable = JASON_AUTO_ABILITIES, JasonAbilities
 	elseif cType and cType:lower():find("shedletsky") then
-		autoList, abilityTable = {"Slash"}, ShedletskyAbilities
+		autoList = {"Slash"}
+		abilityTable = ShedletskyAbilities
 	elseif cType == "Noli" then
 		autoList, abilityTable = NOLI_AUTO_ABILITIES, NoliAbilities
 	end
@@ -327,10 +365,7 @@ RS.Heartbeat:Connect(function()
 		local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
 		if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
 			for _, abilityName in ipairs(autoList) do
-				local data = abilityTable[abilityName]
-				if data and (os.clock() - data.LastUsed >= data.Cooldown) then
-					castCharacterAction(abilityName, tRoot.Position)
-				end
+				castCharacterAction(abilityName, tRoot.Position)
 			end
 		end
 	else
@@ -760,45 +795,56 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM
+-- PART 6: GUEST1337 AUTO FARM (REMOTES & TARGET FIX)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
 local currentHardLockedTarget = nil
-local ALLOWED_CHARACTERS = { ["guest1337"] = true, ["guest"] = true, ["shedletsky"] = true, ["dusekkar"] = true, ["martialartist"] = true, ["chance"] = true, ["twotime"] = true, ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true, ["janedoe"] = true, ["messi"] = true, ["noob"] = true }
 
-local function isAllowedCharacter(target)
-    if not target or not target.Character then return false end
-    local targetChar = target.Character
-    if ALLOWED_CHARACTERS[string.lower(targetChar.Name)] or ALLOWED_CHARACTERS[string.lower(target.Name)] then return true end
-    return false
+local function isAllowedCharacter(targetPlayer)
+    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then return false end
+    local targetChar = targetPlayer.Character
+    local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+
+    -- Check if target is alive and valid
+    if not targetHum or not targetHrp or targetHum.Health <= 0 then
+        return false
+    end
+
+    -- Allow all enemy players in workspace (bypasses restrictive whitelist errors)
+    return true
 end
 
-local function findGuestRemote(names)
-    for _, name in ipairs(names) do
-        local abilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-        if abilities and abilities:FindFirstChild("Guest1337", true) then
-            local obj = abilities.Guest1337:FindFirstChild(name, true)
-            if obj then return obj end
+local function findGuestRemote(possibleNames)
+    for _, name in ipairs(possibleNames) do
+        local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+        if charAbilities then
+            local guestFolder = charAbilities:FindFirstChild("Guest1337", true) or charAbilities:FindFirstChild("Guest", true)
+            if guestFolder then
+                local obj = guestFolder:FindFirstChild(name, true)
+                if obj then return obj end
+            end
         end
+
         local obj = ReplicatedStorage:FindFirstChild(name, true)
         if obj then return obj end
     end
     return nil
 end
 
-local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
-local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
+local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch", "MainAbility"})
+local chargeRemote = findGuestRemote({"ChargeRemote", "Charge", "AltAbility1"})
 
 RS.RenderStepped:Connect(function(deltaTime)
     if not (guestAutoLowHp or guestAutoAll) then return end
-    local char = player.Character
-    if not char then return end
-    local hum, hrp = char:FindFirstChildOfClass("Humanoid"), char:FindFirstChild("HumanoidRootPart")
-    if not hum or not hrp then return end
-    hum.WalkSpeed = guestSpeed
-    if hum.MoveDirection.Magnitude > 0 then
-        local move = hum.MoveDirection * guestSpeed * deltaTime
+    local c = player.Character
+    if not c then return end
+    local h, hrp = c:FindFirstChildOfClass("Humanoid"), c:FindFirstChild("HumanoidRootPart")
+    if not h or not hrp then return end
+    h.WalkSpeed = guestSpeed
+    if h.MoveDirection.Magnitude > 0 then
+        local move = h.MoveDirection * guestSpeed * deltaTime
         hrp.CFrame = hrp.CFrame + Vector3.new(move.X, 0, move.Z)
     end
 end)
@@ -807,13 +853,18 @@ local function getClosestGuestTarget(lowHpOnly)
     local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
     local closest, shortest = nil, math.huge
+
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local hrp, hum = p.Character:FindFirstChild("HumanoidRootPart"), p.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 and isAllowedCharacter(p) then
+        if p ~= player and isAllowedCharacter(p) then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum then
                 if not lowHpOnly or hum.Health <= guestThreshold then
                     local dist = (hrp.Position - myRoot.Position).Magnitude
-                    if dist < shortest then shortest, closest = dist, p end
+                    if dist < shortest then 
+                        shortest = dist
+                        closest = p 
+                    end
                 end
             end
         end
@@ -827,8 +878,9 @@ task.spawn(function()
         if guestAutoLowHp or guestAutoAll then
             local lowHpOnly = guestAutoLowHp and not guestAutoAll
             local target = nil
+
             if stickToTargetOn then
-                if currentHardLockedTarget and currentHardLockedTarget.Character and currentHardLockedTarget.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+                if currentHardLockedTarget and isAllowedCharacter(currentHardLockedTarget) then
                     target = currentHardLockedTarget
                 else
                     currentHardLockedTarget = getClosestGuestTarget(lowHpOnly)
@@ -840,12 +892,33 @@ task.spawn(function()
             end
 
             if target and target.Character then
-                local hrp, myHrp = target.Character:FindFirstChild("HumanoidRootPart"), player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+                local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
                 if hrp and myHrp then
-                    myHrp.CFrame = CFrame.lookAt((hrp.CFrame * CFrame.new(0, 0, -guestHitOffset)).Position, hrp.Position)
+                    -- Position & Facing
+                    local targetPos = hrp.Position
+                    local lookAtPos = Vector3.new(targetPos.X, myHrp.Position.Y, targetPos.Z)
+                    local offsetPos = hrp.CFrame * CFrame.new(0, 0, -guestHitOffset)
+                    myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
+
+                    -- Fire Remotes with multi-argument fallback
+                    if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch", "MainAbility"}) end
+                    if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge", "AltAbility1"}) end
+
                     pcall(function()
-                        if punchRemote and punchRemote:IsA("RemoteEvent") then punchRemote:FireServer() end
-                        if chargeRemote and chargeRemote:IsA("RemoteEvent") then chargeRemote:FireServer() end
+                        if chargeRemote then
+                            if chargeRemote:IsA("RemoteEvent") then
+                                chargeRemote:FireServer(targetPos)
+                                chargeRemote:FireServer()
+                            end
+                        end
+                        if punchRemote then
+                            if punchRemote:IsA("RemoteEvent") then
+                                punchRemote:FireServer(targetPos)
+                                punchRemote:FireServer()
+                            end
+                        end
                     end)
                 end
             end
@@ -857,9 +930,35 @@ end)
 
 local SectionGuestAutomation = GuestTab:Section({ Title = "Guest Auto Farm" })
 local GuestLowHpToggle, GuestAllToggle
-GuestLowHpToggle = SectionGuestAutomation:Toggle({ Title = "Auto Farm Low HP Players", Default = false, Callback = function(v) guestAutoLowHp = v currentHardLockedTarget = nil if v and GuestAllToggle then GuestAllToggle:SetValue(false) end end })
-GuestAllToggle = SectionGuestAutomation:Toggle({ Title = "Auto Farm All Players", Default = false, Callback = function(v) guestAutoAll = v currentHardLockedTarget = nil if v and GuestLowHpToggle then GuestLowHpToggle:SetValue(false) end end })
-SectionGuestAutomation:Toggle({ Title = "Lock to Target", Default = true, Callback = function(v) stickToTargetOn = v currentHardLockedTarget = nil end })
+
+GuestLowHpToggle = SectionGuestAutomation:Toggle({
+   Title = "Auto Farm Low HP Players",
+   Default = false,
+   Callback = function(v)
+      guestAutoLowHp = v
+      currentHardLockedTarget = nil
+      if v and GuestAllToggle then GuestAllToggle:SetValue(false) end
+   end,
+})
+
+GuestAllToggle = SectionGuestAutomation:Toggle({
+   Title = "Auto Farm All Players",
+   Default = false,
+   Callback = function(v)
+      guestAutoAll = v
+      currentHardLockedTarget = nil
+      if v and GuestLowHpToggle then GuestLowHpToggle:SetValue(false) end
+   end,
+})
+
+SectionGuestAutomation:Toggle({
+   Title = "Lock to Target",
+   Default = true,
+   Callback = function(v)
+      stickToTargetOn = v
+      currentHardLockedTarget = nil
+   end,
+})
 
 local SectionGuestSettings = GuestTab:Section({ Title = "Guest Parameters" })
 SectionGuestSettings:Input({ Title = "Low HP Threshold", Placeholder = "20", Callback = function(t) local v = tonumber(t) if v then guestThreshold = v end end })
