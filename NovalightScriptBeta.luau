@@ -134,9 +134,9 @@ local JasonAbilities = {
 	["AltAbility3"] = { Cooldown = 20, LastUsed = 0, Remote = jasonFolder and jasonFolder:FindFirstChild("Enraged") }
 }
 
+-- Simplified Shedletsky Setup (Slash only)
 local ShedletskyAbilities = {
-	["Slash"] = { Cooldown = 15, LastUsed = 0, Remote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote") },
-	["Fried Chicken"] = { Cooldown = 15, LastUsed = 0, Remote = shedFolder and shedFolder:FindFirstChild("ShedletskyChickenRemote") }
+	["Slash"] = { Cooldown = 15, LastUsed = 0, Remote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote") }
 }
 
 local NoliAbilities = {
@@ -145,7 +145,7 @@ local NoliAbilities = {
 }
 
 local JASON_AUTO_ABILITIES = { "MainAbility", "AltAbility1", "AltAbility2" }
-local SHEDLETSKY_AUTO_ABILITIES = { "Slash", "Fried Chicken" }
+local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
 local NOLI_AUTO_ABILITIES = { "MainAbility", "AltAbility2" }
 
 local autoFarmLowHpOn = false
@@ -171,71 +171,14 @@ local function canUseCharacter()
 	if cType == "Jason" or cType == "Slasher" or cType == "Noli" then
 		return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
 	elseif cType == "Shedletsky" then
-		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
+		return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= tru
+e
 	end
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
+-- PART 2: ACTION & AUTO-FARM SYSTEM (REWORKED & OPTIMIZED)
 --------------------------------------------------------------------------------
-
-local function playShedletskyAnim()
-	if not char or not hum then return end
-	local anim = Instance.new("Animation")
-	local skin = char:GetAttribute("Skin")
-	local actualSkin = char:GetAttribute("ActualSkin")
-
-	if skin == "RetroShed" then anim.AnimationId = "rbxassetid://84906874339359"
-	elseif skin == "M100Shed" or skin == "M75Shed" then anim.AnimationId = "rbxassetid://72661064392418"
-	elseif skin == "BusterShedletsky" then anim.AnimationId = "rbxassetid://102735588255002"
-	elseif skin == "ButcherShedletsky" then anim.AnimationId = "rbxassetid://83703568665249"
-	elseif skin == "NessShedletsky" or skin == "Scout" then anim.AnimationId = "rbxassetid://117635960799966"
-	elseif skin == "Targetman" then anim.AnimationId = "rbxassetid://117814766896269"
-	elseif skin == "SCP" then anim.AnimationId = "rbxassetid://113516249240896"
-	elseif skin == "Snyfort" or skin == "Pastelbeat" or skin == "Upbeat" or skin == "SoapyDX" or skin == "SoapyDXLegacy" or skin == "DownTunes" then anim.AnimationId = "rbxassetid://115680124099922"
-	elseif skin == "Pastello" and (actualSkin ~= "Pastello3" and actualSkin ~= "Pastello4") then anim.AnimationId = "rbxassetid://79130710510782"
-	elseif skin == "Pastello" and actualSkin == "Pastello3" then anim.AnimationId = "rbxassetid://99539026106525"
-	elseif skin == "Pastello" and actualSkin == "Pastello4" then anim.AnimationId = "rbxassetid://115470481199645"
-	elseif skin == "GoldenShedletsky" then anim.AnimationId = "rbxassetid://94865308722467"
-	elseif skin == "TillDawnShedletsky" then anim.AnimationId = "rbxassetid://112474546068323"
-	elseif skin == "Blega" then anim.AnimationId = "rbxassetid://74816403474613"
-	elseif skin == "SoapyDX4" then anim.AnimationId = "rbxassetid://122628818808958"
-	elseif skin == "VIPShed" then anim.AnimationId = "rbxassetid://80100528383027"
-	else anim.AnimationId = "rbxassetid://107302018639039" end
-
-	local track = hum:LoadAnimation(anim)
-	track:Play()
-
-	local conn
-	conn = char:GetAttributeChangedSignal("HitSlash"):Connect(function()
-		if char:GetAttribute("HitSlash") and skin ~= "Blega" then
-			track:Stop()
-			local hitAnim = Instance.new("Animation")
-			hitAnim.AnimationId = "rbxassetid://104029412142861"
-			hum:LoadAnimation(hitAnim):Play()
-			if conn then conn:Disconnect() end
-		end
-	end)
-end
-
-local function playNoliAnim()
-	if not char or not hum then return end
-	local anim = Instance.new("Animation")
-	local skin = char:GetAttribute("Skin")
-
-	if skin == "RetroNoli" then anim.AnimationId = "rbxassetid://120515916154475"
-	elseif skin == "Clockwork" then anim.AnimationId = "rbxassetid://108021827965381"
-	elseif skin == "NarratorNoli" then anim.AnimationId = "rbxassetid://128744951510910"
-	elseif skin == "Noli4" then anim.AnimationId = "rbxassetid://98438228576241"
-	elseif skin == "EvilTeh" then anim.AnimationId = "rbxassetid://97930480559280"
-	elseif skin == "AdminNoli" then anim.AnimationId = "rbxassetid://126706312443717"
-	elseif skin == "Pastway" or skin == "Fleatway" then anim.AnimationId = "rbxassetid://105540391527912"
-	else anim.AnimationId = "rbxassetid://133721031387826" end
-
-	local track = hum:LoadAnimation(anim)
-	track:Play()
-	track:AdjustSpeed(1.5)
-end
 
 local function castCharacterAction(actionName, targetPosition)
 	if not canUseCharacter() then return end
@@ -249,12 +192,6 @@ local function castCharacterAction(actionName, targetPosition)
 		local now = os.clock()
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
-
-			if cType == "Shedletsky" and actionName == "Slash" then
-				playShedletskyAnim()
-			elseif cType == "Noli" and actionName == "MainAbility" then
-				playNoliAnim()
-			end
 
 			if cType == "Noli" and actionName == "AltAbility2" then
 				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
@@ -350,7 +287,7 @@ local function positionAtTarget(targetPlayer)
 end
 
 --------------------------------------------------------------------------------
--- EMERGENCY SAFETY DISABLER FUNCTION
+-- EMERGENCY SAFETY DISABLER & TELEPORTER
 --------------------------------------------------------------------------------
 local function checkEmergencyHealth()
 	local currentHum = char and char:FindFirstChildOfClass("Humanoid")
@@ -359,10 +296,10 @@ local function checkEmergencyHealth()
 			autoFarmLowHpOn = false
 			autoFarmAllOn = false
 			currentLockedTarget = nil
-			
+
 			if LowHpToggle then LowHpToggle:SetValue(false) end
 			if AllPlayersToggle then AllPlayersToggle:SetValue(false) end
-			
+
 			teleportToSafeSpace()
 		end
 		return true
@@ -371,7 +308,7 @@ local function checkEmergencyHealth()
 end
 
 --------------------------------------------------------------------------------
--- UNBROKEN STICKY POSITIONING LOOP (STEPS EVERY FRAME)
+-- POSITIONING LOOP (STEPS EVERY FRAME)
 --------------------------------------------------------------------------------
 RS.Stepped:Connect(function()
 	if checkEmergencyHealth() then return end
@@ -395,20 +332,12 @@ end)
 -- AUTO FARM HEARTBEAT LOOP (FIRE ABILITIES ONLY WHEN NEARBY)
 --------------------------------------------------------------------------------
 RS.Heartbeat:Connect(function()
-	if char and getCurrentCharacterType() == "Shedletsky" then
-		char:SetAttribute("CanRun", true)
-		char:SetAttribute("Slowed", false)
-		if hum and hum.WalkSpeed < 16 then
-			hum.WalkSpeed = 16
-		end
-	end
-
 	if checkEmergencyHealth() then return end
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
 	local cType = getCurrentCharacterType()
 	local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
-		or (cType == "Shedletsky" and SHEDLETSKY_AUTO_ABILITIES) 
+		or (cType == "Shedletsky" and {"Slash"}) 
 		or (cType == "Noli" and NOLI_AUTO_ABILITIES) 
 		or {}
 
