@@ -157,7 +157,24 @@ end
 -- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
 --------------------------------------------------------------------------------
 
-local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) and ReplicatedStorage.CharacterAbilities:WaitForChild("Shedletsky", 5) and ReplicatedStorage.CharacterAbilities.Shedletsky:WaitForChild("ShedletskyAttackRemote", 5)
+local function findShedletskyRemote()
+	local possibleNames = {"ShedletskyAttackRemote", "ShedletskyAttack", "Attack", "Slash"}
+	for _, name in ipairs(possibleNames) do
+		local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+		if charAbilities then
+			local shedFolder = charAbilities:FindFirstChild("Shedletsky", true) or charAbilities:FindFirstChild("Shed", true)
+			if shedFolder then
+				local obj = shedFolder:FindFirstChild(name, true)
+				if obj then return obj end
+			end
+		end
+		local obj = ReplicatedStorage:FindFirstChild(name, true)
+		if obj then return obj end
+	end
+	return nil
+end
+
+local shedletskyRemote = findShedletskyRemote()
 
 local function playShedletskyAnim()
 	if not char or not hum or hum.Health <= 0 then return end
@@ -220,11 +237,8 @@ local function castCharacterAction(actionName, targetPosition)
 	local data = abilityTable[actionName]
 
 	if data then
+		if not shedletskyRemote then shedletskyRemote = findShedletskyRemote() end
 		local targetRemote = (cType and cType:lower():find("shedletsky") and actionName == "Slash") and (shedletskyRemote or data.Remote) or data.Remote
-		if not targetRemote then 
-			shedletskyRemote = ReplicatedStorage:FindFirstChild("ShedletskyAttackRemote", true)
-			targetRemote = shedletskyRemote or data.Remote
-		end
 		if not targetRemote then return end
 
 		local now = os.clock()
@@ -242,12 +256,20 @@ local function castCharacterAction(actionName, targetPosition)
 				playNoliAnim()
 			end
 
-			if cType == "Noli" and actionName == "AltAbility2" then
-				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-				if targetRemote:IsA("RemoteEvent") then targetRemote:FireServer(aimPos, true) end
-			else
-				if targetRemote:IsA("RemoteEvent") then targetRemote:FireServer() end
-			end
+			pcall(function()
+				if cType == "Noli" and actionName == "AltAbility2" then
+					local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
+					targetRemote:FireServer(aimPos, true)
+				elseif cType and cType:lower():find("shedletsky") and actionName == "Slash" then
+					if targetPosition then
+						targetRemote:FireServer(targetPosition)
+					else
+						targetRemote:FireServer()
+					end
+				else
+					targetRemote:FireServer()
+				end
+			end)
 		end
 	end
 end
@@ -800,13 +822,13 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (STANDALONE ENGINE INTEGRATED)
+-- PART 6: GUEST1337 AUTO FARM (STRICT SURVIVOR WHITELIST)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
 local currentHardLockedTarget = nil
 
-local ALLOWED_CHARACTERS = {
+local SURVIVOR_CLASSES = {
     ["guest1337"]     = true,
     ["guest"]         = true,
     ["shedletsky"]    = true,
@@ -825,34 +847,25 @@ local ALLOWED_CHARACTERS = {
 local function isAllowedCharacter(playerTarget)
     if not playerTarget or not playerTarget.Parent or not playerTarget.Character then return false end
     local char = playerTarget.Character
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
 
-    if ALLOWED_CHARACTERS[string.lower(char.Name)] then return true end
-    if ALLOWED_CHARACTERS[string.lower(playerTarget.Name)] then return true end
+    if not hum or not hrp or hum.Health <= 0 then return false end
 
-    for _, attrName in ipairs({"Character", "CharacterType", "Role", "Class", "Kit", "SelectedCharacter"}) do
-        local attrValue = char:GetAttribute(attrName) or playerTarget:GetAttribute(attrName)
-        if attrValue and type(attrValue) == "string" then
-            if ALLOWED_CHARACTERS[string.lower(attrValue)] then return true end
-        end
+    -- Check character name or attributes against survivor list strictly
+    local charType = string.lower(tostring(char:GetAttribute("Character") or char:GetAttribute("CharacterType") or char.Name))
+    if SURVIVOR_CLASSES[charType] or SURVIVOR_CLASSES[string.lower(playerTarget.Name)] then 
+        return true 
     end
 
     for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("StringValue") and ALLOWED_CHARACTERS[string.lower(child.Value)] then return true end
+        if child:IsA("StringValue") and SURVIVOR_CLASSES[string.lower(child.Value)] then return true end
     end
 
-    local backpack = playerTarget:FindFirstChild("Backpack")
-    local itemsToCheck = {}
-    if backpack then for _, v in ipairs(backpack:GetChildren()) do table.insert(itemsToCheck, v.Name) end end
-    for _, v in ipairs(char:GetChildren()) do if v:IsA("Tool") then table.insert(itemsToCheck, v.Name) end end
-
-    for _, itemName in ipairs(itemsToCheck) do
-        if ALLOWED_CHARACTERS[string.lower(itemName)] then return true end
-    end
-
-    return true -- Fallback to allow any valid character in the round if names differ
+    return false
 end
 
-local function findRemote(possibleNames)
+local function findGuestRemote(possibleNames)
     for _, name in ipairs(possibleNames) do
         local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
         if charAbilities then
@@ -869,8 +882,8 @@ local function findRemote(possibleNames)
     return nil
 end
 
-local punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
-local chargeRemote = findRemote({"ChargeRemote", "Charge"})
+local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
+local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
 
 local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
     if not remoteObj then return end
@@ -888,8 +901,8 @@ local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
 end
 
 local function executeGuestAbilities(targetChar, targetHrp)
-    if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
-    if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge"}) end
+    if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
+    if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
 
     safeTriggerRemote(chargeRemote, targetChar, targetHrp)
     safeTriggerRemote(punchRemote, targetChar, targetHrp)
@@ -922,9 +935,9 @@ end)
 local function isTargetValid(targetPlayer, lowHpOnly)
     if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then return false end
 
-    local char = targetPlayer.Character
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local targetChar = targetPlayer.Character
+    local hrp = targetChar:FindFirstChild("HumanoidRootPart")
+    local hum = targetChar:FindFirstChildOfClass("Humanoid")
 
     if not hrp or not hum or hum.Health <= 0 then
         return false
@@ -1010,7 +1023,7 @@ local SectionGuestAutomation = GuestTab:Section({ Title = "Guest Auto Farm" })
 local GuestLowHpToggle, GuestAllToggle
 
 GuestLowHpToggle = SectionGuestAutomation:Toggle({
-   Title = "Auto Farm Low HP Players",
+   Title = "Auto Farm Low HP Survivors",
    Default = false,
    Callback = function(v)
       guestAutoLowHp = v
@@ -1020,7 +1033,7 @@ GuestLowHpToggle = SectionGuestAutomation:Toggle({
 })
 
 GuestAllToggle = SectionGuestAutomation:Toggle({
-   Title = "Auto Farm All Players",
+   Title = "Auto Farm All Survivors",
    Default = false,
    Callback = function(v)
       guestAutoAll = v
