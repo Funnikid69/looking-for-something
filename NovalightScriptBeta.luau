@@ -154,7 +154,7 @@ local function canUseCharacter()
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ACTION & AUTO-FARM SYSTEM (SHEDLETSKY FIXED)
+-- PART 2: ACTION & AUTO-FARM SYSTEM (STRICT LOW HP VALIDATION)
 --------------------------------------------------------------------------------
 
 local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) 
@@ -221,26 +221,43 @@ local function castCharacterAction(actionName, targetPosition)
 	end
 end
 
-local function isTargetAliveAndValid(p)
+--------------------------------------------------------------------------------
+-- STRICT TARGET VALIDATION & SELECTION
+--------------------------------------------------------------------------------
+
+local function isTargetAliveAndValid(p, maxHpConstraint)
 	if not p or not p.Parent or not p.Character or p == player then return false end
 	local tHum = p.Character:FindFirstChild("Humanoid")
 	local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
-	return tHum and tRoot and tHum.Health > 0 and p.Character:IsDescendantOf(workspace)
+	
+	if not tHum or not tRoot or tHum.Health <= 0 or not p.Character:IsDescendantOf(workspace) then
+		return false
+	end
+
+	-- STRICT LOW HP CHECK: Reject target if health exceeds threshold
+	if maxHpConstraint and tHum.Health > maxHpConstraint then
+		return false
+	end
+
+	return true
 end
 
 local function getLowHpTarget(maxHp)
-	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget) then
+	local limitHp = maxHp or targetHealthThreshold
+
+	-- Validate existing hard lock target strictly against threshold
+	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget, limitHp) then
 		return currentLockedTarget
 	end
 
 	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
 	if not myRoot then return nil end
 
-	local lowestHp = maxHp or targetHealthThreshold
+	local lowestHp = limitHp
 	local targetPlayer = nil
 
 	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= player and isTargetAliveAndValid(p) then
+		if p ~= player and isTargetAliveAndValid(p, limitHp) then
 			local tHum = p.Character.Humanoid
 			if tHum.Health <= lowestHp then
 				lowestHp = tHum.Health
@@ -254,7 +271,7 @@ local function getLowHpTarget(maxHp)
 end
 
 local function getAnyTarget()
-	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget) then
+	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget, nil) then
 		return currentLockedTarget
 	end
 
@@ -265,7 +282,7 @@ local function getAnyTarget()
 	local targetPlayer = nil
 
 	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= player and isTargetAliveAndValid(p) then
+		if p ~= player and isTargetAliveAndValid(p, nil) then
 			local tRoot = p.Character.HumanoidRootPart
 			local dist = (tRoot.Position - myRoot.Position).Magnitude
 			if dist < closestDist then
@@ -298,13 +315,22 @@ local function positionAtTarget(targetPlayer)
 	end
 end
 
+--------------------------------------------------------------------------------
+-- POSITIONING & ATTACK LOOPS
+--------------------------------------------------------------------------------
+
 RS.Stepped:Connect(function()
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 	if not char or not hum or hum.Health <= 0 then return end
 
 	local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
-	if activeTarget and isTargetAliveAndValid(activeTarget) then
+	
+	-- Verify target strictly matches criteria before moving
+	local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
+	if activeTarget and isTargetAliveAndValid(activeTarget, maxHpConstraint) then
 		positionAtTarget(activeTarget)
+	else
+		currentLockedTarget = nil
 	end
 end)
 
@@ -328,25 +354,32 @@ RS.Heartbeat:Connect(function()
 		return
 	end
 
-	local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
-		or (cType and cType:lower():find("shedletsky") and {"Slash"}) 
-		or (cType == "Noli" and NOLI_AUTO_ABILITIES) or {}
-
+	local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
 	local targetP = currentLockedTarget
-	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
 
-	-- Attack ONLY executes when auto-farming an active, valid target
-	if targetP and isTargetAliveAndValid(targetP) and myRoot then
-		local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
-		if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
-			for _, abilityName in ipairs(autoList) do
-				castCharacterAction(abilityName, tRoot.Position)
+	-- Verify target strictly matches criteria before attacking
+	if targetP and isTargetAliveAndValid(targetP, maxHpConstraint) then
+		local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
+			or (cType and cType:lower():find("shedletsky") and {"Slash"}) 
+			or (cType == "Noli" and NOLI_AUTO_ABILITIES) or {}
+
+		local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+		if myRoot then
+			local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
+			if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
+				for _, abilityName in ipairs(autoList) do
+					castCharacterAction(abilityName, tRoot.Position)
+				end
 			end
 		end
 	else
 		currentLockedTarget = nil
 	end
 end)
+
+--------------------------------------------------------------------------------
+-- AUTO FARM TAB ELEMENTS
+--------------------------------------------------------------------------------
 
 local SectionTarget = AutoFarmTab:Section({ Title = "Targeting Options" })
 SectionTarget:Toggle({ Title = "Lock in Front of Person", Default = false, Callback = function(v) lockInFrontOn = v end })
@@ -401,7 +434,10 @@ SectionAuto:Dropdown({
    Callback = function(option)
       local selected = typeof(option) == "table" and option[1] or option
       local val = tonumber(string.match(selected, "%d+"))
-      if val then targetHealthThreshold = val end
+      if val then 
+         targetHealthThreshold = val 
+         currentLockedTarget = nil -- Reset target lock on threshold change
+      end
    end,
 })
 
