@@ -154,122 +154,69 @@ local function canUseCharacter()
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ANIMATION, ACTION & AUTO-FARM SYSTEM
+-- PART 2: ACTION & AUTO-FARM SYSTEM (SHEDLETSKY FIXED)
 --------------------------------------------------------------------------------
 
-local function findShedletskyRemote()
-	local possibleNames = {"ShedletskyAttackRemote", "ShedletskyAttack", "Attack", "Slash"}
-	for _, name in ipairs(possibleNames) do
-		local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-		if charAbilities then
-			local shedFolder = charAbilities:FindFirstChild("Shedletsky", true) or charAbilities:FindFirstChild("Shed", true)
-			if shedFolder then
-				local obj = shedFolder:FindFirstChild(name, true)
-				if obj then return obj end
-			end
-		end
-		local obj = ReplicatedStorage:FindFirstChild(name, true)
-		if obj then return obj end
-	end
-	return nil
-end
-
-local shedletskyRemote = findShedletskyRemote()
-
-local function playShedletskyAnim()
-	if not char or not hum or hum.Health <= 0 then return end
-	if char:GetAttribute("Character") ~= "Shedletsky" then return end
-	if char:GetAttribute("CanAttack") == false or char:GetAttribute("AbilitiesDisabled") == true then return end
-
-	local anim = Instance.new("Animation")
-	local skin = char:GetAttribute("Skin")
-	local actualSkin = char:GetAttribute("ActualSkin")
-
-	if skin == "RetroShed" then anim.AnimationId = "rbxassetid://84906874339359"
-	elseif skin == "M100Shed" or skin == "M75Shed" then anim.AnimationId = "rbxassetid://72661064392418"
-	elseif skin == "BusterShedletsky" then anim.AnimationId = "rbxassetid://102735588255002"
-	elseif skin == "ButcherShedletsky" then anim.AnimationId = "rbxassetid://83703568665249"
-	elseif skin == "NessShedletsky" or skin == "Scout" then anim.AnimationId = "rbxassetid://117635960799966"
-	elseif skin == "Targetman" then anim.AnimationId = "rbxassetid://117814766896269"
-	elseif skin == "SCP" then anim.AnimationId = "rbxassetid://113516249240896"
-	elseif skin == "Snyfort" or skin == "Pastelbeat" or skin == "Upbeat" or skin == "SoapyDX" or skin == "SoapyDXLegacy" or skin == "DownTunes" then anim.AnimationId = "rbxassetid://115680124099922"
-	elseif skin == "Pastello" and (actualSkin ~= "Pastello3" and actualSkin ~= "Pastello4") then anim.AnimationId = "rbxassetid://79130710510782"
-	elseif skin == "Pastello" and actualSkin == "Pastello3" then anim.AnimationId = "rbxassetid://99539026106525"
-	elseif skin == "Pastello" and actualSkin == "Pastello4" then anim.AnimationId = "rbxassetid://115470481199645"
-	elseif skin == "GoldenShedletsky" then anim.AnimationId = "rbxassetid://94865308722467"
-	elseif skin == "TillDawnShedletsky" then anim.AnimationId = "rbxassetid://112474546068323"
-	elseif skin == "Blega" then anim.AnimationId = "rbxassetid://74816403474613"
-	elseif skin == "SoapyDX4" then anim.AnimationId = "rbxassetid://122628818808958"
-	elseif skin == "VIPShed" then anim.AnimationId = "rbxassetid://80100528383027"
-	else anim.AnimationId = "rbxassetid://107302018639039" end
-
-	task.spawn(function()
-		local track = hum:LoadAnimation(anim)
-		track:Play()
-	end)
-end
-
-local function playNoliAnim()
-	if not char or not hum then return end
-	local anim = Instance.new("Animation")
-	local skin = char:GetAttribute("Skin")
-
-	if skin == "RetroNoli" then anim.AnimationId = "rbxassetid://120515916154475"
-	elseif skin == "Clockwork" then anim.AnimationId = "rbxassetid://108021827965381"
-	elseif skin == "NarratorNoli" then anim.AnimationId = "rbxassetid://128744951510910"
-	elseif skin == "Noli4" then anim.AnimationId = "rbxassetid://98438228576241"
-	elseif skin == "EvilTeh" then anim.AnimationId = "rbxassetid://97930480559280"
-	elseif skin == "AdminNoli" then anim.AnimationId = "rbxassetid://126706312443717"
-	elseif skin == "Pastway" or skin == "Fleatway" then anim.AnimationId = "rbxassetid://105540391527912"
-	else anim.AnimationId = "rbxassetid://133721031387826" end
-
-	local track = hum:LoadAnimation(anim)
-	track:Play()
-	track:AdjustSpeed(1.5)
-end
+local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) 
+	and ReplicatedStorage.CharacterAbilities:WaitForChild("Shedletsky", 5) 
+	and ReplicatedStorage.CharacterAbilities.Shedletsky:WaitForChild("ShedletskyAttackRemote", 5)
 
 local function castCharacterAction(actionName, targetPosition)
 	if not canUseCharacter() then return end
 	local cType = getCurrentCharacterType()
-	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType and cType:lower():find("shedletsky") and ShedletskyAbilities) or (cType == "Noli" and NoliAbilities)
 
+	-- Direct Shedletsky Slash logic
+	if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
+		if not shedletskyRemote then
+			local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+			local shedFolder = charAbilities and charAbilities:FindFirstChild("Shedletsky", true)
+			shedletskyRemote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote", true)
+		end
+
+		if shedletskyRemote then
+			local data = ShedletskyAbilities["Slash"]
+			local now = os.clock()
+			
+			if data and (now - data.LastUsed >= data.Cooldown) then
+				data.LastUsed = now
+
+				-- Turn character toward target
+				if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
+					local myRoot = char.HumanoidRootPart
+					myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
+				end
+
+				-- Execute ability via RemoteFunction / RemoteEvent safely
+				task.spawn(function()
+					pcall(function()
+						if shedletskyRemote:IsA("RemoteFunction") then
+							shedletskyRemote:InvokeServer()
+						elseif shedletskyRemote:IsA("RemoteEvent") then
+							shedletskyRemote:FireServer()
+						end
+					end)
+				end)
+			end
+		end
+		return
+	end
+
+	-- Logic for Jason / Slasher / Noli
+	local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType == "Noli" and NoliAbilities)
 	if not abilityTable then return end
+
 	local data = abilityTable[actionName]
-
-	if data then
-		if not shedletskyRemote then shedletskyRemote = findShedletskyRemote() end
-		local targetRemote = (cType and cType:lower():find("shedletsky") and actionName == "Slash") and (shedletskyRemote or data.Remote) or data.Remote
-		if not targetRemote then return end
-
+	if data and data.Remote then
 		local now = os.clock()
 		if now - data.LastUsed >= data.Cooldown then
 			data.LastUsed = now
 
-			if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
-				local myRoot = char.HumanoidRootPart
-				myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
+			if cType == "Noli" and actionName == "AltAbility2" then
+				local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
+				data.Remote:FireServer(aimPos, true)
+			else
+				data.Remote:FireServer()
 			end
-
-			if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
-				playShedletskyAnim()
-			elseif cType == "Noli" and actionName == "MainAbility" then
-				playNoliAnim()
-			end
-
-			pcall(function()
-				if cType == "Noli" and actionName == "AltAbility2" then
-					local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-					targetRemote:FireServer(aimPos, true)
-				elseif cType and cType:lower():find("shedletsky") and actionName == "Slash" then
-					if targetPosition then
-						targetRemote:FireServer(targetPosition)
-					else
-						targetRemote:FireServer()
-					end
-				else
-					targetRemote:FireServer()
-				end
-			end)
 		end
 	end
 end
@@ -388,6 +335,7 @@ RS.Heartbeat:Connect(function()
 	local targetP = currentLockedTarget
 	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
 
+	-- Attack ONLY executes when auto-farming an active, valid target
 	if targetP and isTargetAliveAndValid(targetP) and myRoot then
 		local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
 		if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
