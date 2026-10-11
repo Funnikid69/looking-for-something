@@ -892,7 +892,7 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (OPTIMIZED THROTTLING)
+-- PART 6: GUEST1337 AUTO FARM (REMOTES & HITBOX FIXED + OPTIMIZED)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
@@ -927,14 +927,18 @@ local function isAllowedCharacter(playerTarget)
         return true 
     end
 
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("StringValue") and SURVIVOR_CLASSES[string.lower(child.Value)] then return true end
+    end
+
     return false
 end
 
-local function findGuestRemote(possibleNames)
+local function findRemote(possibleNames)
     for _, name in ipairs(possibleNames) do
         local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
         if charAbilities then
-            local guestFolder = charAbilities:FindFirstChild("Guest1337", true)
+            local guestFolder = charAbilities:FindFirstChild("Guest1337", true) or charAbilities:FindFirstChild("Guest", true)
             if guestFolder then
                 local obj = guestFolder:FindFirstChild(name, true)
                 if obj then return obj end
@@ -947,10 +951,33 @@ local function findGuestRemote(possibleNames)
     return nil
 end
 
-local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
-local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
+local punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch", "MainAbility"})
+local chargeRemote = findRemote({"ChargeRemote", "Charge", "AltAbility1"})
 
--- Movement enforcement
+local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
+    if not remoteObj then return end
+    pcall(function()
+        if remoteObj:IsA("RemoteEvent") then
+            remoteObj:FireServer()
+            if targetChar then remoteObj:FireServer(targetChar) end
+            if targetHrp then remoteObj:FireServer(targetHrp.Position) end
+        elseif remoteObj:IsA("RemoteFunction") then
+            task.spawn(function()
+                remoteObj:InvokeServer()
+            end)
+        end
+    end)
+end
+
+local function executeGuestAbilities(targetChar, targetHrp)
+    if not punchRemote then punchRemote = findRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch", "MainAbility"}) end
+    if not chargeRemote then chargeRemote = findRemote({"ChargeRemote", "Charge", "AltAbility1"}) end
+
+    safeTriggerRemote(chargeRemote, targetChar, targetHrp)
+    safeTriggerRemote(punchRemote, targetChar, targetHrp)
+end
+
+-- Smooth Movement Enforcement
 RS.RenderStepped:Connect(function(deltaTime)
     if not (guestAutoLowHp or guestAutoAll) then return end
 
@@ -1021,10 +1048,10 @@ local function getClosestValidPlayer(lowHpOnly)
     return closestPlayer
 end
 
--- Throttled Main Execution Loop (Safe 0.1s yield to avoid CPU bottleneck)
+-- Optimized Execution Loop (Stable 0.05s delay prevents CPU lag while keeping attacks continuous)
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(0.05)
 
         if guestAutoLowHp or guestAutoAll then
             local lowHpOnly = guestAutoLowHp and not guestAutoAll
@@ -1050,17 +1077,13 @@ task.spawn(function()
                 local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
                 if targetHrp and targetHum and targetHum.Health > 0 and myHrp then
+                    -- Face target directly at close offset range
                     local lookAtPos = Vector3.new(targetHrp.Position.X, myHrp.Position.Y, targetHrp.Position.Z)
                     local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -guestHitOffset)
                     myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
 
-                    if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
-                    if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
-
-                    pcall(function()
-                        if chargeRemote and chargeRemote:IsA("RemoteEvent") then chargeRemote:FireServer() end
-                        if punchRemote and punchRemote:IsA("RemoteEvent") then punchRemote:FireServer() end
-                    end)
+                    -- Trigger ability remotes continuously during active farm engagement
+                    executeGuestAbilities(targetChar, targetHrp)
                 end
             end
         else
@@ -1068,6 +1091,10 @@ task.spawn(function()
         end
     end
 end)
+
+--------------------------------------------------------------------------------
+-- GUEST TAB ELEMENTS
+--------------------------------------------------------------------------------
 
 local SectionGuestAutomation = GuestTab:Section({ Title = "Guest Auto Farm" })
 local GuestLowHpToggle, GuestAllToggle
