@@ -154,7 +154,7 @@ local function canUseCharacter()
 	return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ACTION & AUTO-FARM SYSTEM (STRICT LOW HP VALIDATION)
+-- PART 2: ACTION & AUTO-FARM SYSTEM (IDLE SAFE SPACE TELEPORT)
 --------------------------------------------------------------------------------
 
 local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) 
@@ -234,7 +234,7 @@ local function isTargetAliveAndValid(p, maxHpConstraint)
 		return false
 	end
 
-	-- STRICT LOW HP CHECK: Reject target if health exceeds threshold
+	-- STRICT LOW HP CHECK
 	if maxHpConstraint and tHum.Health > maxHpConstraint then
 		return false
 	end
@@ -245,7 +245,7 @@ end
 local function getLowHpTarget(maxHp)
 	local limitHp = maxHp or targetHealthThreshold
 
-	-- Validate existing hard lock target strictly against threshold
+	-- Validate existing locked target strictly against threshold
 	if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget, limitHp) then
 		return currentLockedTarget
 	end
@@ -316,21 +316,32 @@ local function positionAtTarget(targetPlayer)
 end
 
 --------------------------------------------------------------------------------
--- POSITIONING & ATTACK LOOPS
+-- POSITIONING & ATTACK LOOPS WITH IDLE SAFE SPACE TELEPORT
 --------------------------------------------------------------------------------
 
+local isCurrentlyWaitingInSafeSpace = false
+
 RS.Stepped:Connect(function()
-	if not autoFarmLowHpOn and not autoFarmAllOn then return end
+	if not autoFarmLowHpOn and not autoFarmAllOn then 
+		isCurrentlyWaitingInSafeSpace = false
+		return 
+	end
 	if not char or not hum or hum.Health <= 0 then return end
 
 	local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
-	
-	-- Verify target strictly matches criteria before moving
 	local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
+
 	if activeTarget and isTargetAliveAndValid(activeTarget, maxHpConstraint) then
+		isCurrentlyWaitingInSafeSpace = false
 		positionAtTarget(activeTarget)
 	else
 		currentLockedTarget = nil
+		
+		-- If Auto-Farm Low HP is active but no targets exist, stay parked at Safe Space
+		if autoFarmLowHpOn and not isCurrentlyWaitingInSafeSpace then
+			isCurrentlyWaitingInSafeSpace = true
+			teleportToSafeSpace()
+		end
 	end
 end)
 
@@ -344,12 +355,14 @@ RS.Heartbeat:Connect(function()
 
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
+	-- Emergency Health Protection Threshold
 	if hum and hum.Health <= 30 then
 		if autoFarmLowHpOn and LowHpToggle then LowHpToggle:SetValue(false) end
 		if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
 		autoFarmLowHpOn = false
 		autoFarmAllOn = false
 		currentLockedTarget = nil
+		isCurrentlyWaitingInSafeSpace = false
 		teleportToSafeSpace()
 		return
 	end
@@ -357,7 +370,6 @@ RS.Heartbeat:Connect(function()
 	local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
 	local targetP = currentLockedTarget
 
-	-- Verify target strictly matches criteria before attacking
 	if targetP and isTargetAliveAndValid(targetP, maxHpConstraint) then
 		local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
 			or (cType and cType:lower():find("shedletsky") and {"Slash"}) 
@@ -406,6 +418,7 @@ LowHpToggle = SectionAuto:Toggle({
          return
       end
       autoFarmLowHpOn = value
+      isCurrentlyWaitingInSafeSpace = false
       if value and AllPlayersToggle then AllPlayersToggle:SetValue(false) end
       if not value then currentLockedTarget = nil end
    end,
@@ -422,6 +435,7 @@ AllPlayersToggle = SectionAuto:Toggle({
          return
       end
       autoFarmAllOn = value
+      isCurrentlyWaitingInSafeSpace = false
       if value and LowHpToggle then LowHpToggle:SetValue(false) end
       if not value then currentLockedTarget = nil end
    end,
@@ -436,7 +450,8 @@ SectionAuto:Dropdown({
       local val = tonumber(string.match(selected, "%d+"))
       if val then 
          targetHealthThreshold = val 
-         currentLockedTarget = nil -- Reset target lock on threshold change
+         currentLockedTarget = nil
+         isCurrentlyWaitingInSafeSpace = false
       end
    end,
 })
