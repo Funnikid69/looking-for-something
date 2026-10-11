@@ -553,9 +553,9 @@ local function applyESP(plr)
         label.TextSize = 14
 
         local conn = RS.RenderStepped:Connect(function()
-            if not espOn or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
-                highlight.Enabled = false
-                billboard.Enabled = false
+            if not espOn or not targetChar or not targetChar.Parent or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
+                if highlight then highlight.Enabled = false end
+                if billboard then billboard.Enabled = false end
             else
                 local updatedColor, updatedRole = getRoleColor(targetChar)
                 highlight.FillColor = updatedColor
@@ -1202,7 +1202,9 @@ local function safeTriggerRemote(remoteObj)
         remoteObj:FireServer()
     elseif remoteObj:IsA("RemoteFunction") then
         task.spawn(function()
-            remoteObj:InvokeServer()
+            pcall(function()
+                remoteObj:InvokeServer()
+            end)
         end)
     end
 end
