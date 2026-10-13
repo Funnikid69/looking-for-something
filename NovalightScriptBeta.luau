@@ -42,8 +42,68 @@ Rayfield:Notify({
    Image = 4483362458,
 })
 --------------------------------------------------------------------------------
--- PART 2: ACTION, AUTO-FARM & RAYFIELD UI ELEMENTS
+-- PART 2: ACTION & AUTO-FARM SYSTEM (RAYFIELD OPTIMIZED)
 --------------------------------------------------------------------------------
+
+local char = player.Character or player.CharacterAdded:Wait()
+local hum = char:WaitForChild("Humanoid", 5)
+
+player.CharacterAdded:Connect(function(newChar)
+    char = newChar
+    hum = newChar:WaitForChild("Humanoid", 5)
+end)
+
+local autoFarmLowHpOn = false
+local autoFarmAllOn = false
+local stickToPersonOn = false
+local lockInFrontOn = false
+local targetHealthThreshold = 20
+local hitDistanceOffset = 3
+local currentLockedTarget = nil
+local isCurrentlyWaitingInSafeSpace = false
+
+local LowHpToggle = nil
+local AllPlayersToggle = nil
+
+local JasonAbilities = {
+    ["Attack"] = { Cooldown = 0.5, LastUsed = 0, Remote = ReplicatedStorage:FindFirstChild("JasonAttackRemote", true) }
+}
+local ShedletskyAbilities = {
+    ["Slash"] = { Cooldown = 0.3, LastUsed = 0 }
+}
+local NoliAbilities = {
+    ["MainAbility"] = { Cooldown = 1, LastUsed = 0, Remote = ReplicatedStorage:FindFirstChild("NoliMainRemote", true) },
+    ["AltAbility2"] = { Cooldown = 2, LastUsed = 0, Remote = ReplicatedStorage:FindFirstChild("NoliAltRemote", true) }
+}
+
+local JASON_AUTO_ABILITIES = {"Attack"}
+local SHEDLETSKY_AUTO_ABILITIES = {"Slash"}
+local NOLI_AUTO_ABILITIES = {"MainAbility", "AltAbility2"}
+local MAX_ABILITY_DISTANCE = 15
+
+local function getCurrentCharacterType()
+    local c = player.Character or char
+    if not c then return "Unknown" end
+    local charAttr = c:GetAttribute("Character") or c:GetAttribute("CharacterType")
+    if charAttr then return tostring(charAttr) end
+    return c.Name
+end
+
+local function canUseCharacter()
+    local c = player.Character or char
+    local h = c and c:FindFirstChildOfClass("Humanoid")
+    if not c or not h or h.Health <= 0 then return false end
+    if c:GetAttribute("CanAttack") == false or c:GetAttribute("AbilitiesDisabled") == true then return false end
+    return true
+end
+
+local function teleportToSafeSpace()
+    local c = player.Character or char
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.CFrame = CFrame.new(-1119.03, 905.94, -85.90)
+    end
+end
 
 local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) 
 	and ReplicatedStorage.CharacterAbilities:WaitForChild("Shedletsky", 5) 
@@ -67,8 +127,9 @@ local function castCharacterAction(actionName, targetPosition)
 			if data and (now - data.LastUsed >= data.Cooldown) then
 				data.LastUsed = now
 
-				if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
-					local myRoot = char.HumanoidRootPart
+				local myChar = player.Character or char
+				if targetPosition and myChar and myChar:FindFirstChild("HumanoidRootPart") then
+					local myRoot = myChar.HumanoidRootPart
 					myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
 				end
 
@@ -128,7 +189,8 @@ local function getLowHpTarget(maxHp)
 		return currentLockedTarget
 	end
 
-	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+	local myChar = player.Character or char
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 	if not myRoot then return nil end
 
 	local lowestHp = limitHp
@@ -153,7 +215,8 @@ local function getAnyTarget()
 		return currentLockedTarget
 	end
 
-	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+	local myChar = player.Character or char
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 	if not myRoot then return nil end
 
 	local closestDist = math.huge
@@ -176,10 +239,15 @@ end
 
 local function positionAtTarget(targetPlayer)
 	if not targetPlayer or not targetPlayer.Character then return end
-	local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+	local myChar = player.Character or char
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 	local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
 
 	if not myRoot or not targetRoot then return end
+
+	for _, part in ipairs(myChar:GetDescendants()) do
+		if part:IsA("BasePart") then part.CanCollide = false end
+	end
 
 	local offset = hitDistanceOffset
 	if lockInFrontOn then
@@ -189,24 +257,21 @@ local function positionAtTarget(targetPlayer)
 	end
 end
 
-local isCurrentlyWaitingInSafeSpace = false
-
 RS.Stepped:Connect(function()
 	if not autoFarmLowHpOn and not autoFarmAllOn then 
 		isCurrentlyWaitingInSafeSpace = false
 		return 
 	end
-	if not char or not hum or hum.Health <= 0 then return end
+	local myChar = player.Character or char
+	local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+	if not myChar or not myHum or myHum.Health <= 0 then return end
 
+	local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
 	local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
-	
-	if not isTargetAliveAndValid(currentLockedTarget, maxHpConstraint) then
-		currentLockedTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
-	end
 
-	if currentLockedTarget and isTargetAliveAndValid(currentLockedTarget, maxHpConstraint) then
+	if activeTarget and isTargetAliveAndValid(activeTarget, maxHpConstraint) then
 		isCurrentlyWaitingInSafeSpace = false
-		positionAtTarget(currentLockedTarget)
+		positionAtTarget(activeTarget)
 	else
 		currentLockedTarget = nil
 		if autoFarmLowHpOn and not isCurrentlyWaitingInSafeSpace then
@@ -217,11 +282,21 @@ RS.Stepped:Connect(function()
 end)
 
 RS.Heartbeat:Connect(function()
+	local myChar = player.Character or char
+	local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+	if myChar and getCurrentCharacterType() == "Shedletsky" then
+		myChar:SetAttribute("CanRun", true)
+		myChar:SetAttribute("Slowed", false)
+		if myHum and myHum.WalkSpeed < 16 then myHum.WalkSpeed = 16 end
+	end
+
 	if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
-	if hum and hum.Health <= 30 then
-		if autoFarmLowHpOn and LowHpToggle then LowHpToggle:Set({CurrentValue = false}) end
-		if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:Set({CurrentValue = false}) end
+	-- Low Health Emergency Protection (<= 30 HP)
+	if myHum and myHum.Health <= 30 then
+		if autoFarmLowHpOn and LowHpToggle then LowHpToggle:Set(false) end
+		if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:Set(false) end
 		autoFarmLowHpOn = false
 		autoFarmAllOn = false
 		currentLockedTarget = nil
@@ -239,7 +314,7 @@ RS.Heartbeat:Connect(function()
 			or (cType and cType:lower():find("shedletsky") and {"Slash"}) 
 			or (cType == "Noli" and NOLI_AUTO_ABILITIES) or {}
 
-		local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+		local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 		if myRoot then
 			local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
 			if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
@@ -248,11 +323,12 @@ RS.Heartbeat:Connect(function()
 				end
 			end
 		end
+	else
+		currentLockedTarget = nil
 	end
 end)
 
--- Rayfield UI Elements for AutoFarm Tab
-local SectionTarget = AutoFarmTab:CreateSection("Targeting Options")
+AutoFarmTab:CreateSection("Targeting Options")
 AutoFarmTab:CreateToggle({
    Name = "Lock in Front of Person",
    CurrentValue = false,
@@ -276,19 +352,21 @@ AutoFarmTab:CreateDropdown({
    end,
 })
 
-local SectionAuto = AutoFarmTab:CreateSection("Auto Farm Automation")
+AutoFarmTab:CreateSection("Auto Farm Automation")
 LowHpToggle = AutoFarmTab:CreateToggle({
    Name = "Auto Farm Low Health Players",
    CurrentValue = false,
    Callback = function(value)
-      if value and hum and hum.Health <= 30 then
+      local myHum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+      if value and myHum and myHum.Health <= 30 then
          autoFarmLowHpOn = false
+         task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
          teleportToSafeSpace()
          return
       end
       autoFarmLowHpOn = value
       isCurrentlyWaitingInSafeSpace = false
-      if value and AllPlayersToggle then AllPlayersToggle:Set({CurrentValue = false}) end
+      if value and AllPlayersToggle then AllPlayersToggle:Set(false) end
       if not value then currentLockedTarget = nil end
    end,
 })
@@ -297,14 +375,16 @@ AllPlayersToggle = AutoFarmTab:CreateToggle({
    Name = "Auto Farm All Players",
    CurrentValue = false,
    Callback = function(value)
-      if value and hum and hum.Health <= 30 then
+      local myHum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+      if value and myHum and myHum.Health <= 30 then
          autoFarmAllOn = false
+         task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
          teleportToSafeSpace()
          return
       end
       autoFarmAllOn = value
       isCurrentlyWaitingInSafeSpace = false
-      if value and LowHpToggle then LowHpToggle:Set({CurrentValue = false}) end
+      if value and LowHpToggle then LowHpToggle:Set(false) end
       if not value then currentLockedTarget = nil end
    end,
 })
@@ -324,12 +404,10 @@ AutoFarmTab:CreateDropdown({
    end,
 })
 
-local SectionSafety = AutoFarmTab:CreateSection("Emergency Safety")
+AutoFarmTab:CreateSection("Emergency Safety")
 AutoFarmTab:CreateButton({
    Name = "Teleport to Safe Space",
-   Callback = function()
-      teleportToSafeSpace()
-   end,
+   Callback = function() teleportToSafeSpace() end,
 })
 --------------------------------------------------------------------------------
 -- PART 3: ROLE-BASED DYNAMIC ESP (RAYFIELD INTEGRATED)
@@ -474,7 +552,7 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT & UTILITY TABS (RAYFIELD INTEGRATED)
+-- PART 4: COMBAT & UTILITY TABS (TPWALK FIXED)
 --------------------------------------------------------------------------------
 
 local AIM_DISTANCE = 30 
@@ -553,7 +631,6 @@ local function findRemoteByName(remoteName, folderName)
     return ReplicatedStorage:FindFirstChild(remoteName, true)
 end
 
--- Auto Attack (Slasher M1)
 local autoAttackOn = false
 local attackRemote = nil
 
@@ -588,7 +665,6 @@ CombatTab:CreateToggle({
    end,
 })
 
--- Camlock
 local DROP_DISTANCE = 35
 local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
 local TURN_SMOOTHNESS = 0.35
@@ -659,16 +735,44 @@ CombatTab:CreateToggle({
    end,
 })
 
--- Utility Tab Elements
 UtilityTab:CreateSection("Movement Mods")
+
 local tpwalkOn = false
 local speed = 1
+local tpwalkConn = nil
+
+local function enableTpWalk()
+    if tpwalkConn then tpwalkConn:Disconnect() tpwalkConn = nil end
+    tpwalkConn = RS.RenderStepped:Connect(function()
+        if not tpwalkOn then return end
+        local character = player.Character
+        if not character then return end
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if hrp and humanoid and humanoid.MoveDirection.Magnitude > 0 then
+            local move = humanoid.MoveDirection
+            hrp.CFrame = hrp.CFrame + Vector3.new(move.X, 0, move.Z) * (speed * 0.5)
+        end
+    end)
+end
+
+local function disableTpWalk()
+    if tpwalkConn then
+        tpwalkConn:Disconnect()
+        tpwalkConn = nil
+    end
+end
 
 UtilityTab:CreateToggle({
    Name = "TpWalk",
    CurrentValue = false,
    Callback = function(value)
       tpwalkOn = value
+      if value then
+          enableTpWalk()
+      else
+          disableTpWalk()
+      end
    end,
 })
 
@@ -682,26 +786,14 @@ UtilityTab:CreateSlider({
    end,
 })
 
-RS.Heartbeat:Connect(function()
-    if tpwalkOn and char then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if hrp and humanoid then
-            local move = humanoid.MoveDirection
-            if move.Magnitude > 0 then
-                hrp.CFrame = hrp.CFrame + (move * speed)
-            end
-        end
-    end
-end)
-
 local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
 local platform
 
 UtilityTab:CreateButton({
    Name = "Save Place (Platform TP)",
    Callback = function()
-      local hrp = char and char:FindFirstChild("HumanoidRootPart")
+      local character = player.Character
+      local hrp = character and character:FindFirstChild("HumanoidRootPart")
       if not hrp then return end
       if not platform or not platform.Parent then
           platform = Instance.new("Part")
@@ -766,11 +858,14 @@ local NOLI_AUTO_ABILITIES = {"MainAbility", "AltAbility2"}
 local MAX_ABILITY_DISTAN
 CE = 15
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (RAYFIELD INTEGRATED)
+-- PART 6: GUEST1337 AUTO FARM (STICK TO TARGET RESTORED)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
 local currentHardLockedTarget = nil
+
+local GuestLowHpToggle = nil
+local GuestAllToggle = nil
 
 local SURVIVOR_CLASSES = {
     ["guest1337"]     = true,
@@ -922,12 +1017,19 @@ task.spawn(function()
 
         if guestAutoLowHp or guestAutoAll then
             local lowHpOnly = guestAutoLowHp and not guestAutoAll
+            local targetPlayer = nil
 
-            if not isTargetValid(currentHardLockedTarget, lowHpOnly) then
-                currentHardLockedTarget = getClosestValidPlayer(lowHpOnly)
+            if stickToTargetOn then
+                if currentHardLockedTarget and isTargetValid(currentHardLockedTarget, lowHpOnly) then
+                    targetPlayer = currentHardLockedTarget
+                else
+                    currentHardLockedTarget = getClosestValidPlayer(lowHpOnly)
+                    targetPlayer = currentHardLockedTarget
+                end
+            else
+                currentHardLockedTarget = nil
+                targetPlayer = getClosestValidPlayer(lowHpOnly)
             end
-
-            local targetPlayer = currentHardLockedTarget
 
             if targetPlayer and targetPlayer.Character then
                 local targetChar = targetPlayer.Character
@@ -950,27 +1052,39 @@ task.spawn(function()
     end
 end)
 
--- Rayfield Elements for Guest Tab
 GuestTab:CreateSection("Guest Auto Farm")
-GuestTab:CreateToggle({
+
+GuestLowHpToggle = GuestTab:CreateToggle({
    Name = "Auto Farm Low HP Survivors",
    CurrentValue = false,
    Callback = function(v)
       guestAutoLowHp = v
       currentHardLockedTarget = nil
+      if v and GuestAllToggle then GuestAllToggle:Set(false) end
    end,
 })
 
-GuestTab:CreateToggle({
+GuestAllToggle = GuestTab:CreateToggle({
    Name = "Auto Farm All Survivors",
    CurrentValue = false,
    Callback = function(v)
       guestAutoAll = v
       currentHardLockedTarget = nil
+      if v and GuestLowHpToggle then GuestLowHpToggle:Set(false) end
+   end,
+})
+
+GuestTab:CreateToggle({
+   Name = "Stick to Target",
+   CurrentValue = true,
+   Callback = function(v)
+      stickToTargetOn = v
+      currentHardLockedTarget = nil
    end,
 })
 
 GuestTab:CreateSection("Guest Parameters")
+
 GuestTab:CreateInput({
    Name = "Low HP Threshold",
    PlaceholderText = "20",
@@ -980,6 +1094,7 @@ GuestTab:CreateInput({
       if v then guestThreshold = v end 
    end,
 })
+
 GuestTab:CreateInput({
    Name = "Hit Distance Offset",
    PlaceholderText = "5.5",
@@ -989,6 +1104,7 @@ GuestTab:CreateInput({
       if v then guestHitOffset = v end 
    end,
 })
+
 GuestTab:CreateInput({
    Name = "Target Walk Speed",
    PlaceholderText = "16",
