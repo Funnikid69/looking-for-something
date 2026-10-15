@@ -874,15 +874,24 @@ end)
 --------------------------------------------------------------------------------
 
 local AIM_DISTANCE = 30 
+local MAX_LOCK_DISTANCE = 30
+local DROP_DISTANCE = 35
+local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
+local TURN_SMOOTHNESS = 0.35
 
-local function getClosestTarget()
+local currentTarget = nil
+local isLocked = false
+local lastTargetCheck = 0
+
+-- Helper: Target selection restricted strictly to nearby players within range
+local function getClosestTarget(maxDistance)
     local character = player.Character
     if not character then return nil end
     local myRoot = character:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
     
     local closestTarget = nil
-    local shortestDistance = math.huge
+    local shortestDistance = maxDistance or MAX_LOCK_DISTANCE
 
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and p.Character then
@@ -892,7 +901,7 @@ local function getClosestTarget()
             
             if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
                 local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                if distance < shortestDistance then
+                if distance <= shortestDistance then
                     shortestDistance = distance
                     closestTarget = targetChar
                 end
@@ -957,14 +966,8 @@ CombatTab:CreateSlider({
 })
 
 --------------------------------------------------------------------------------
--- CAMLOCK TARGET FOCUS (OPTIMIZED RENDERSTEP)
+-- CAMLOCK TARGET FOCUS (PROXIMITY RESTRICTED)
 --------------------------------------------------------------------------------
-local DROP_DISTANCE = 35
-local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
-local TURN_SMOOTHNESS = 0.35
-local currentTarget = nil
-local isLocked = false
-local lastTargetCheck = 0
 
 local function isTargetValid(targetChar)
     if not targetChar or not targetChar.Parent then return false end
@@ -975,7 +978,10 @@ local function isTargetValid(targetChar)
     local myChar = player.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if myHrp then
-        if (myHrp.Position - targetHrp.Position).Magnitude > DROP_DISTANCE then return false end
+        local distance = (myHrp.Position - targetHrp.Position).Magnitude
+        if distance > DROP_DISTANCE then 
+            return false 
+        end
     end
     return true
 end
@@ -998,11 +1004,12 @@ local function enableLock()
         if now - lastTargetCheck > 0.1 then
             lastTargetCheck = now
             if not isTargetValid(currentTarget) then 
-                currentTarget = getClosestTarget() 
+                currentTarget = getClosestTarget(MAX_LOCK_DISTANCE) 
             end
         end
 
-        if currentTarget then
+        -- Only manipulates the camera when an active target is confirmed nearby
+        if currentTarget and isTargetValid(currentTarget) then
             local targetRoot = currentTarget:FindFirstChild("HumanoidRootPart")
             if targetRoot then
                 local myPos = myRoot.Position
@@ -1017,6 +1024,8 @@ local function enableLock()
                 local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
                 camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
             end
+        else
+            currentTarget = nil
         end
     end)
 end
@@ -1028,6 +1037,17 @@ CombatTab:CreateToggle({
     CurrentValue = false,
     Callback = function(value)
         if value then enableLock() else disableLock() end
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Camlock Max Distance",
+    Range = {10, 60},
+    Increment = 1,
+    CurrentValue = 30,
+    Callback = function(value)
+        MAX_LOCK_DISTANCE = tonumber(value) or 30
+        DROP_DISTANCE = MAX_LOCK_DISTANCE + 5
     end,
 })
 
@@ -1071,26 +1091,33 @@ RS.Heartbeat:Connect(function()
 end)
 
 --------------------------------------------------------------------------------
--- UTILITY TAB: INFINITE STAMINA
+-- UTILITY TAB: INFINITE STAMINA (UNDRAINABLE HARD-LOCK)
 --------------------------------------------------------------------------------
 UtilityTab:CreateSection("Stamina Mods")
 
-local staminaModule = nil
-if getloadedmodules then
-    for _, mod in ipairs(getloadedmodules()) do
-        if mod.Name == "Main" or mod.Name == "PlayerModule" or mod.Name == "Stamina" then
-            local success, res = pcall(require, mod)
-            if success and type(res) == "table" and (res.Stamina ~= nil or res.MaxStamina ~= nil) then
-                staminaModule = res
-                break
+local staminaModules = {}
+
+local function locateStaminaModules()
+    staminaModules = {}
+    if getloadedmodules then
+        for _, mod in ipairs(getloadedmodules()) do
+            local name = mod.Name:lower()
+            if name == "main" or name == "playermodule" or name == "stamina" or name == "staminaservice" or name == "sprint" then
+                local success, res = pcall(require, mod)
+                if success and type(res) == "table" then
+                    if res.Stamina ~= nil or res.MaxStamina ~= nil or res.SprintStamina ~= nil then
+                        table.insert(staminaModules, res)
+                    end
+                end
             end
         end
     end
+    if getgenv and getgenv().MainModule and type(getgenv().MainModule) == "table" then
+        table.insert(staminaModules, getgenv().MainModule)
+    end
 end
 
-if not staminaModule and getgenv and getgenv().MainModule then
-    staminaModule = getgenv().MainModule
-end
+locateStaminaModules()
 
 local infStaminaOn = false
 
@@ -1129,23 +1156,57 @@ local function updateStaminaHUD(state)
     end
 end
 
+local function applyStaminaLock()
+    if not infStaminaOn then return end
+
+    for _, mod in ipairs(staminaModules) do
+        local maxVal = mod.MaxStamina or 100
+        rawset(mod, "Stamina", maxVal)
+        if rawget(mod, "SprintStamina") ~= nil then
+            rawset(mod, "SprintStamina", maxVal)
+        end
+        if rawget(mod, "IsExhausted") ~= nil then
+            rawset(mod, "IsExhausted", false)
+        end
+    end
+
+    local myChar = player.Character
+    if myChar then
+        if myChar:GetAttribute("Stamina") ~= nil then
+            myChar:SetAttribute("Stamina", 100)
+        end
+        if myChar:GetAttribute("Exhausted") ~= nil then
+            myChar:SetAttribute("Exhausted", false)
+        end
+        if myChar:GetAttribute("Draining") ~= nil then
+            myChar:SetAttribute("Draining", false)
+        end
+
+        local staminaVal = myChar:FindFirstChild("Stamina")
+        if staminaVal and (staminaVal:IsA("NumberValue") or staminaVal:IsA("IntValue")) then
+            staminaVal.Value = 100
+        end
+    end
+end
+
 UtilityTab:CreateToggle({
     Name = "Infinite Stamina",
     CurrentValue = false,
     Callback = function(value)
         infStaminaOn = value
+        if value then
+            locateStaminaModules()
+        end
         updateStaminaHUD(value)
     end,
 })
 
-RS.Heartbeat:Connect(function()
-    if infStaminaOn and staminaModule and staminaModule.MaxStamina then
-        rawset(staminaModule, "Stamina", staminaModule.MaxStamina)
-    end
-end)
+RS.RenderStepped:Connect(applyStaminaLock)
+RS.Heartbeat:Connect(applyStaminaLock)
 
 player.CharacterAdded:Connect(function()
-    task.wait(1)
+    task.wait(0.8)
+    locateStaminaModules()
     if infStaminaOn then
         updateStaminaHUD(true)
     end
@@ -1467,7 +1528,7 @@ ItemsTab:CreateButton({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 7: FULLY AUTOMATED GENERATOR ROUTE (WITH 3-PLAYER DETECTOR)
+-- PART 7: FULLY AUTOMATED GENERATOR ROUTE (SMART SIDE ALLOCATION)
 --------------------------------------------------------------------------------
 
 local Players = game:GetService("Players")
@@ -1478,6 +1539,15 @@ local autoGenFullToggle = nil
 local FIXED_GEN_COOLDOWN = 1.5
 local MAX_REPAIR_DISTANCE = 9
 local MAX_OCCUPANTS = 3
+local SLOT_DISTANCE_OCCUPIED = 3.2
+
+-- 4 repair offset sides (Front is preferred priority)
+local REPAIR_SLOTS = {
+    { Offset = CFrame.new(0, 3, -4), Name = "Front" },
+    { Offset = CFrame.new(0, 3, 4) * CFrame.Angles(0, math.pi, 0), Name = "Back" },
+    { Offset = CFrame.new(-4, 3, 0) * CFrame.Angles(0, math.pi / 2, 0), Name = "Left" },
+    { Offset = CFrame.new(4, 3, 0) * CFrame.Angles(0, -math.pi / 2, 0), Name = "Right" },
+}
 
 local function getActiveMap()
     return workspace:FindFirstChild("Map") 
@@ -1509,7 +1579,34 @@ local function isGeneratorCompleted(genModel)
     return false
 end
 
--- Counts how many other players are currently at/repairing the generator
+-- Check if another player is currently standing in a specific repair side
+local function isSlotOccupiedByOther(targetWorldPos)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                if (hrp.Position - targetWorldPos).Magnitude <= SLOT_DISTANCE_OCCUPIED then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Pick the best available slot (defaults to Front, switches only if occupied)
+local function getBestRepairCFrame(mainPart)
+    for _, slot in ipairs(REPAIR_SLOTS) do
+        local targetCFrame = mainPart.CFrame * slot.Offset
+        if not isSlotOccupiedByOther(targetCFrame.Position) then
+            return targetCFrame
+        end
+    end
+    -- Fallback to default front if all slots are contested
+    return mainPart.CFrame * REPAIR_SLOTS[1].Offset
+end
+
 local function getOccupantCount(mainPart)
     local count = 0
     if not mainPart then return count end
@@ -1539,7 +1636,6 @@ local function getIncompleteGenerators()
             local mainPart = obj:FindFirstChild("Main") or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
             if mainPart and not isGeneratorCompleted(obj) then
                 local occupants = getOccupantCount(mainPart)
-                -- Only queue generators that do not already have 3 players
                 if occupants < MAX_OCCUPANTS then
                     table.insert(incompleteGens, {
                         Model = obj,
@@ -1566,7 +1662,6 @@ task.spawn(function()
                 local incompleteList = getIncompleteGenerators()
 
                 if #incompleteList == 0 then
-                    -- Check if any generators remain in the match at all
                     local anyLeft = false
                     local gameMap = getActiveMap()
                     local searchScope = gameMap or workspace
@@ -1581,7 +1676,6 @@ task.spawn(function()
                     end
 
                     if not anyLeft then
-                        -- All generators on the map are fully finished
                         fullAutoGenActive = false
                         if autoGenFullToggle then
                             autoGenFullToggle:Set(false)
@@ -1594,23 +1688,25 @@ task.spawn(function()
                             Image = 4483362458,
                         })
                     else
-                        -- Incomplete generators exist, but all are occupied by 3 players
                         task.wait(0.5)
                     end
                 else
-                    -- Pick the first generator with fewer than 3 players
                     local targetGenData = incompleteList[1]
                     local genModel = targetGenData.Model
                     local mainPart = targetGenData.Main
 
-                    -- Position character directly in repair range
-                    myRoot.CFrame = mainPart.CFrame * CFrame.new(0, 3, -4)
+                    -- Calculate initial best slot (defaults to Front)
+                    local assignedCFrame = getBestRepairCFrame(mainPart)
+                    myRoot.CFrame = assignedCFrame
 
-                    -- Stay on this generator until completed, disabled, or 3 other players arrive
                     while fullAutoGenActive and not isGeneratorCompleted(genModel) and genModel:IsDescendantOf(workspace) do
-                        -- If 3 other players are now at this generator, abandon and find another
                         if getOccupantCount(mainPart) >= MAX_OCCUPANTS then
                             break
+                        end
+
+                        -- If someone steps into your spot, adjust to another free side
+                        if isSlotOccupiedByOther(assignedCFrame.Position) then
+                            assignedCFrame = getBestRepairCFrame(mainPart)
                         end
 
                         local remotes = genModel:FindFirstChild("Remotes")
@@ -1628,9 +1724,9 @@ task.spawn(function()
 
                         task.wait(FIXED_GEN_COOLDOWN)
 
-                        -- Keep character pinned in position against knockback
+                        -- Pin back to the designated slot
                         if myRoot and mainPart and mainPart.Parent then
-                            myRoot.CFrame = mainPart.CFrame * CFrame.new(0, 3, -4)
+                            myRoot.CFrame = assignedCFrame
                         end
                     end
                 end
