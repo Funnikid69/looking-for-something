@@ -56,6 +56,30 @@ player.CharacterAdded:Connect(function(c)
 end)
 
 --------------------------------------------------------------------------------
+-- CRATE SPAWN NOTIFICATION LISTENER
+--------------------------------------------------------------------------------
+local function isCrateObject(obj)
+    if not obj or not obj:IsDescendantOf(workspace) then return false end
+    local name = obj.Name:lower()
+    if name:find("crate") or name:find("chest") or name:find("box") then
+        local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if prompt then return true end
+    end
+    return false
+end
+
+workspace.DescendantAdded:Connect(function(descendant)
+    if isCrateObject(descendant) then
+        Rayfield:Notify({
+            Title = "Crate Event",
+            Content = "A Crate Has Spawned!",
+            Duration = 4,
+            Image = 4483362458,
+        })
+    end
+end)
+
+--------------------------------------------------------------------------------
 -- AUTO FARM STATE TRACKERS
 --------------------------------------------------------------------------------
 local autoFarmLowHpOn = false
@@ -283,18 +307,20 @@ AutoFarmTab:CreateDropdown({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 3: ROLE-BASED, MINION, GENERATOR & ITEM DYNAMIC ESP
+-- PART 3 (SECTION 1): CORE STATE, PLAYER, MINION & GENERATOR ESP
 --------------------------------------------------------------------------------
 
 local espOn = false
 local minionEspOn = false
 local generatorEspOn = false
 local itemEspOn = false
+local crateEspOn = false
 
 local activeESP = {}
 local activeMinionESP = {}
 local activeGenESP = {}
 local activeItemESP = {}
+local activeCrateESP = {}
 
 -- Character Role Sets
 local SURVIVOR_CLASSES = {
@@ -342,10 +368,8 @@ local MAP_BLACKLIST = {
 --------------------------------------------------------------------------------
 -- 1. PLAYER ROLE ESP
 --------------------------------------------------------------------------------
-
 local function getRoleInfo(targetChar)
     if not targetChar then return nil end
-
     local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType") or targetChar.Name
     local charKey = string.lower(tostring(rawCharType))
 
@@ -376,11 +400,9 @@ local function applyESP(plr)
 
     local function setupChar(targetChar)
         if not targetChar then return end
-        
         local root = targetChar:WaitForChild("HumanoidRootPart", 5)
         local targetHum = targetChar:WaitForChild("Humanoid", 5)
         local head = targetChar:WaitForChild("Head", 5) or root
-        
         if not root or not targetHum then return end
 
         local highlight = Instance.new("Highlight")
@@ -416,7 +438,6 @@ local function applyESP(plr)
             end
 
             local roleColor, roleName, className = getRoleInfo(targetChar)
-
             highlight.FillColor = roleColor
             label.TextColor3 = roleColor
             highlight.Enabled = true
@@ -436,9 +457,8 @@ local function applyESP(plr)
 end
 
 --------------------------------------------------------------------------------
--- 2. C00LKIDD MINION ESP (ORANGE HIGHLIGHT & TEXT)
+-- 2. C00LKIDD MINION ESP (ORANGE)
 --------------------------------------------------------------------------------
-
 local function removeMinionESP(minion)
     if activeMinionESP[minion] then
         if activeMinionESP[minion].Highlight then activeMinionESP[minion].Highlight:Destroy() end
@@ -455,7 +475,6 @@ local function applyMinionESP(minion)
     local root = minion:WaitForChild("HumanoidRootPart", 3) or minion:FindFirstChildWhichIsA("BasePart")
     local hum = minion:FindFirstChildOfClass("Humanoid")
     local head = minion:FindFirstChild("Head") or root
-
     if not root then return end
 
     local minionColor = Color3.fromRGB(255, 130, 0)
@@ -523,9 +542,8 @@ local function clearAllMinionESP()
 end
 
 --------------------------------------------------------------------------------
--- 3. GENERATOR ESP (YELLOW = IN PROGRESS, WHITE = DONE)
+-- 3. GENERATOR ESP (YELLOW / WHITE)
 --------------------------------------------------------------------------------
-
 local function removeGenESP(gen)
     if activeGenESP[gen] then
         if activeGenESP[gen].Highlight then activeGenESP[gen].Highlight:Destroy() end
@@ -540,10 +558,8 @@ local function isGenFinished(genModel)
         return true
     end
     local progress = genModel:FindFirstChild("Progress")
-    if progress then
-        if progress:IsA("NumberValue") or progress:IsA("IntValue") then
-            if progress.Value >= 100 then return true end
-        end
+    if progress and (progress:IsA("NumberValue") or progress:IsA("IntValue")) then
+        if progress.Value >= 100 then return true end
     end
     local prompt = genModel:FindFirstChildWhichIsA("ProximityPrompt", true)
     if prompt and not prompt.Enabled then
@@ -637,28 +653,116 @@ local function clearAllGenESP()
         removeGenESP(gen)
     end
 end
+--------------------------------------------------------------------------------
+-- PART 3 (SECTION 2): CRATE, ITEM ESP, MONITORING & UI CONTROLS
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- 4. ITEM ESP (MAP EXCLUSION FILTER)
+-- 4. CRATE ESP (PURPLE HIGHLIGHT & TEXT)
 --------------------------------------------------------------------------------
+local function isCrateValid(crate)
+    if not crate or not crate:IsDescendantOf(workspace) then return false end
+    local prompt = crate:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not prompt or not prompt.Enabled then return false end
+    return true
+end
 
+local function removeCrateESP(crate)
+    if activeCrateESP[crate] then
+        if activeCrateESP[crate].Highlight then activeCrateESP[crate].Highlight:Destroy() end
+        if activeCrateESP[crate].Billboard then activeCrateESP[crate].Billboard:Destroy() end
+        if activeCrateESP[crate].Connection then activeCrateESP[crate].Connection:Disconnect() end
+        activeCrateESP[crate] = nil
+    end
+end
+
+local function applyCrateESP(crate)
+    if not crate or activeCrateESP[crate] then return end
+    if not isCrateValid(crate) then return end
+
+    local primaryAdornee = crate:IsA("BasePart") and crate or (crate:IsA("Model") and (crate.PrimaryPart or crate:FindFirstChildWhichIsA("BasePart", true)))
+    if not primaryAdornee then return end
+
+    local purpleColor = Color3.fromRGB(170, 0, 255)
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Crate_Highlight"
+    highlight.FillColor = purpleColor
+    highlight.FillTransparency = 0.45
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Adornee = crate
+    highlight.Parent = crate
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Crate_Billboard"
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 160, 0, 25)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Adornee = primaryAdornee
+    billboard.Parent = crate
+
+    local label = Instance.new("TextLabel", billboard)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = purpleColor
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 14
+    label.Text = "Crate"
+
+    local conn = RS.RenderStepped:Connect(function()
+        if not crateEspOn or not isCrateValid(crate) then
+            removeCrateESP(crate)
+        end
+    end)
+
+    activeCrateESP[crate] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Connection = conn
+    }
+end
+
+local function scanCrates()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        local name = obj.Name:lower()
+        if (name:find("crate") or name:find("chest") or name:find("box")) and obj:FindFirstChildWhichIsA("ProximityPrompt", true) then
+            local targetModel = obj:IsA("Model") and obj or obj.Parent
+            applyCrateESP(targetModel)
+        end
+    end
+end
+
+local function clearAllCrateESP()
+    for crate, _ in pairs(activeCrateESP) do
+        removeCrateESP(crate)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- 5. ITEM ESP (GREEN)
+--------------------------------------------------------------------------------
 local function resolveItemTarget(prompt)
     if not prompt or not prompt.Enabled then return nil end
-
     local parentObj = prompt.Parent
     if not parentObj or not parentObj:IsDescendantOf(workspace) then return nil end
 
     local actionText = prompt.ActionText:lower()
     local objectText = prompt.ObjectText:lower()
-    if actionText:find("repair") or objectText:find("generator") or parentObj.Name:lower():find("generator") then
+    local parentName = parentObj.Name:lower()
+
+    if actionText:find("repair") or objectText:find("generator") or parentName:find("generator") then
+        return nil
+    end
+
+    if parentName:find("crate") or objectText:find("crate") or actionText:find("crate") then
         return nil
     end
 
     local charModel = prompt:FindFirstAncestorOfClass("Model")
-    if charModel then
-        if Players:GetPlayerFromCharacter(charModel) or charModel:FindFirstChildOfClass("Humanoid") then
-            return nil
-        end
+    if charModel and (Players:GetPlayerFromCharacter(charModel) or charModel:FindFirstChildOfClass("Humanoid")) then
+        return nil
     end
 
     if charModel and charModel ~= workspace then
@@ -685,7 +789,6 @@ end
 
 local function applyItemESP(target)
     if not target or activeItemESP[target] then return end
-
     local prompt = target:FindFirstChildWhichIsA("ProximityPrompt", true)
     if not prompt or not prompt.Enabled then return end
 
@@ -747,7 +850,6 @@ end
 --------------------------------------------------------------------------------
 -- DYNAMIC WORKSPACE MONITORING & CLEANUP
 --------------------------------------------------------------------------------
-
 workspace.DescendantAdded:Connect(function(descendant)
     if minionEspOn and descendant:IsA("Model") and (descendant.Name == "PizzaDeliveryRig" or descendant.Name:find("PizzaDelivery")) then
         applyMinionESP(descendant)
@@ -755,6 +857,14 @@ workspace.DescendantAdded:Connect(function(descendant)
 
     if generatorEspOn and descendant:IsA("Model") and (descendant.Name == "Generator" or descendant.Name:find("Generator")) then
         applyGenESP(descendant)
+    end
+
+    if crateEspOn and descendant:IsA("ProximityPrompt") then
+        local p = descendant.Parent
+        local name = p and p.Name:lower() or ""
+        if name:find("crate") or name:find("chest") or name:find("box") then
+            applyCrateESP(p:IsA("Model") and p or p.Parent)
+        end
     end
 
     if itemEspOn and descendant:IsA("ProximityPrompt") then
@@ -766,52 +876,25 @@ workspace.DescendantAdded:Connect(function(descendant)
 end)
 
 workspace.DescendantRemoving:Connect(function(descendant)
-    if activeMinionESP[descendant] then
-        removeMinionESP(descendant)
-    end
-    if activeGenESP[descendant] then
-        removeGenESP(descendant)
-    end
-    if activeItemESP[descendant] then
-        removeItemESP(descendant)
-    end
+    if activeMinionESP[descendant] then removeMinionESP(descendant) end
+    if activeGenESP[descendant] then removeGenESP(descendant) end
+    if activeCrateESP[descendant] then removeCrateESP(descendant) end
+    if activeItemESP[descendant] then removeItemESP(descendant) end
 end)
 
 task.spawn(function()
     while true do
         task.wait(0.6)
-        if minionEspOn then
-            for minion, _ in pairs(activeMinionESP) do
-                if not minion or not minion:IsDescendantOf(workspace) then
-                    removeMinionESP(minion)
-                end
-            end
-            scanMinions()
-        end
-        if generatorEspOn then
-            for gen, _ in pairs(activeGenESP) do
-                if not gen or not gen:IsDescendantOf(workspace) then
-                    removeGenESP(gen)
-                end
-            end
-            scanGenerators()
-        end
-        if itemEspOn then
-            for item, _ in pairs(activeItemESP) do
-                local prompt = item:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if not prompt or not prompt.Enabled or not item:IsDescendantOf(workspace) then
-                    removeItemESP(item)
-                end
-            end
-            scanAndApplyItemESP()
-        end
+        if minionEspOn then scanMinions() end
+        if generatorEspOn then scanGenerators() end
+        if crateEspOn then scanCrates() end
+        if itemEspOn then scanAndApplyItemESP() end
     end
 end)
 
 --------------------------------------------------------------------------------
 -- ESP TAB ELEMENTS (ORIGINAL RAYFIELD)
 --------------------------------------------------------------------------------
-
 ESPTab:CreateSection("Player Visuals")
 
 ESPTab:CreateToggle({
@@ -820,59 +903,50 @@ ESPTab:CreateToggle({
     Callback = function(value)
         espOn = value
         if espOn then
-            for _, p in ipairs(Players:GetPlayers()) do
-                applyESP(p)
-            end
+            for _, p in ipairs(Players:GetPlayers()) do applyESP(p) end
         else
-            for p, _ in pairs(activeESP) do
-                removeESP(p)
-            end
+            for p, _ in pairs(activeESP) do removeESP(p) end
         end
     end,
 })
 
-ESPTab:CreateSection("Minion Visuals")
+ESPTab:CreateSection("Minion & Objective Visuals")
 
 ESPTab:CreateToggle({
     Name = "C00lkidd Minion ESP",
     CurrentValue = false,
     Callback = function(value)
         minionEspOn = value
-        if minionEspOn then
-            scanMinions()
-        else
-            clearAllMinionESP()
-        end
+        if minionEspOn then scanMinions() else clearAllMinionESP() end
     end,
 })
-
-ESPTab:CreateSection("Objective Visuals")
 
 ESPTab:CreateToggle({
     Name = "Generator ESP (Yellow / White)",
     CurrentValue = false,
     Callback = function(value)
         generatorEspOn = value
-        if generatorEspOn then
-            scanGenerators()
-        else
-            clearAllGenESP()
-        end
+        if generatorEspOn then scanGenerators() else clearAllGenESP() end
     end,
 })
 
-ESPTab:CreateSection("Item Visuals")
+ESPTab:CreateSection("Item & Crate Visuals")
+
+ESPTab:CreateToggle({
+    Name = "Crate ESP (Purple)",
+    CurrentValue = false,
+    Callback = function(value)
+        crateEspOn = value
+        if crateEspOn then scanCrates() else clearAllCrateESP() end
+    end,
+})
 
 ESPTab:CreateToggle({
     Name = "Item ESP (Green)",
     CurrentValue = false,
     Callback = function(value)
         itemEspOn = value
-        if itemEspOn then
-            scanAndApplyItemESP()
-        else
-            clearAllItemESP()
-        end
+        if itemEspOn then scanAndApplyItemESP() else clearAllItemESP() end
     end,
 })
 
@@ -1442,7 +1516,6 @@ end)
 local function isItemValidAndAvailable(v)
     if not v or not v:IsDescendantOf(workspace) then return false end
 
-    -- Check if held by another player or inside a character
     local ancestorModel = v:FindFirstAncestorOfClass("Model")
     if ancestorModel then
         if Players:GetPlayerFromCharacter(ancestorModel) or ancestorModel:FindFirstChildOfClass("Humanoid") then
@@ -1450,7 +1523,6 @@ local function isItemValidAndAvailable(v)
         end
     end
 
-    -- Confirm presence of an enabled ProximityPrompt
     local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
     if not prompt or not prompt.Enabled then return false end
 
@@ -1510,7 +1582,7 @@ local function teleportToItem(matchKeywords, itemName)
     else
         Rayfield:Notify({
             Title = "Item Unavailable",
-            Content = "No available " .. itemName .. " found (it may be used or taken).",
+            Content = "No available " .. itemName .. " found in this round.",
             Duration = 3,
             Image = 4483362458,
         })
@@ -1536,8 +1608,17 @@ ItemsTab:CreateButton({
         teleportToItem({"bloxycola", "bloxy cola", "cola"}, "Bloxy Cola")
     end,
 })
+
+ItemsTab:CreateSection("Special Teleporters")
+
+ItemsTab:CreateButton({
+    Name = "Teleport to Crate",
+    Callback = function()
+        teleportToItem({"crate", "chest", "box"}, "Crate")
+    end,
+})
 --------------------------------------------------------------------------------
--- PART 7: FULLY AUTOMATED GENERATOR ROUTE (FIXED SLOT DETECTION)
+-- PART 7: FULLY AUTOMATED GENERATOR ROUTE (REWORKED STABILIZATION)
 --------------------------------------------------------------------------------
 
 local Players = game:GetService("Players")
@@ -1548,9 +1629,9 @@ local autoGenFullToggle = nil
 local FIXED_GEN_COOLDOWN = 1.5
 local MAX_REPAIR_DISTANCE = 8.5
 local MAX_OCCUPANTS = 3
-local EXACT_SLOT_THRESHOLD = 2.2 -- Strict radius to prevent false occupied triggers
+local EXACT_SLOT_THRESHOLD = 2.6
 
--- Predefined cardinal slots (Front is the absolute default priority)
+-- 4 Repair positions: Front is the default
 local REPAIR_SLOTS = {
     { Offset = CFrame.new(0, 3, -4), Name = "Front" },
     { Offset = CFrame.new(0, 3, 4) * CFrame.Angles(0, math.pi, 0), Name = "Back" },
@@ -1588,19 +1669,19 @@ local function isGeneratorCompleted(genModel)
     return false
 end
 
--- Strictly checks if a real, living player is actively occupying an exact slot position
-local function isSlotOccupiedByRealPlayer(slotWorldPos)
+-- Checks if an actual other living player is repairing/locked onto an exact slot
+local function isSlotOccupiedByOther(slotWorldPos)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
             if hrp and hum and hum.Health > 0 then
-                -- Ignore falling, ragdolled, or jumping players passing overhead
                 local flatDistance = (Vector3.new(hrp.Position.X, slotWorldPos.Y, hrp.Position.Z) - slotWorldPos).Magnitude
                 local heightDiff = math.abs(hrp.Position.Y - slotWorldPos.Y)
 
-                if flatDistance <= EXACT_SLOT_THRESHOLD and heightDiff <= 2.5 then
+                -- Must be stationed directly in that repair slot
+                if flatDistance <= EXACT_SLOT_THRESHOLD and heightDiff <= 2.2 then
                     return true
                 end
             end
@@ -1609,27 +1690,23 @@ local function isSlotOccupiedByRealPlayer(slotWorldPos)
     return false
 end
 
--- Returns the designated repair CFrame, strictly preferring Front unless actually occupied
+-- Decides repair CFrame: defaults to Front, selects alternative only if another player is stationed there
 local function getBestRepairCFrame(mainPart)
-    -- 1. Try default Front slot first
     local frontCFrame = mainPart.CFrame * REPAIR_SLOTS[1].Offset
-    if not isSlotOccupiedByRealPlayer(frontCFrame.Position) then
+    if not isSlotOccupiedByOther(frontCFrame.Position) then
         return frontCFrame
     end
 
-    -- 2. If someone is truly standing on Front, pick the next vacant slot
     for i = 2, #REPAIR_SLOTS do
         local slotCFrame = mainPart.CFrame * REPAIR_SLOTS[i].Offset
-        if not isSlotOccupiedByRealPlayer(slotCFrame.Position) then
+        if not isSlotOccupiedByOther(slotCFrame.Position) then
             return slotCFrame
         end
     end
 
-    -- 3. Fallback to Front
     return frontCFrame
 end
 
--- Counts how many real players are currently within interaction range of the generator
 local function getOccupantCount(mainPart)
     local count = 0
     if not mainPart then return count end
@@ -1673,6 +1750,20 @@ local function getIncompleteGenerators()
     return incompleteGens
 end
 
+local function checkAnyGeneratorsLeft()
+    local gameMap = getActiveMap()
+    local searchScope = gameMap or workspace
+
+    for _, obj in ipairs(searchScope:GetDescendants()) do
+        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) then
+            if not isGeneratorCompleted(obj) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -1685,20 +1776,8 @@ task.spawn(function()
                 local incompleteList = getIncompleteGenerators()
 
                 if #incompleteList == 0 then
-                    local anyLeft = false
-                    local gameMap = getActiveMap()
-                    local searchScope = gameMap or workspace
-
-                    for _, obj in ipairs(searchScope:GetDescendants()) do
-                        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) then
-                            if not isGeneratorCompleted(obj) then
-                                anyLeft = true
-                                break
-                            end
-                        end
-                    end
-
-                    if not anyLeft then
+                    -- Verify if every single generator in the entire map is completed
+                    if not checkAnyGeneratorsLeft() then
                         fullAutoGenActive = false
                         if autoGenFullToggle then
                             autoGenFullToggle:Set(false)
@@ -1707,7 +1786,7 @@ task.spawn(function()
                         Rayfield:Notify({
                             Title = "Auto Gen Finished",
                             Content = "All generators in this round are completed!",
-                            Duration = 3.5,
+                            Duration = 4,
                             Image = 4483362458,
                         })
                     else
@@ -1718,20 +1797,13 @@ task.spawn(function()
                     local genModel = targetGenData.Model
                     local mainPart = targetGenData.Main
 
-                    -- Assign slot: guaranteed Front unless an active player is detected right there
-                    local assignedCFrame = getBestRepairCFrame(mainPart)
-                    myRoot.CFrame = assignedCFrame
+                    -- Lock into a single slot coordinate and do not alter it mid-repair to avoid dropping puzzles
+                    local lockedSlotCFrame = getBestRepairCFrame(mainPart)
+                    myRoot.CFrame = lockedSlotCFrame
 
                     while fullAutoGenActive and not isGeneratorCompleted(genModel) and genModel:IsDescendantOf(workspace) do
-                        -- Stop if 3 other players arrive
                         if getOccupantCount(mainPart) >= MAX_OCCUPANTS then
                             break
-                        end
-
-                        -- If another player steps into your specific position, adjust to a vacant side
-                        if isSlotOccupiedByRealPlayer(assignedCFrame.Position) then
-                            assignedCFrame = getBestRepairCFrame(mainPart)
-                            myRoot.CFrame = assignedCFrame
                         end
 
                         local remotes = genModel:FindFirstChild("Remotes")
@@ -1749,9 +1821,9 @@ task.spawn(function()
 
                         task.wait(FIXED_GEN_COOLDOWN)
 
-                        -- Keep character locked to the chosen slot
+                        -- Keep character pinned stably at the exact initial interaction spot
                         if myRoot and mainPart and mainPart.Parent then
-                            myRoot.CFrame = assignedCFrame
+                            myRoot.CFrame = lockedSlotCFrame
                         end
                     end
                 end
@@ -1770,17 +1842,25 @@ autoGenFullToggle = AutoGenTab:CreateToggle({
     Name = "Smart Auto Gen (Auto-Route)",
     CurrentValue = false,
     Callback = function(value)
-        fullAutoGenActive = value
         if value then
-            local pending = getIncompleteGenerators()
-            if #pending == 0 then
+            if not checkAnyGeneratorsLeft() then
+                fullAutoGenActive = false
+                task.spawn(function()
+                    if autoGenFullToggle then
+                        autoGenFullToggle:Set(false)
+                    end
+                end)
                 Rayfield:Notify({
-                    Title = "Auto Gen Waiting",
-                    Content = "Searching for available generators with < 3 players...",
-                    Duration = 2.5,
+                    Title = "Auto Gen",
+                    Content = "There are no more generators to complete!",
+                    Duration = 3,
                     Image = 4483362458,
                 })
+                return
             end
+            fullAutoGenActive = true
+        else
+            fullAutoGenActive = false
         end
     end,
 })
