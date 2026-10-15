@@ -35,14 +35,13 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
---// 7 MAIN TABS
+--// 6 ACTIVE TABS (PART 7 AUTO GEN TAB REMOVED)
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 local UtilityTab = Window:CreateTab("Movement & Misc", 4483362458)
 local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
 local ItemsTab = Window:CreateTab("Items", 4483362458)
-local AutoGenTab = Window:CreateTab("Auto Gen", 4483362458)
 
 --// CHARACTER & STATE TRACKING
 local char = player.Character or player.CharacterAdded:Wait()
@@ -1322,43 +1321,99 @@ player.CharacterAdded:Connect(function()
     if infStaminaOn then updateStaminaHUD(true) end
 end)
 
---// STANDALONE MANUAL GENERATOR CONTROLS
+--// GENERATOR AUTOMATION & SMART TELEPORT
 UtilityTab:CreateSection("Generator Automation")
 
 local AutoGenEnabled = false
-local CurrentGenIndex = 1
 local AutoGenCooldown = 1.5
+local CurrentGenIndex = 1
 
 local function GetGameMap()
-    return workspace:FindFirstChild("Map") 
-        and workspace.Map:FindFirstChild("Ingame") 
-        and workspace.Map.Ingame:FindFirstChild("Map")
+    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map"))
+        or (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
+        or workspace:FindFirstChild("Map")
+        or workspace
+end
+
+local function isGenFinished(genModel)
+    if not genModel or not genModel.Parent or not genModel:IsDescendantOf(workspace) then 
+        return true 
+    end
+
+    if genModel:GetAttribute("Completed") == true 
+        or genModel:GetAttribute("Finished") == true 
+        or genModel:GetAttribute("Done") == true then
+        return true
+    end
+
+    local progressVal = genModel:FindFirstChild("Progress")
+    if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
+        if progressVal.Value >= 100 then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Collects only incomplete or semi-completed generators
+local function getIncompleteGenerators()
+    local searchScope = GetGameMap()
+    local incomplete = {}
+
+    for _, obj in ipairs(searchScope:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name:lower():find("generator") then
+            local mainPart = obj:FindFirstChild("Main") or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+            if mainPart and not isGenFinished(obj) then
+                table.insert(incomplete, {
+                    Model = obj,
+                    Main = mainPart
+                })
+            end
+        end
+    end
+
+    return incomplete
 end
 
 local function TeleportToNextGen()
     local localChar = player.Character
     local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
-    local gameMap = GetGameMap()
+    if not localRoot then return end
 
-    if not localRoot or not gameMap then return end
+    local incompleteList = getIncompleteGenerators()
 
-    local generators = {}
-    for _, object in ipairs(gameMap:QueryDescendants("Model#Generator:has(#Main)")) do
-        local mainPart = object:FindFirstChild("Main")
-        if mainPart then
-            table.insert(generators, mainPart)
-        end
+    if #incompleteList == 0 then
+        Rayfield:Notify({
+            Title = "Generators Completed",
+            Content = "All of the generators are completed!",
+            Duration = 3,
+            Image = 4483362458,
+        })
+        return
     end
 
-    if #generators == 0 then return end
-
-    if CurrentGenIndex > #generators then
+    if CurrentGenIndex > #incompleteList then
         CurrentGenIndex = 1
     end
 
-    local targetGen = generators[CurrentGenIndex]
-    if targetGen then
-        localRoot.CFrame = targetGen.CFrame * CFrame.new(0, 3, -4)
+    local targetGen = incompleteList[CurrentGenIndex]
+    if targetGen and targetGen.Main then
+        -- Positions 2.8 studs in front facing the generator safely on the ground
+        local mainCFrame = targetGen.Main.CFrame
+        local targetPos = (mainCFrame * CFrame.new(0, 0, -2.8)).Position
+        targetPos = Vector3.new(targetPos.X, localRoot.Position.Y, targetPos.Z)
+
+        localRoot.CFrame = CFrame.lookAt(targetPos, Vector3.new(mainCFrame.Position.X, targetPos.Y, mainCFrame.Position.Z))
+        localRoot.AssemblyLinearVelocity = Vector3.zero
+        localRoot.AssemblyAngularVelocity = Vector3.zero
+
+        local prompt = targetGen.Model:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if prompt and fireproximityprompt then
+            task.wait(0.15)
+            pcall(fireproximityprompt, prompt)
+        end
+
         CurrentGenIndex = CurrentGenIndex + 1
     end
 end
@@ -1366,20 +1421,30 @@ end
 local function RunTimedAutoGen()
     local localChar = player.Character
     local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
-    local gameMap = GetGameMap()
+    local searchScope = GetGameMap()
 
-    if not localRoot or not gameMap then return end
+    if not localRoot or not searchScope then return end
 
-    for _, object in ipairs(gameMap:QueryDescendants("Model#Generator:has(#Main)")) do
-        local mainPart = object:FindFirstChild("Main")
-        if mainPart and (mainPart.Position - localRoot.Position).Magnitude < 7 then
-            local remotes = object:FindFirstChild("Remotes")
-            local progress = object:FindFirstChild("Progress")
-            local remoteEvent = progress and remotes and remotes:FindFirstChildOfClass("RemoteEvent")
+    for _, object in ipairs(searchScope:GetDescendants()) do
+        if object:IsA("Model") and object.Name:lower():find("generator") and not isGenFinished(object) then
+            local mainPart = object:FindFirstChild("Main") or object.PrimaryPart or object:FindFirstChildWhichIsA("BasePart", true)
+            if mainPart and (mainPart.Position - localRoot.Position).Magnitude <= 7.5 then
+                local remotes = object:FindFirstChild("Remotes")
+                local remoteEvent = remotes and remotes:FindFirstChildOfClass("RemoteEvent")
 
-            if remoteEvent then
-                remoteEvent:FireServer()
-                task.wait(AutoGenCooldown)
+                if not remoteEvent then
+                    for _, desc in ipairs(object:GetDescendants()) do
+                        if desc:IsA("RemoteEvent") then
+                            remoteEvent = desc
+                            break
+                        end
+                    end
+                end
+
+                if remoteEvent then
+                    remoteEvent:FireServer()
+                    task.wait(AutoGenCooldown)
+                end
             end
         end
     end
@@ -1632,275 +1697,5 @@ ItemsTab:CreateButton({
     Name = "Teleport to Crate",
     Callback = function()
         teleportToItem({"crate", "chest", "box"}, "Crate")
-    end,
-})
---------------------------------------------------------------------------------
--- PART 7: FULLY AUTOMATED GENERATOR ROUTE (UPDATED REWORK)
---------------------------------------------------------------------------------
-
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-
-local fullAutoGenActive = false
-local autoGenFullToggle = nil
-local FIXED_GEN_COOLDOWN = 1.5
-local MAX_REPAIR_DISTANCE = 8.5
-local MAX_OCCUPANTS = 3
-
-local function getActiveMap()
-    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map"))
-        or (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
-        or workspace:FindFirstChild("Map")
-        or workspace
-end
-
-local function isGeneratorCompleted(genModel)
-    if not genModel or not genModel.Parent or not genModel:IsDescendantOf(workspace) then 
-        return true 
-    end
-
-    if genModel:GetAttribute("Completed") == true 
-        or genModel:GetAttribute("Finished") == true 
-        or genModel:GetAttribute("Done") == true then
-        return true
-    end
-
-    local progressVal = genModel:FindFirstChild("Progress")
-    if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
-        if progressVal.Value >= 100 then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function getGenRemote(genModel)
-    local remotes = genModel:FindFirstChild("Remotes")
-    if remotes then
-        local re = remotes:FindFirstChildOfClass("RemoteEvent")
-        if re then return re end
-    end
-    for _, desc in ipairs(genModel:GetDescendants()) do
-        if desc:IsA("RemoteEvent") then
-            return desc
-        end
-    end
-    return nil
-end
-
-local function getAvailableRepairSlot(genModel, mainPart)
-    local availableSlots = {}
-
-    for _, desc in ipairs(genModel:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then
-            local promptPart = desc.Parent:IsA("BasePart") and desc.Parent or desc.Parent:FindFirstAncestorWhichIsA("BasePart")
-            local promptPos = desc.Parent:IsA("Attachment") and desc.Parent.WorldPosition or (promptPart and promptPart.Position)
-
-            if promptPos then
-                local isOccupied = false
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
-                        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                        if hrp and hum and hum.Health > 0 then
-                            if (hrp.Position - promptPos).Magnitude <= 3.2 then
-                                isOccupied = true
-                                break
-                            end
-                        end
-                    end
-                end
-
-                if not isOccupied then
-                    table.insert(availableSlots, {
-                        Prompt = desc,
-                        Position = promptPos,
-                        Part = promptPart
-                    })
-                end
-            end
-        end
-    end
-
-    if #availableSlots > 0 then
-        return availableSlots[1]
-    end
-
-    local fallbackPrompt = genModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if fallbackPrompt then
-        local pPart = fallbackPrompt.Parent:IsA("BasePart") and fallbackPrompt.Parent or fallbackPrompt.Parent:FindFirstAncestorWhichIsA("BasePart")
-        local pPos = fallbackPrompt.Parent:IsA("Attachment") and fallbackPrompt.Parent.WorldPosition or (pPart and pPart.Position) or mainPart.Position
-        return {
-            Prompt = fallbackPrompt,
-            Position = pPos,
-            Part = pPart
-        }
-    end
-
-    return nil
-end
-
-local function getOccupantCount(mainPart)
-    local count = 0
-    if not mainPart then return count end
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 then
-                if (hrp.Position - mainPart.Position).Magnitude <= MAX_REPAIR_DISTANCE then
-                    count = count + 1
-                end
-            end
-        end
-    end
-
-    return count
-end
-
-local function checkAnyGeneratorsLeft()
-    local searchScope = getActiveMap()
-    for _, obj in ipairs(searchScope:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name:lower():find("generator") then
-            if not isGeneratorCompleted(obj) then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function getIncompleteGenerators()
-    local searchScope = getActiveMap()
-    local incompleteGens = {}
-
-    for _, obj in ipairs(searchScope:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name:lower():find("generator") then
-            local mainPart = obj:FindFirstChild("Main") or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-            if mainPart and not isGeneratorCompleted(obj) then
-                local occupants = getOccupantCount(mainPart)
-                if occupants < MAX_OCCUPANTS then
-                    local slotData = getAvailableRepairSlot(obj, mainPart)
-                    if slotData then
-                        table.insert(incompleteGens, {
-                            Model = obj,
-                            Main = mainPart,
-                            Slot = slotData
-                        })
-                    end
-                end
-            end
-        end
-    end
-
-    return incompleteGens
-end
-
-task.spawn(function()
-    while true do
-        task.wait(0.2)
-
-        if fullAutoGenActive then
-            local myChar = player.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-
-            if myRoot and myHum and myHum.Health > 0 then
-                local incompleteList = getIncompleteGenerators()
-
-                if #incompleteList == 0 then
-                    if not checkAnyGeneratorsLeft() then
-                        fullAutoGenActive = false
-                        if autoGenFullToggle then
-                            autoGenFullToggle:Set(false)
-                        end
-
-                        Rayfield:Notify({
-                            Title = "Auto Gen Finished",
-                            Content = "All generators in this round are completed!",
-                            Duration = 4,
-                            Image = 4483362458,
-                        })
-                    else
-                        task.wait(0.5)
-                    end
-                else
-                    local targetGenData = incompleteList[1]
-                    local genModel = targetGenData.Model
-                    local mainPart = targetGenData.Main
-                    local slotData = targetGenData.Slot
-
-                    local panelPos = slotData.Position
-                    local genCenter = mainPart.Position
-                    local outwardDir = (Vector3.new(panelPos.X, genCenter.Y, panelPos.Z) - genCenter).Unit
-                    if outwardDir.Magnitude == 0 or tostring(outwardDir.X) == "-nan(ind)" then
-                        outwardDir = (mainPart.CFrame.LookVector * -1).Unit
-                    end
-
-                    local standPosition = panelPos + (outwardDir * 2.3)
-                    standPosition = Vector3.new(standPosition.X, myRoot.Position.Y, standPosition.Z)
-                    
-                    myRoot.CFrame = CFrame.lookAt(standPosition, Vector3.new(panelPos.X, standPosition.Y, panelPos.Z))
-                    myRoot.AssemblyLinearVelocity = Vector3.zero
-                    myRoot.AssemblyAngularVelocity = Vector3.zero
-                    task.wait(0.25)
-
-                    if slotData.Prompt and fireproximityprompt then
-                        pcall(fireproximityprompt, slotData.Prompt)
-                    end
-                    task.wait(0.2)
-
-                    while fullAutoGenActive and not isGeneratorCompleted(genModel) and genModel:IsDescendantOf(workspace) do
-                        if getOccupantCount(mainPart) >= MAX_OCCUPANTS then
-                            break
-                        end
-
-                        myRoot.AssemblyLinearVelocity = Vector3.zero
-
-                        local remoteEvent = getGenRemote(genModel)
-                        if remoteEvent then
-                            remoteEvent:FireServer()
-                        end
-
-                        if slotData.Prompt and slotData.Prompt.Enabled and fireproximityprompt then
-                            pcall(fireproximityprompt, slotData.Prompt)
-                        end
-
-                        task.wait(FIXED_GEN_COOLDOWN)
-                    end
-                end
-            end
-        end
-    end
-end)
-
-AutoGenTab:CreateSection("Automated Route System")
-
-autoGenFullToggle = AutoGenTab:CreateToggle({
-    Name = "Smart Auto Gen (Auto-Route)",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            if not checkAnyGeneratorsLeft() then
-                fullAutoGenActive = false
-                task.spawn(function()
-                    if autoGenFullToggle then
-                        autoGenFullToggle:Set(false)
-                    end
-                end)
-                Rayfield:Notify({
-                    Title = "Auto Gen",
-                    Content = "There are no more generators to complete!",
-                    Duration = 3,
-                    Image = 4483362458,
-                })
-                return
-            end
-            fullAutoGenActive = true
-        else
-            fullAutoGenActive = false
-        end
     end,
 })
