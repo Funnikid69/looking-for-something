@@ -154,12 +154,12 @@ local ShedletskyAbilities = {
 }
 
 local NoliAbilities = {
-    ["MainAbility"] = { -- Slash
+    ["MainAbility"] = {
         ["Cooldown"] = 1.8,
         ["LastUsed"] = 0,
         ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliAttackRemote")
     },
-    ["AltAbility2"] = { -- Nova
+    ["AltAbility2"] = {
         ["Cooldown"] = 0,
         ["LastUsed"] = 0,
         ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
@@ -214,7 +214,6 @@ local function castCharacterAction(actionName, targetPosition)
     if not canUseCharacter() then return end
     local cType = getCurrentCharacterType()
 
-    -- Direct Shedletsky Slash logic
     if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
         if not shedletskyRemote then
             local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
@@ -229,13 +228,11 @@ local function castCharacterAction(actionName, targetPosition)
             if data and (now - data.LastUsed >= data.Cooldown) then
                 data.LastUsed = now
 
-                -- Turn character toward target
                 if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
                     local myRoot = char.HumanoidRootPart
                     myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
                 end
 
-                -- Execute ability via RemoteFunction / RemoteEvent safely
                 task.spawn(function()
                     pcall(function()
                         if shedletskyRemote:IsA("RemoteFunction") then
@@ -250,7 +247,6 @@ local function castCharacterAction(actionName, targetPosition)
         return
     end
 
-    -- Logic for Jason / Slasher / Noli
     local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType == "Noli" and NoliAbilities)
     if not abilityTable then return end
 
@@ -283,7 +279,6 @@ local function isTargetAliveAndValid(p, maxHpConstraint)
         return false
     end
 
-    -- STRICT LOW HP CHECK
     if maxHpConstraint and tHum.Health > maxHpConstraint then
         return false
     end
@@ -294,7 +289,6 @@ end
 local function getLowHpTarget(maxHp)
     local limitHp = maxHp or targetHealthThreshold
 
-    -- Validate existing locked target strictly against threshold
     if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget, limitHp) then
         return currentLockedTarget
     end
@@ -386,7 +380,6 @@ RS.Stepped:Connect(function()
     else
         currentLockedTarget = nil
         
-        -- If Auto-Farm Low HP is active but no targets exist, stay parked at Safe Space
         if autoFarmLowHpOn and not isCurrentlyWaitingInSafeSpace then
             isCurrentlyWaitingInSafeSpace = true
             teleportToSafeSpace()
@@ -404,7 +397,6 @@ RS.Heartbeat:Connect(function()
 
     if not autoFarmLowHpOn and not autoFarmAllOn then return end
 
-    -- Emergency Health Protection Threshold
     if hum and hum.Health <= 30 then
         if autoFarmLowHpOn and LowHpToggle then LowHpToggle:Set(false) end
         if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:Set(false) end
@@ -537,7 +529,6 @@ AutoFarmTab:CreateButton({
 local espOn = false
 local activeESP = {}
 
--- Character Role Sets
 local SURVIVOR_CLASSES = {
     ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
     ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
@@ -552,7 +543,6 @@ local KILLER_CLASSES = {
     ["azure"] = true
 }
 
--- Determine Role Colors (Blue = Survivor, Red = Killer)
 local function getRoleColor(targetChar)
     if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor" end
 
@@ -560,12 +550,12 @@ local function getRoleColor(targetChar)
     local charType = string.lower(tostring(rawCharType))
 
     if SURVIVOR_CLASSES[charType] then
-        return Color3.fromRGB(0, 150, 255), "Survivor" -- Blue
+        return Color3.fromRGB(0, 150, 255), "Survivor"
     elseif KILLER_CLASSES[charType] then
-        return Color3.fromRGB(255, 35, 35), "Killer"   -- Red
+        return Color3.fromRGB(255, 35, 35), "Killer"
     end
 
-    return Color3.fromRGB(0, 150, 255), "Survivor" -- Default Fallback
+    return Color3.fromRGB(0, 150, 255), "Survivor"
 end
 
 local function removeESP(plr)
@@ -673,12 +663,11 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT TAB & UTILITY TAB (PERFORMANCE OPTIMIZED & CLEANED)
+-- PART 4: COMBAT TAB & UTILITY TAB (HITBOX EXPANDER INTEGRATED)
 --------------------------------------------------------------------------------
 
 local AIM_DISTANCE = 30 
 
--- Helper: Fast character matching check
 local function isMatchingCharacter(charName)
     local character = player.Character
     if not character then return false end
@@ -697,7 +686,6 @@ local function isMatchingCharacter(charName)
     return currentName:find(charName) or (charAttr and tostring(charAttr):find(charName))
 end
 
--- Helper: Target selection cached by distance
 local function getClosestTarget()
     local character = player.Character
     if not character then return nil end
@@ -746,7 +734,6 @@ CombatTab:CreateSection("Main Attacks")
 -- AUTOMATED ATTACKS (REMOTE CACHED & THROTTLED)
 --------------------------------------------------------------------------------
 
--- Remote Cache Function
 local function findRemoteByName(remoteName, folderName)
     local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
     if charAbilities and folderName then
@@ -759,7 +746,7 @@ local function findRemoteByName(remoteName, folderName)
     return ReplicatedStorage:FindFirstChild(remoteName, true)
 end
 
--- 1. Auto Attack (Slasher M1)
+-- Auto Attack (Slasher M1)
 local autoAttackOn = false
 local attackRemote = nil
 
@@ -778,9 +765,9 @@ task.spawn(function()
                     end
                 end
             end
-            task.wait(0.12) -- Throttled delay to eliminate loop spam
+            task.wait(0.12)
         else
-            task.wait(0.3) -- Slow wait when disabled
+            task.wait(0.3)
         end
     end
 end)
@@ -791,6 +778,60 @@ CombatTab:CreateToggle({
     Callback = function(value)
         autoAttackOn = value
         if value and not attackRemote then attackRemote = findRemoteByName("JasonAttackRemote", "Jason") end
+    end,
+})
+
+--------------------------------------------------------------------------------
+-- HITBOX EXPANDER / LUNGE BOOST SYSTEM
+--------------------------------------------------------------------------------
+local lungeBoostOn = false
+local lungeRange = 9.6
+
+RS.Heartbeat:Connect(function()
+    if not lungeBoostOn then return end
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart or humanoid.Health <= 0 then return end
+
+    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+        local animObj = track.Animation
+        local name = animObj and animObj.Name:lower() or ""
+
+        local looksLikeAttack =
+               name:find("attack")
+            or name:find("slash")
+            or name:find("swing")
+            or (track.Length > 0.3 and track.Length <= 1.5)
+
+        if looksLikeAttack and track.Length > 0 and (track.TimePosition / track.Length) < 0.75 then
+            local oldVelocity = rootPart.Velocity
+            rootPart.Velocity = oldVelocity + rootPart.CFrame.LookVector * lungeRange
+            RS.RenderStepped:Wait()
+            rootPart.Velocity = oldVelocity
+            break
+        end
+    end
+end)
+
+CombatTab:CreateSection("Hitbox Expander / Lunge Boost")
+
+CombatTab:CreateToggle({
+    Name = "Hitbox Expander / Lunge Boost",
+    CurrentValue = false,
+    Callback = function(value)
+        lungeBoostOn = value
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Lunge Range",
+    Range = {1, 30},
+    Increment = 0.5,
+    CurrentValue = 9.6,
+    Callback = function(value)
+        lungeRange = tonumber(value) or 9.6
     end,
 })
 
@@ -928,10 +969,14 @@ UtilityTab:CreateButton({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 5: PROTECTION & TELEPORTER
+-- PART 5: PROTECTION & TELEPORTER (REUSABLE AUTO-PROTECTION PINNING)
 --------------------------------------------------------------------------------
 
-local lowHealthProtectionOn, healthThreshold, protectionPlatform = false, 40, nil
+local lowHealthProtectionOn = false
+local healthThreshold = 40
+local protectionPlatform = nil
+local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local isCurrentlyProtected = false
 
 UtilityTab:CreateSection("Safety & Protection")
 
@@ -940,6 +985,9 @@ UtilityTab:CreateToggle({
     CurrentValue = false,
     Callback = function(value)
         lowHealthProtectionOn = value
+        if not value then
+            isCurrentlyProtected = false
+        end
     end,
 })
 
@@ -953,25 +1001,44 @@ UtilityTab:CreateSlider({
     end,
 })
 
+-- Reusable Auto-Protection Loop with Return-to-Platform Enforcer
 task.spawn(function()
     while true do
         task.wait(0.2)
         if lowHealthProtectionOn and char then
             local humanoid = char:FindFirstChildOfClass("Humanoid")
             local hrp = char:FindFirstChild("HumanoidRootPart")
-            if humanoid and hrp and humanoid.Health > 0 and humanoid.Health <= healthThreshold then
-                if not protectionPlatform or not protectionPlatform.Parent then
-                    protectionPlatform = Instance.new("Part", workspace)
-                    protectionPlatform.Size = Vector3.new(60, 5, 60)
-                    protectionPlatform.Position = savedPos
-                    protectionPlatform.Anchored = true
-                    protectionPlatform.Color = Color3.fromRGB(0, 200, 100)
-                    protectionPlatform.Material = Enum.Material.SmoothPlastic
-                    protectionPlatform.Name = "AutoProtectionBaseplate"
+            
+            if humanoid and hrp and humanoid.Health > 0 then
+                if humanoid.Health <= healthThreshold then
+                    -- Ensure platform exists
+                    if not protectionPlatform or not protectionPlatform.Parent then
+                        protectionPlatform = Instance.new("Part", workspace)
+                        protectionPlatform.Size = Vector3.new(60, 5, 60)
+                        protectionPlatform.Position = savedPos
+                        protectionPlatform.Anchored = true
+                        protectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                        protectionPlatform.Material = Enum.Material.SmoothPlastic
+                        protectionPlatform.Name = "AutoProtectionBaseplate"
+                    end
+
+                    local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
+                    local dist = (hrp.Position - targetPlatformPos).Magnitude
+                    
+                    -- Initial trigger or return if fallen off / teleported away
+                    if not isCurrentlyProtected or dist > 25 then
+                        hrp.CFrame = CFrame.new(targetPlatformPos)
+                        isCurrentlyProtected = true
+                    end
+                else
+                    -- Reset condition: if health recovers above threshold, stop pinning to platform
+                    if isCurrentlyProtected then
+                        isCurrentlyProtected = false
+                    end
                 end
-                hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
-                lowHealthProtectionOn = false
             end
+        else
+            isCurrentlyProtected = false
         end
     end
 end)
@@ -1119,7 +1186,6 @@ local function isAllowedCharacter(playerTarget)
 
     if not hum or not hrp or hum.Health <= 0 then return false end
 
-    -- Check character name or attributes against survivor list strictly
     local charType = string.lower(tostring(char:GetAttribute("Character") or char:GetAttribute("CharacterType") or char.Name))
     if SURVIVOR_CLASSES[charType] or SURVIVOR_CLASSES[string.lower(playerTarget.Name)] then 
         return true 
