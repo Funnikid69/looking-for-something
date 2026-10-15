@@ -385,40 +385,13 @@ local KILLER_CLASSES = {
     ["azure"] = "Azure"
 }
 
--- Checks if character is actively in the match rather than idling in the lobby
-local function isIngame(targetChar)
-    if not targetChar or not targetChar.Parent then return false end
-    
-    -- Check character attributes or tags first
-    if targetChar:GetAttribute("InGame") == false or targetChar:GetAttribute("Lobby") == true then
-        return false
-    end
-
-    local map = workspace:FindFirstChild("Map")
-    local ingameFolder = map and map:FindFirstChild("Ingame")
-
-    -- If map structure exists, check parentage
-    if ingameFolder then
-        if targetChar:IsDescendantOf(ingameFolder) then return true end
-    end
-
-    -- Fallback: verify character has an explicit character class attribute assigned
-    local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType")
-    if rawCharType and tostring(rawCharType) ~= "" and tostring(rawCharType):lower() ~= "none" then
-        return true
-    end
-
-    return false
-end
-
--- Determine Role Colors & Formatted Class Name
+-- Determine Role Colors & Formatted Class Name (No lobby restrictions)
 local function getRoleInfo(targetChar)
     if not targetChar then return nil end
 
     local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType") or targetChar.Name
     local charKey = string.lower(tostring(rawCharType))
 
-    -- Quick alias fix for variations
     if charKey == "coolkid" then charKey = "c00lkidd" end
     if charKey == "1x4" then charKey = "1x1x1x1" end
 
@@ -428,7 +401,8 @@ local function getRoleInfo(targetChar)
         return Color3.fromRGB(255, 35, 35), "Killer", KILLER_CLASSES[charKey]
     end
 
-    return nil
+    -- Default fallback for any player character
+    return Color3.fromRGB(0, 150, 255), "Survivor", targetChar.Name
 end
 
 local function removeESP(plr)
@@ -479,20 +453,13 @@ local function applyESP(plr)
         label.TextSize = 13
 
         local conn = RS.RenderStepped:Connect(function()
-            if not espOn or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 or not isIngame(targetChar) then
+            if not espOn or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
                 highlight.Enabled = false
                 billboard.Enabled = false
                 return
             end
 
             local roleColor, roleName, className = getRoleInfo(targetChar)
-
-            -- If player has no active role or isn't a recognized survivor/killer, hide
-            if not roleColor then
-                highlight.Enabled = false
-                billboard.Enabled = false
-                return
-            end
 
             highlight.FillColor = roleColor
             label.TextColor3 = roleColor
@@ -513,8 +480,26 @@ local function applyESP(plr)
 end
 
 --------------------------------------------------------------------------------
--- ITEM ESP SYSTEM (GREEN HIGHLIGHT & TEXT)
+-- ITEM ESP SYSTEM (AVAILABLE / UNTAKEN ITEMS CHECK)
 --------------------------------------------------------------------------------
+
+local function isItemAvailable(v)
+    if not v or not v:IsDescendantOf(workspace) then return false end
+
+    -- Verify it isn't carried by any player or equipped
+    local ancestorModel = v:FindFirstAncestorOfClass("Model")
+    if ancestorModel then
+        if Players:GetPlayerFromCharacter(ancestorModel) or ancestorModel:FindFirstChildOfClass("Humanoid") then
+            return false
+        end
+    end
+
+    -- Check for an active ProximityPrompt
+    local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not prompt or not prompt.Enabled then return false end
+
+    return true
+end
 
 local function removeItemESP(item)
     if activeItemESP[item] then
@@ -526,11 +511,10 @@ end
 
 local function applyItemESP(v)
     if not v or activeItemESP[v] then return end
+    if not isItemAvailable(v) then return end
 
     local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
     if not prompt then return end
-
-    if Players:GetPlayerFromCharacter(v) or v:FindFirstChildOfClass("Humanoid") then return end
 
     local primaryAdornee = v:IsA("BasePart") and v or (v:IsA("Model") and (v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart", true)))
     if not primaryAdornee then return end
@@ -538,15 +522,17 @@ local function applyItemESP(v)
     local itemName = (prompt.ActionText ~= "" and prompt.ActionText) or (prompt.ObjectText ~= "" and prompt.ObjectText) or v.Name
     local itemColor = Color3.fromRGB(0, 255, 120)
 
+    -- Item Highlight
     local highlight = Instance.new("Highlight")
     highlight.Name = "Item_Highlight"
     highlight.FillColor = itemColor
-    highlight.FillTransparency = 0.5
+    highlight.FillTransparency = 0.45
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
     highlight.OutlineTransparency = 0
     highlight.Adornee = v
     highlight.Parent = v
 
+    -- Billboard Title
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "Item_Billboard"
     billboard.AlwaysOnTop = true
@@ -573,7 +559,10 @@ end
 local function scanAndApplyItemESP()
     for _, v in ipairs(workspace:GetDescendants()) do
         if v:FindFirstChildWhichIsA("ProximityPrompt", true) then
-            applyItemESP(v)
+            local parentObj = v:IsA("Model") and v or v.Parent
+            if isItemAvailable(parentObj) then
+                applyItemESP(parentObj)
+            end
         end
     end
 end
@@ -584,23 +573,23 @@ local function clearAllItemESP()
     end
 end
 
-workspace.DescendantAdded:Connect(function(descendant)
-    if itemEspOn and descendant:IsA("ProximityPrompt") then
-        local parentModel = descendant:FindFirstAncestorOfClass("Model") or descendant.Parent
-        if parentModel then
-            applyItemESP(parentModel)
+-- Periodic validation loop to purge items taken or consumed
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if itemEspOn then
+            for item, _ in pairs(activeItemESP) do
+                if not isItemAvailable(item) then
+                    removeItemESP(item)
+                end
+            end
+            scanAndApplyItemESP()
         end
     end
 end)
 
-workspace.DescendantRemoving:Connect(function(descendant)
-    if activeItemESP[descendant] then
-        removeItemESP(descendant)
-    end
-end)
-
 --------------------------------------------------------------------------------
--- ESP TAB ELEMENTS (ORIGINAL RAYFIELD)
+-- ESP TAB ELEMENTS
 --------------------------------------------------------------------------------
 ESPTab:CreateSection("Player Visuals")
 
@@ -1165,28 +1154,45 @@ end)
 -- PART 6: ITEMS TAB (ITEM TELEPORTERS)
 --------------------------------------------------------------------------------
 
+local function isItemValidAndAvailable(v)
+    if not v or not v:IsDescendantOf(workspace) then return false end
+
+    -- Check if held by another player or inside a character
+    local ancestorModel = v:FindFirstAncestorOfClass("Model")
+    if ancestorModel then
+        if Players:GetPlayerFromCharacter(ancestorModel) or ancestorModel:FindFirstChildOfClass("Humanoid") then
+            return false
+        end
+    end
+
+    -- Confirm presence of an enabled ProximityPrompt
+    local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not prompt or not prompt.Enabled then return false end
+
+    return true
+end
+
 local function getTargetItemCFrame(matchKeywords)
     local searchRoot = (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")) or workspace
 
     for _, v in ipairs(searchRoot:GetDescendants()) do
-        local isItem = false
         local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
 
-        local nameLower = v.Name:lower()
-        local promptAction = prompt and prompt.ActionText:lower() or ""
-        local promptObject = prompt and prompt.ObjectText:lower() or ""
+        if prompt and isItemValidAndAvailable(v) then
+            local nameLower = v.Name:lower()
+            local promptAction = prompt.ActionText:lower()
+            local promptObject = prompt.ObjectText:lower()
 
-        for _, keyword in ipairs(matchKeywords) do
-            local kw = keyword:lower()
-            if nameLower:find(kw) or promptAction:find(kw) or promptObject:find(kw) then
-                isItem = true
-                break
+            local isMatch = false
+            for _, keyword in ipairs(matchKeywords) do
+                local kw = keyword:lower()
+                if nameLower:find(kw) or promptAction:find(kw) or promptObject:find(kw) then
+                    isMatch = true
+                    break
+                end
             end
-        end
 
-        if isItem then
-            -- Avoid characters and players
-            if not Players:GetPlayerFromCharacter(v) and not v:FindFirstChildOfClass("Humanoid") then
+            if isMatch then
                 if v:IsA("BasePart") then
                     return v.CFrame
                 elseif v:IsA("Model") then
@@ -1213,14 +1219,14 @@ local function teleportToItem(matchKeywords, itemName)
         Rayfield:Notify({
             Title = "Item Found",
             Content = "Teleported to " .. itemName .. "!",
-            Duration = 2,
+            Duration = 2.5,
             Image = 4483362458,
         })
     else
         Rayfield:Notify({
-            Title = "Item Not Found",
-            Content = "No " .. itemName .. " found in this round.",
-            Duration = 2,
+            Title = "Item Unavailable",
+            Content = "No available " .. itemName .. " found (it may be used or taken).",
+            Duration = 3,
             Image = 4483362458,
         })
     end
