@@ -1,6 +1,8 @@
 --------------------------------------------------------------------------------
--- GAME ID CHECKER
+-- PART 1: CORE SETUP & RAYFIELD INITIALIZATION
 --------------------------------------------------------------------------------
+
+--// GAME ID CHECKER
 local ALLOWED_PLACE_IDS = {
     [99585784721880] = true,
 }
@@ -10,9 +12,7 @@ if not ALLOWED_PLACE_IDS[game.PlaceId] then
     return
 end
 
---------------------------------------------------------------------------------
--- ORIGINAL RAYFIELD SETUP
---------------------------------------------------------------------------------
+--// RAYFIELD LIBRARY LOADER
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local player = game.Players.LocalPlayer
@@ -23,7 +23,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local camera = workspace.CurrentCamera
 
---// ORIGINAL RAYFIELD WINDOW (NOVASAKEN)
+--// WINDOW SETUP (NOVASAKEN)
 local Window = Rayfield:CreateWindow({
     Name = "Novasaken",
     LoadingTitle = "Novasaken",
@@ -35,7 +35,7 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
---// TABS (7 ACTIVE TABS)
+--// 7 MAIN TABS
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
@@ -44,9 +44,7 @@ local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
 local ItemsTab = Window:CreateTab("Items", 4483362458)
 local AutoGenTab = Window:CreateTab("Auto Gen", 4483362458)
 
---------------------------------------------------------------------------------
--- CHARACTER & STATE TRACKING
---------------------------------------------------------------------------------
+--// CHARACTER & STATE TRACKING
 local char = player.Character or player.CharacterAdded:Wait()
 local hum = char:WaitForChild("Humanoid")
 
@@ -55,9 +53,7 @@ player.CharacterAdded:Connect(function(c)
     hum = c:WaitForChild("Humanoid")
 end)
 
---------------------------------------------------------------------------------
--- CRATE SPAWN NOTIFICATION LISTENER
---------------------------------------------------------------------------------
+--// GLOBAL CRATE SPAWN NOTIFICATION LISTENER
 local function isCrateObject(obj)
     if not obj or not obj:IsDescendantOf(workspace) then return false end
     local name = obj.Name:lower()
@@ -79,9 +75,7 @@ workspace.DescendantAdded:Connect(function(descendant)
     end
 end)
 
---------------------------------------------------------------------------------
--- AUTO FARM STATE TRACKERS
---------------------------------------------------------------------------------
+--// AUTO FARM SHARED VARIABLES
 local autoFarmLowHpOn = false
 local autoFarmAllOn = false
 local lockInFrontOn = false
@@ -90,15 +84,10 @@ local targetHealthThreshold = 20
 local hitDistanceOffset = 3
 
 local currentLockedTarget = nil
-
 local LowHpToggle
 local AllPlayersToggle
 --------------------------------------------------------------------------------
 -- PART 2: AUTO-FARM SYSTEM
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- STRICT TARGET VALIDATION & SELECTION
 --------------------------------------------------------------------------------
 
 local function isTargetAliveAndValid(p, maxHpConstraint)
@@ -110,7 +99,6 @@ local function isTargetAliveAndValid(p, maxHpConstraint)
         return false
     end
 
-    -- STRICT LOW HP CHECK
     if maxHpConstraint and tHum.Health > maxHpConstraint then
         return false
     end
@@ -190,10 +178,6 @@ local function positionAtTarget(targetPlayer)
     end
 end
 
---------------------------------------------------------------------------------
--- POSITIONING & LOOP LOGIC
---------------------------------------------------------------------------------
-
 RS.Stepped:Connect(function()
     if not autoFarmLowHpOn and not autoFarmAllOn then return end
     if not char or not hum or hum.Health <= 0 then return end
@@ -227,10 +211,6 @@ RS.Heartbeat:Connect(function()
         currentLockedTarget = nil
     end
 end)
-
---------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (RAYFIELD)
---------------------------------------------------------------------------------
 
 AutoFarmTab:CreateSection("Targeting Options")
 
@@ -307,7 +287,7 @@ AutoFarmTab:CreateDropdown({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 1): CORE STATE, PLAYER, MINIONS & GENERATOR ESP
+-- PART 3 (SECTION 1): ROLES, MINIONS & GENERATOR ESP
 --------------------------------------------------------------------------------
 
 local espOn = false
@@ -324,7 +304,6 @@ local activeGenESP = {}
 local activeItemESP = {}
 local activeCrateESP = {}
 
--- Character Role Sets
 local SURVIVOR_CLASSES = {
     ["guest1337"]     = "Guest 1337",
     ["shedletsky"]    = "Shedletsky",
@@ -367,9 +346,6 @@ local MAP_BLACKLIST = {
     ["terrain"]    = true,
 }
 
---------------------------------------------------------------------------------
--- 1. PLAYER ROLE ESP
---------------------------------------------------------------------------------
 local function getRoleInfo(targetChar)
     if not targetChar then return nil end
     local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType") or targetChar.Name
@@ -458,9 +434,7 @@ local function applyESP(plr)
     plr.CharacterAdded:Connect(setupChar)
 end
 
---------------------------------------------------------------------------------
--- 2. C00LKIDD MINION ESP (ORANGE)
---------------------------------------------------------------------------------
+--// C00LKIDD MINION ESP (ORANGE)
 local function removeMinionESP(minion)
     if activeMinionESP[minion] then
         if activeMinionESP[minion].Highlight then activeMinionESP[minion].Highlight:Destroy() end
@@ -513,11 +487,7 @@ local function applyMinionESP(minion)
         else
             highlight.Enabled = true
             billboard.Enabled = true
-            if hum then
-                label.Text = string.format("c00lkidd Minion | %d HP", math.floor(hum.Health))
-            else
-                label.Text = "c00lkidd Minion"
-            end
+            label.Text = hum and string.format("c00lkidd Minion | %d HP", math.floor(hum.Health)) or "c00lkidd Minion"
         end
     end)
 
@@ -542,9 +512,7 @@ local function clearAllMinionESP()
     end
 end
 
---------------------------------------------------------------------------------
--- 3. 1x1x1x1 MINION ESP (DARK GREEN)
---------------------------------------------------------------------------------
+--// 1X1X1X1 ZOMBIE MINION ESP (DARK GREEN)
 local function removeZombieESP(zombie)
     if activeZombieESP[zombie] then
         if activeZombieESP[zombie].Highlight then activeZombieESP[zombie].Highlight:Destroy() end
@@ -597,11 +565,7 @@ local function applyZombieESP(zombie)
         else
             highlight.Enabled = true
             billboard.Enabled = true
-            if hum then
-                label.Text = string.format("1x1x1x1 Zombie | %d HP", math.floor(hum.Health))
-            else
-                label.Text = "1x1x1x1 Zombie"
-            end
+            label.Text = hum and string.format("1x1x1x1 Zombie | %d HP", math.floor(hum.Health)) or "1x1x1x1 Zombie"
         end
     end)
 
@@ -626,9 +590,7 @@ local function clearAllZombieESP()
     end
 end
 
---------------------------------------------------------------------------------
--- 4. GENERATOR ESP (YELLOW / WHITE)
---------------------------------------------------------------------------------
+--// GENERATOR ESP (YELLOW / WHITE)
 local function removeGenESP(gen)
     if activeGenESP[gen] then
         if activeGenESP[gen].Highlight then activeGenESP[gen].Highlight:Destroy() end
@@ -645,10 +607,6 @@ local function isGenFinished(genModel)
     local progress = genModel:FindFirstChild("Progress")
     if progress and (progress:IsA("NumberValue") or progress:IsA("IntValue")) then
         if progress.Value >= 100 then return true end
-    end
-    local prompt = genModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt and not prompt.Enabled then
-        return true
     end
     return false
 end
@@ -739,12 +697,10 @@ local function clearAllGenESP()
     end
 end
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 2): CRATE, ITEM ESP, MONITORING & UI CONTROLS
+-- PART 3 (SECTION 2): CRATE, ITEM ESP & UI TOGGLES
 --------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
--- 5. CRATE ESP (PURPLE HIGHLIGHT & TEXT)
---------------------------------------------------------------------------------
+--// CRATE ESP (PURPLE)
 local function isCrateValid(crate)
     if not crate or not crate:IsDescendantOf(workspace) then return false end
     local prompt = crate:FindFirstChildWhichIsA("ProximityPrompt", true)
@@ -825,9 +781,7 @@ local function clearAllCrateESP()
     end
 end
 
---------------------------------------------------------------------------------
--- 6. ITEM ESP (GREEN)
---------------------------------------------------------------------------------
+--// ITEM ESP (GREEN)
 local function resolveItemTarget(prompt)
     if not prompt or not prompt.Enabled then return nil end
     local parentObj = prompt.Parent
@@ -932,9 +886,7 @@ local function clearAllItemESP()
     end
 end
 
---------------------------------------------------------------------------------
--- DYNAMIC WORKSPACE MONITORING & CLEANUP
---------------------------------------------------------------------------------
+--// DYNAMIC LISTENERS
 workspace.DescendantAdded:Connect(function(descendant)
     if minionEspOn and descendant:IsA("Model") and (descendant.Name == "PizzaDeliveryRig" or descendant.Name:find("PizzaDelivery")) then
         applyMinionESP(descendant)
@@ -983,9 +935,7 @@ task.spawn(function()
     end
 end)
 
---------------------------------------------------------------------------------
--- ESP TAB ELEMENTS (RAYFIELD CONTROLS)
---------------------------------------------------------------------------------
+--// UI TOGGLES
 ESPTab:CreateSection("Player Visuals")
 
 ESPTab:CreateToggle({
@@ -1071,7 +1021,6 @@ local currentTarget = nil
 local isLocked = false
 local lastTargetCheck = 0
 
--- Helper: Target selection restricted strictly to nearby players within range
 local function getClosestTarget(maxDistance)
     local character = player.Character
     if not character then return nil end
@@ -1099,9 +1048,7 @@ local function getClosestTarget(maxDistance)
     return closestTarget
 end
 
---------------------------------------------------------------------------------
--- HITBOX EXPANDER / LUNGE BOOST SYSTEM
---------------------------------------------------------------------------------
+--// HITBOX EXPANDER / LUNGE BOOST
 local lungeBoostOn = false
 local lungeRange = 9.6
 
@@ -1153,10 +1100,7 @@ CombatTab:CreateSlider({
     end,
 })
 
---------------------------------------------------------------------------------
--- CAMLOCK TARGET FOCUS (PROXIMITY RESTRICTED)
---------------------------------------------------------------------------------
-
+--// CAMLOCK TARGET FOCUS
 local function isTargetValid(targetChar)
     if not targetChar or not targetChar.Parent then return false end
     local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -1238,9 +1182,7 @@ CombatTab:CreateSlider({
     end,
 })
 
---------------------------------------------------------------------------------
--- UTILITY TAB: MOVEMENT MODS
---------------------------------------------------------------------------------
+--// TPWALK
 UtilityTab:CreateSection("Movement Mods")
 
 local tpwalkOn = false
@@ -1277,23 +1219,18 @@ RS.Heartbeat:Connect(function()
     end
 end)
 
---------------------------------------------------------------------------------
--- UTILITY TAB: INFINITE STAMINA (FIXED)
---------------------------------------------------------------------------------
+--// INFINITE STAMINA (GETGC MAINMODULE LOCK)
 UtilityTab:CreateSection("Stamina Mods")
 
 local infStaminaOn = false
 local MainModule = nil
 
--- Locate the actual Forsaken MainModule
 local function locateMainModule()
-    -- 1. Check global environment
     if getgenv and getgenv().MainModule and type(getgenv().MainModule) == "table" then
         MainModule = getgenv().MainModule
         return MainModule
     end
 
-    -- 2. Inspect active Lua garbage collector for Forsaken's core module
     if getgc then
         for _, obj in ipairs(getgc(true)) do
             if type(obj) == "table" and rawget(obj, "Stamina") ~= nil and rawget(obj, "MaxStamina") ~= nil then
@@ -1304,7 +1241,6 @@ local function locateMainModule()
         end
     end
 
-    -- 3. Fallback: Search loaded modules
     if getloadedmodules then
         for _, mod in ipairs(getloadedmodules()) do
             if mod:IsA("ModuleScript") then
@@ -1349,17 +1285,12 @@ local function updateStaminaHUD(state)
     end
 
     local centerCounter = tempUI:FindFirstChild("CenterStaminaCounter")
-    if centerCounter then
-        centerCounter.Visible = not state
-    end
+    if centerCounter then centerCounter.Visible = not state end
 
     local centerDrain = tempUI:FindFirstChild("Drain")
-    if centerDrain then
-        centerDrain.Visible = not state
-    end
+    if centerDrain then centerDrain.Visible = not state end
 end
 
--- Hard-lock loop matching ForsakenPlus
 local function applyStaminaLock()
     if not infStaminaOn then return end
 
@@ -1377,9 +1308,7 @@ UtilityTab:CreateToggle({
     CurrentValue = false,
     Callback = function(value)
         infStaminaOn = value
-        if value then
-            locateMainModule()
-        end
+        if value then locateMainModule() end
         updateStaminaHUD(value)
     end,
 })
@@ -1390,14 +1319,10 @@ RS.RenderStepped:Connect(applyStaminaLock)
 player.CharacterAdded:Connect(function()
     task.wait(1)
     locateMainModule()
-    if infStaminaOn then
-        updateStaminaHUD(true)
-    end
+    if infStaminaOn then updateStaminaHUD(true) end
 end)
 
---------------------------------------------------------------------------------
--- UTILITY TAB: GENERATOR AUTOMATION
---------------------------------------------------------------------------------
+--// STANDALONE MANUAL GENERATOR CONTROLS
 UtilityTab:CreateSection("Generator Automation")
 
 local AutoGenEnabled = false
@@ -1494,123 +1419,119 @@ task.spawn(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 5: PLAYER TELEPORTER
+-- PART 5: TELEPORTATION SYSTEM
 --------------------------------------------------------------------------------
 
-TeleportTab:CreateSection("Player Teleporter")
+TeleportTab:CreateSection("Player Teleportation")
 
-local selectedPlayer, stickInFrontOn, stickOffset, searchQuery = nil, false, 5.5, ""
-local playerDropdownOptions, playerMap, PlayerDropdown = {}, {}, nil
+local selectedPlayerName = nil
 
-local function refreshPlayerDropdown()
-    playerDropdownOptions, playerMap = {}, {}
-    local queryLower = string.lower(searchQuery)
+local function getPlayerList()
+    local list = {}
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
-            local displayName, username = p.DisplayName, p.Name
-            if queryLower == "" or string.find(string.lower(displayName), queryLower, 1, true) or string.find(string.lower(username), queryLower, 1, true) then
-                local formattedName = displayName .. " (@" .. username .. ")"
-                table.insert(playerDropdownOptions, formattedName)
-                playerMap[formattedName] = p
-            end
+            table.insert(list, p.Name)
         end
     end
-    if #playerDropdownOptions == 0 then
-        playerDropdownOptions = {"No Players Found"}
-    end
-    if PlayerDropdown and PlayerDropdown.Refresh then
-        PlayerDropdown:Refresh(playerDropdownOptions)
-    end
+    return list
 end
 
-TeleportTab:CreateInput({
-    Name = "Search Player",
-    PlaceholderText = "Type to filter...",
-    Callback = function(text)
-        searchQuery = text or ""
-        refreshPlayerDropdown()
-    end,
-})
-
-PlayerDropdown = TeleportTab:CreateDropdown({
-    Name = "Select Target Player",
-    Options = {"Loading..."},
-    CurrentOption = "Loading...",
+local PlayerDropdown = TeleportTab:CreateDropdown({
+    Name = "Select Player",
+    Options = getPlayerList(),
+    CurrentOption = "",
     Callback = function(option)
-        local selected = typeof(option) == "table" and option[1] or option
-        selectedPlayer = playerMap[selected]
+        selectedPlayerName = typeof(option) == "table" and option[1] or option
     end,
 })
-
-task.defer(function()
-    refreshPlayerDropdown()
-end)
-
-Players.PlayerAdded:Connect(function()
-    task.wait(0.5)
-    refreshPlayerDropdown()
-end)
-
-Players.PlayerRemoving:Connect(function(p)
-    if selectedPlayer == p then
-        selectedPlayer = nil
-        stickInFrontOn = false
-    end
-    refreshPlayerDropdown()
-end)
 
 TeleportTab:CreateButton({
-    Name = "Teleport to Player",
+    Name = "Teleport to Selected Player",
     Callback = function()
-        if selectedPlayer and selectedPlayer.Character then
-            local targetHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            if targetHrp and myHrp then
-                myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -3)
-            end
-        end
-    end,
-})
-
-TeleportTab:CreateToggle({
-    Name = "Stick in Front of Player",
-    CurrentValue = false,
-    Callback = function(value)
-        stickInFrontOn = value
-    end,
-})
-
-TeleportTab:CreateSlider({
-    Name = "Stick Distance Offset",
-    Range = {2, 25},
-    Increment = 0.5,
-    CurrentValue = 5.5,
-    Callback = function(value)
-        stickOffset = value
-    end,
-})
-
-RS.RenderStepped:Connect(function()
-    if stickInFrontOn and selectedPlayer and selectedPlayer.Character then
-        local targetChar = selectedPlayer.Character
-        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-        local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-
-        if not targetHrp or not targetHum or targetHum.Health <= 0 then
-            stickInFrontOn = false
-            selectedPlayer = nil
+        if not selectedPlayerName then
+            Rayfield:Notify({
+                Title = "Teleport Failed",
+                Content = "Please select a player from the dropdown first.",
+                Duration = 2,
+                Image = 4483362458,
+            })
             return
         end
 
-        if myHrp then
-            local pos = targetHrp.CFrame * CFrame.new(0, 0, -stickOffset)
-            myHrp.CFrame = CFrame.lookAt(pos.Position, targetHrp.Position)
+        local targetPlr = Players:FindFirstChild(selectedPlayerName)
+        if targetPlr and targetPlr.Character then
+            local tRoot = targetPlr.Character:FindFirstChild("HumanoidRootPart")
+            local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if tRoot and myRoot then
+                myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, 3)
+            end
+        else
+            Rayfield:Notify({
+                Title = "Player Unavailable",
+                Content = "Target player is no longer alive or in the game.",
+                Duration = 2,
+                Image = 4483362458,
+            })
         end
-    end
-end)
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "Refresh Player List",
+    Callback = function()
+        if PlayerDropdown then
+            PlayerDropdown:Refresh(getPlayerList(), true)
+        end
+    end,
+})
+
+TeleportTab:CreateSection("Map Teleportation")
+
+TeleportTab:CreateButton({
+    Name = "Teleport to Ingame Map",
+    Callback = function()
+        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+
+        local map = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")
+        if map then
+            local spawnPoint = map:FindFirstChildWhichIsA("SpawnLocation", true) or map:FindFirstChildWhichIsA("BasePart", true)
+            if spawnPoint then
+                myRoot.CFrame = spawnPoint.CFrame * CFrame.new(0, 4, 0)
+            end
+        end
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "Teleport to Killer",
+    Callback = function()
+        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
+
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                local charType = p.Character:GetAttribute("Character") or p.Character.Name
+                if charType and KILLER_CLASSES and KILLER_CLASSES[string.lower(tostring(charType))] then
+                    local kRoot = p.Character:FindFirstChild("HumanoidRootPart")
+                    if kRoot then
+                        myRoot.CFrame = kRoot.CFrame * CFrame.new(0, 0, 5)
+                        return
+                    end
+                end
+            end
+        end
+
+        Rayfield:Notify({
+            Title = "Killer Not Found",
+            Content = "No killer character found in the round.",
+            Duration = 2.5,
+            Image = 4483362458,
+        })
+    end,
+})
 --------------------------------------------------------------------------------
--- PART 6: ITEMS TAB (ITEM TELEPORTERS)
+-- PART 6: ITEMS TAB (ITEM & CRATE TELEPORTERS)
 --------------------------------------------------------------------------------
 
 local function isItemValidAndAvailable(v)
@@ -1689,10 +1610,6 @@ local function teleportToItem(matchKeywords, itemName)
     end
 end
 
---------------------------------------------------------------------------------
--- RAYFIELD ITEMS TAB BUTTONS
---------------------------------------------------------------------------------
-
 ItemsTab:CreateSection("Item Teleporters")
 
 ItemsTab:CreateButton({
@@ -1718,7 +1635,7 @@ ItemsTab:CreateButton({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 7: FULLY AUTOMATED GENERATOR ROUTE (PHYSICS-LOCKED & WALL-SAFE)
+-- PART 7: FULLY AUTOMATED GENERATOR ROUTE (UPDATED REWORK)
 --------------------------------------------------------------------------------
 
 local Players = game:GetService("Players")
@@ -1727,26 +1644,20 @@ local player = Players.LocalPlayer
 local fullAutoGenActive = false
 local autoGenFullToggle = nil
 local FIXED_GEN_COOLDOWN = 1.5
-local MAX_REPAIR_DISTANCE = 7.5
+local MAX_REPAIR_DISTANCE = 8.5
 local MAX_OCCUPANTS = 3
-local EXACT_SLOT_THRESHOLD = 2.2
-
--- 4 Cardinal sides positioned at 2.5 studs (tight interaction range)
-local CANDIDATE_SLOTS = {
-    { Offset = Vector3.new(0, 0, -2.5), Name = "Front" },
-    { Offset = Vector3.new(0, 0, 2.5),  Name = "Back" },
-    { Offset = Vector3.new(-2.5, 0, 0), Name = "Left" },
-    { Offset = Vector3.new(2.5, 0, 0),  Name = "Right" },
-}
 
 local function getActiveMap()
-    return workspace:FindFirstChild("Map") 
-        and workspace.Map:FindFirstChild("Ingame") 
-        and workspace.Map.Ingame:FindFirstChild("Map")
+    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map"))
+        or (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
+        or workspace:FindFirstChild("Map")
+        or workspace
 end
 
 local function isGeneratorCompleted(genModel)
-    if not genModel or not genModel.Parent then return true end
+    if not genModel or not genModel.Parent or not genModel:IsDescendantOf(workspace) then 
+        return true 
+    end
 
     if genModel:GetAttribute("Completed") == true 
         or genModel:GetAttribute("Finished") == true 
@@ -1761,80 +1672,73 @@ local function isGeneratorCompleted(genModel)
         end
     end
 
-    local prompt = genModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt and not prompt.Enabled then
-        return true
-    end
-
     return false
 end
 
--- Raycasts from generator center to ensure the side is clear of map walls
-local function isSlotClearOfWalls(genPos, targetPos, genModel)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = {genModel, player.Character}
-    rayParams.IgnoreWater = true
-
-    local direction = targetPos - genPos
-    local result = workspace:Raycast(genPos, direction, rayParams)
-    if result and result.Instance and result.Instance.CanCollide then
-        return false -- Hit a wall or obstacle
+local function getGenRemote(genModel)
+    local remotes = genModel:FindFirstChild("Remotes")
+    if remotes then
+        local re = remotes:FindFirstChildOfClass("RemoteEvent")
+        if re then return re end
     end
-    return true
+    for _, desc in ipairs(genModel:GetDescendants()) do
+        if desc:IsA("RemoteEvent") then
+            return desc
+        end
+    end
+    return nil
 end
 
--- Checks if another real living player is standing in this specific side
-local function isSlotOccupiedByOtherPlayer(slotWorldPos)
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+local function getAvailableRepairSlot(genModel, mainPart)
+    local availableSlots = {}
 
-            if hrp and hum and hum.Health > 0 then
-                local flatDist = (Vector3.new(hrp.Position.X, slotWorldPos.Y, hrp.Position.Z) - slotWorldPos).Magnitude
-                local heightDiff = math.abs(hrp.Position.Y - slotWorldPos.Y)
+    for _, desc in ipairs(genModel:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") then
+            local promptPart = desc.Parent:IsA("BasePart") and desc.Parent or desc.Parent:FindFirstAncestorWhichIsA("BasePart")
+            local promptPos = desc.Parent:IsA("Attachment") and desc.Parent.WorldPosition or (promptPart and promptPart.Position)
 
-                if flatDist <= EXACT_SLOT_THRESHOLD and heightDiff <= 2.5 then
-                    return true
+            if promptPos then
+                local isOccupied = false
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
+                        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if hrp and hum and hum.Health > 0 then
+                            if (hrp.Position - promptPos).Magnitude <= 3.2 then
+                                isOccupied = true
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if not isOccupied then
+                    table.insert(availableSlots, {
+                        Prompt = desc,
+                        Position = promptPos,
+                        Part = promptPart
+                    })
                 end
             end
         end
     end
-    return false
-end
 
--- Finds the floor height directly under the target position
-local function getGroundPosition(targetWorldPos, mainPart)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = RaycastFilterType.Exclude
-    rayParams.FilterDescendantsInstances = {player.Character}
-    
-    local rayResult = workspace:Raycast(targetWorldPos + Vector3.new(0, 3, 0), Vector3.new(0, -10, 0), rayParams)
-    if rayResult then
-        return rayResult.Position + Vector3.new(0, 2.5, 0)
-    end
-    return Vector3.new(targetWorldPos.X, mainPart.Position.Y, targetWorldPos.Z)
-end
-
--- Selects the best accessible side (Defaulting to Front if wall-free and empty)
-local function getOptimalRepairCFrame(mainPart, genModel)
-    local genCFrame = mainPart.CFrame
-    local genPos = mainPart.Position
-
-    for _, slot in ipairs(CANDIDATE_SLOTS) do
-        local rawPos = (genCFrame * CFrame.new(slot.Offset)).Position
-        local groundPos = getGroundPosition(rawPos, mainPart)
-
-        if isSlotClearOfWalls(genPos, groundPos, genModel) and not isSlotOccupiedByOtherPlayer(groundPos) then
-            -- Face directly at the generator center
-            return CFrame.lookAt(groundPos, Vector3.new(genPos.X, groundPos.Y, genPos.Z))
-        end
+    if #availableSlots > 0 then
+        return availableSlots[1]
     end
 
-    -- Fallback: Front offset
-    local fallbackPos = getGroundPosition((genCFrame * CFrame.new(0, 0, -2.5)).Position, mainPart)
-    return CFrame.lookAt(fallbackPos, Vector3.new(genPos.X, fallbackPos.Y, genPos.Z))
+    local fallbackPrompt = genModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if fallbackPrompt then
+        local pPart = fallbackPrompt.Parent:IsA("BasePart") and fallbackPrompt.Parent or fallbackPrompt.Parent:FindFirstAncestorWhichIsA("BasePart")
+        local pPos = fallbackPrompt.Parent:IsA("Attachment") and fallbackPrompt.Parent.WorldPosition or (pPart and pPart.Position) or mainPart.Position
+        return {
+            Prompt = fallbackPrompt,
+            Position = pPos,
+            Part = pPart
+        }
+    end
+
+    return nil
 end
 
 local function getOccupantCount(mainPart)
@@ -1857,11 +1761,9 @@ local function getOccupantCount(mainPart)
 end
 
 local function checkAnyGeneratorsLeft()
-    local gameMap = getActiveMap()
-    local searchScope = gameMap or workspace
-
+    local searchScope = getActiveMap()
     for _, obj in ipairs(searchScope:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) then
+        if obj:IsA("Model") and obj.Name:lower():find("generator") then
             if not isGeneratorCompleted(obj) then
                 return true
             end
@@ -1871,21 +1773,23 @@ local function checkAnyGeneratorsLeft()
 end
 
 local function getIncompleteGenerators()
-    local gameMap = getActiveMap()
-    local searchScope = gameMap or workspace
+    local searchScope = getActiveMap()
     local incompleteGens = {}
 
     for _, obj in ipairs(searchScope:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) then
+        if obj:IsA("Model") and obj.Name:lower():find("generator") then
             local mainPart = obj:FindFirstChild("Main") or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
             if mainPart and not isGeneratorCompleted(obj) then
                 local occupants = getOccupantCount(mainPart)
                 if occupants < MAX_OCCUPANTS then
-                    table.insert(incompleteGens, {
-                        Model = obj,
-                        Main = mainPart,
-                        Occupants = occupants
-                    })
+                    local slotData = getAvailableRepairSlot(obj, mainPart)
+                    if slotData then
+                        table.insert(incompleteGens, {
+                            Model = obj,
+                            Main = mainPart,
+                            Slot = slotData
+                        })
+                    end
                 end
             end
         end
@@ -1893,10 +1797,6 @@ local function getIncompleteGenerators()
 
     return incompleteGens
 end
-
---------------------------------------------------------------------------------
--- AUTO REPAIR MAIN THREAD
---------------------------------------------------------------------------------
 
 task.spawn(function()
     while true do
@@ -1918,8 +1818,8 @@ task.spawn(function()
                         end
 
                         Rayfield:Notify({
-                            Title = "Auto Gen Complete",
-                            Content = "All generators in this round are finished!",
+                            Title = "Auto Gen Finished",
+                            Content = "All generators in this round are completed!",
                             Duration = 4,
                             Image = 4483362458,
                         })
@@ -1930,36 +1830,42 @@ task.spawn(function()
                     local targetGenData = incompleteList[1]
                     local genModel = targetGenData.Model
                     local mainPart = targetGenData.Main
+                    local slotData = targetGenData.Slot
 
-                    -- Calculate stable repair CFrame
-                    local targetCFrame = getOptimalRepairCFrame(mainPart, genModel)
+                    local panelPos = slotData.Position
+                    local genCenter = mainPart.Position
+                    local outwardDir = (Vector3.new(panelPos.X, genCenter.Y, panelPos.Z) - genCenter).Unit
+                    if outwardDir.Magnitude == 0 or tostring(outwardDir.X) == "-nan(ind)" then
+                        outwardDir = (mainPart.CFrame.LookVector * -1).Unit
+                    end
+
+                    local standPosition = panelPos + (outwardDir * 2.3)
+                    standPosition = Vector3.new(standPosition.X, myRoot.Position.Y, standPosition.Z)
                     
-                    -- Teleport cleanly onto the floor
-                    myRoot.CFrame = targetCFrame
+                    myRoot.CFrame = CFrame.lookAt(standPosition, Vector3.new(panelPos.X, standPosition.Y, panelPos.Z))
                     myRoot.AssemblyLinearVelocity = Vector3.zero
                     myRoot.AssemblyAngularVelocity = Vector3.zero
-                    task.wait(0.15)
+                    task.wait(0.25)
 
-                    -- Stay stationary on this generator until 100% complete
+                    if slotData.Prompt and fireproximityprompt then
+                        pcall(fireproximityprompt, slotData.Prompt)
+                    end
+                    task.wait(0.2)
+
                     while fullAutoGenActive and not isGeneratorCompleted(genModel) and genModel:IsDescendantOf(workspace) do
                         if getOccupantCount(mainPart) >= MAX_OCCUPANTS then
                             break
                         end
 
-                        -- Stop physics drift from canceling the puzzle UI
                         myRoot.AssemblyLinearVelocity = Vector3.zero
 
-                        local remotes = genModel:FindFirstChild("Remotes")
-                        local progress = genModel:FindFirstChild("Progress")
-                        local remoteEvent = progress and remotes and remotes:FindFirstChildOfClass("RemoteEvent")
-
-                        local prompt = genModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-                        if prompt and prompt.Enabled and fireproximityprompt then
-                            fireproximityprompt(prompt)
-                        end
-
+                        local remoteEvent = getGenRemote(genModel)
                         if remoteEvent then
                             remoteEvent:FireServer()
+                        end
+
+                        if slotData.Prompt and slotData.Prompt.Enabled and fireproximityprompt then
+                            pcall(fireproximityprompt, slotData.Prompt)
                         end
 
                         task.wait(FIXED_GEN_COOLDOWN)
@@ -1969,10 +1875,6 @@ task.spawn(function()
         end
     end
 end)
-
---------------------------------------------------------------------------------
--- AUTO GEN TAB ELEMENTS
---------------------------------------------------------------------------------
 
 AutoGenTab:CreateSection("Automated Route System")
 
