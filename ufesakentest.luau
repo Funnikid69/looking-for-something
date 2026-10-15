@@ -307,17 +307,19 @@ AutoFarmTab:CreateDropdown({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 1): CORE STATE, PLAYER, MINION & GENERATOR ESP
+-- PART 3 (SECTION 1): CORE STATE, PLAYER, MINIONS & GENERATOR ESP
 --------------------------------------------------------------------------------
 
 local espOn = false
 local minionEspOn = false
+local zombieEspOn = false
 local generatorEspOn = false
 local itemEspOn = false
 local crateEspOn = false
 
 local activeESP = {}
 local activeMinionESP = {}
+local activeZombieESP = {}
 local activeGenESP = {}
 local activeItemESP = {}
 local activeCrateESP = {}
@@ -507,8 +509,7 @@ local function applyMinionESP(minion)
 
     local conn = RS.RenderStepped:Connect(function()
         if not minionEspOn or not minion:IsDescendantOf(workspace) or (hum and hum.Health <= 0) then
-            highlight.Enabled = false
-            billboard.Enabled = false
+            removeMinionESP(minion)
         else
             highlight.Enabled = true
             billboard.Enabled = true
@@ -542,7 +543,91 @@ local function clearAllMinionESP()
 end
 
 --------------------------------------------------------------------------------
--- 3. GENERATOR ESP (YELLOW / WHITE)
+-- 3. 1x1x1x1 MINION ESP (DARK GREEN)
+--------------------------------------------------------------------------------
+local function removeZombieESP(zombie)
+    if activeZombieESP[zombie] then
+        if activeZombieESP[zombie].Highlight then activeZombieESP[zombie].Highlight:Destroy() end
+        if activeZombieESP[zombie].Billboard then activeZombieESP[zombie].Billboard:Destroy() end
+        if activeZombieESP[zombie].Connection then activeZombieESP[zombie].Connection:Disconnect() end
+        activeZombieESP[zombie] = nil
+    end
+end
+
+local function applyZombieESP(zombie)
+    if not zombie or activeZombieESP[zombie] then return end
+    if not zombie:IsDescendantOf(workspace) then return end
+
+    local root = zombie:WaitForChild("HumanoidRootPart", 3) or zombie:FindFirstChildWhichIsA("BasePart")
+    local hum = zombie:FindFirstChildOfClass("Humanoid")
+    local head = zombie:FindFirstChild("Head") or root
+    if not root then return end
+
+    local darkGreenColor = Color3.fromRGB(0, 130, 45)
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Zombie_Highlight"
+    highlight.FillColor = darkGreenColor
+    highlight.FillTransparency = 0.4
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0
+    highlight.Adornee = zombie
+    highlight.Parent = zombie
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Zombie_Billboard"
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 180, 0, 26)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Adornee = head
+    billboard.Parent = zombie
+
+    local label = Instance.new("TextLabel", billboard)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = darkGreenColor
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 13
+    label.Text = "1x1x1x1 Zombie"
+
+    local conn = RS.RenderStepped:Connect(function()
+        if not zombieEspOn or not zombie:IsDescendantOf(workspace) or (hum and hum.Health <= 0) then
+            removeZombieESP(zombie)
+        else
+            highlight.Enabled = true
+            billboard.Enabled = true
+            if hum then
+                label.Text = string.format("1x1x1x1 Zombie | %d HP", math.floor(hum.Health))
+            else
+                label.Text = "1x1x1x1 Zombie"
+            end
+        end
+    end)
+
+    activeZombieESP[zombie] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Connection = conn
+    }
+end
+
+local function scanZombies()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and (obj.Name == "1x1x1x1Zombie" or obj.Name:find("1x1x1x1Zombie")) then
+            applyZombieESP(obj)
+        end
+    end
+end
+
+local function clearAllZombieESP()
+    for zombie, _ in pairs(activeZombieESP) do
+        removeZombieESP(zombie)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- 4. GENERATOR ESP (YELLOW / WHITE)
 --------------------------------------------------------------------------------
 local function removeGenESP(gen)
     if activeGenESP[gen] then
@@ -658,7 +743,7 @@ end
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- 4. CRATE ESP (PURPLE HIGHLIGHT & TEXT)
+-- 5. CRATE ESP (PURPLE HIGHLIGHT & TEXT)
 --------------------------------------------------------------------------------
 local function isCrateValid(crate)
     if not crate or not crate:IsDescendantOf(workspace) then return false end
@@ -741,7 +826,7 @@ local function clearAllCrateESP()
 end
 
 --------------------------------------------------------------------------------
--- 5. ITEM ESP (GREEN)
+-- 6. ITEM ESP (GREEN)
 --------------------------------------------------------------------------------
 local function resolveItemTarget(prompt)
     if not prompt or not prompt.Enabled then return nil end
@@ -855,6 +940,10 @@ workspace.DescendantAdded:Connect(function(descendant)
         applyMinionESP(descendant)
     end
 
+    if zombieEspOn and descendant:IsA("Model") and (descendant.Name == "1x1x1x1Zombie" or descendant.Name:find("1x1x1x1Zombie")) then
+        applyZombieESP(descendant)
+    end
+
     if generatorEspOn and descendant:IsA("Model") and (descendant.Name == "Generator" or descendant.Name:find("Generator")) then
         applyGenESP(descendant)
     end
@@ -877,6 +966,7 @@ end)
 
 workspace.DescendantRemoving:Connect(function(descendant)
     if activeMinionESP[descendant] then removeMinionESP(descendant) end
+    if activeZombieESP[descendant] then removeZombieESP(descendant) end
     if activeGenESP[descendant] then removeGenESP(descendant) end
     if activeCrateESP[descendant] then removeCrateESP(descendant) end
     if activeItemESP[descendant] then removeItemESP(descendant) end
@@ -886,6 +976,7 @@ task.spawn(function()
     while true do
         task.wait(0.6)
         if minionEspOn then scanMinions() end
+        if zombieEspOn then scanZombies() end
         if generatorEspOn then scanGenerators() end
         if crateEspOn then scanCrates() end
         if itemEspOn then scanAndApplyItemESP() end
@@ -893,7 +984,7 @@ task.spawn(function()
 end)
 
 --------------------------------------------------------------------------------
--- ESP TAB ELEMENTS (ORIGINAL RAYFIELD)
+-- ESP TAB ELEMENTS (RAYFIELD CONTROLS)
 --------------------------------------------------------------------------------
 ESPTab:CreateSection("Player Visuals")
 
@@ -918,6 +1009,15 @@ ESPTab:CreateToggle({
     Callback = function(value)
         minionEspOn = value
         if minionEspOn then scanMinions() else clearAllMinionESP() end
+    end,
+})
+
+ESPTab:CreateToggle({
+    Name = "1x1x1x1 Minion ESP",
+    CurrentValue = false,
+    Callback = function(value)
+        zombieEspOn = value
+        if zombieEspOn then scanZombies() else clearAllZombieESP() end
     end,
 })
 
@@ -1618,7 +1718,7 @@ ItemsTab:CreateButton({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 7: FULLY AUTOMATED GENERATOR ROUTE (REWORKED STABILIZATION)
+-- PART 7: FULLY AUTOMATED GENERATOR ROUTE (PHYSICS-LOCKED & WALL-SAFE)
 --------------------------------------------------------------------------------
 
 local Players = game:GetService("Players")
@@ -1627,16 +1727,16 @@ local player = Players.LocalPlayer
 local fullAutoGenActive = false
 local autoGenFullToggle = nil
 local FIXED_GEN_COOLDOWN = 1.5
-local MAX_REPAIR_DISTANCE = 8.5
+local MAX_REPAIR_DISTANCE = 7.5
 local MAX_OCCUPANTS = 3
-local EXACT_SLOT_THRESHOLD = 2.6
+local EXACT_SLOT_THRESHOLD = 2.2
 
--- 4 Repair positions: Front is the default
-local REPAIR_SLOTS = {
-    { Offset = CFrame.new(0, 3, -4), Name = "Front" },
-    { Offset = CFrame.new(0, 3, 4) * CFrame.Angles(0, math.pi, 0), Name = "Back" },
-    { Offset = CFrame.new(-4, 3, 0) * CFrame.Angles(0, math.pi / 2, 0), Name = "Left" },
-    { Offset = CFrame.new(4, 3, 0) * CFrame.Angles(0, -math.pi / 2, 0), Name = "Right" },
+-- 4 Cardinal sides positioned at 2.5 studs (tight interaction range)
+local CANDIDATE_SLOTS = {
+    { Offset = Vector3.new(0, 0, -2.5), Name = "Front" },
+    { Offset = Vector3.new(0, 0, 2.5),  Name = "Back" },
+    { Offset = Vector3.new(-2.5, 0, 0), Name = "Left" },
+    { Offset = Vector3.new(2.5, 0, 0),  Name = "Right" },
 }
 
 local function getActiveMap()
@@ -1669,19 +1769,33 @@ local function isGeneratorCompleted(genModel)
     return false
 end
 
--- Checks if an actual other living player is repairing/locked onto an exact slot
-local function isSlotOccupiedByOther(slotWorldPos)
+-- Raycasts from generator center to ensure the side is clear of map walls
+local function isSlotClearOfWalls(genPos, targetPos, genModel)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {genModel, player.Character}
+    rayParams.IgnoreWater = true
+
+    local direction = targetPos - genPos
+    local result = workspace:Raycast(genPos, direction, rayParams)
+    if result and result.Instance and result.Instance.CanCollide then
+        return false -- Hit a wall or obstacle
+    end
+    return true
+end
+
+-- Checks if another real living player is standing in this specific side
+local function isSlotOccupiedByOtherPlayer(slotWorldPos)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
             if hrp and hum and hum.Health > 0 then
-                local flatDistance = (Vector3.new(hrp.Position.X, slotWorldPos.Y, hrp.Position.Z) - slotWorldPos).Magnitude
+                local flatDist = (Vector3.new(hrp.Position.X, slotWorldPos.Y, hrp.Position.Z) - slotWorldPos).Magnitude
                 local heightDiff = math.abs(hrp.Position.Y - slotWorldPos.Y)
 
-                -- Must be stationed directly in that repair slot
-                if flatDistance <= EXACT_SLOT_THRESHOLD and heightDiff <= 2.2 then
+                if flatDist <= EXACT_SLOT_THRESHOLD and heightDiff <= 2.5 then
                     return true
                 end
             end
@@ -1690,21 +1804,37 @@ local function isSlotOccupiedByOther(slotWorldPos)
     return false
 end
 
--- Decides repair CFrame: defaults to Front, selects alternative only if another player is stationed there
-local function getBestRepairCFrame(mainPart)
-    local frontCFrame = mainPart.CFrame * REPAIR_SLOTS[1].Offset
-    if not isSlotOccupiedByOther(frontCFrame.Position) then
-        return frontCFrame
+-- Finds the floor height directly under the target position
+local function getGroundPosition(targetWorldPos, mainPart)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {player.Character}
+    
+    local rayResult = workspace:Raycast(targetWorldPos + Vector3.new(0, 3, 0), Vector3.new(0, -10, 0), rayParams)
+    if rayResult then
+        return rayResult.Position + Vector3.new(0, 2.5, 0)
     end
+    return Vector3.new(targetWorldPos.X, mainPart.Position.Y, targetWorldPos.Z)
+end
 
-    for i = 2, #REPAIR_SLOTS do
-        local slotCFrame = mainPart.CFrame * REPAIR_SLOTS[i].Offset
-        if not isSlotOccupiedByOther(slotCFrame.Position) then
-            return slotCFrame
+-- Selects the best accessible side (Defaulting to Front if wall-free and empty)
+local function getOptimalRepairCFrame(mainPart, genModel)
+    local genCFrame = mainPart.CFrame
+    local genPos = mainPart.Position
+
+    for _, slot in ipairs(CANDIDATE_SLOTS) do
+        local rawPos = (genCFrame * CFrame.new(slot.Offset)).Position
+        local groundPos = getGroundPosition(rawPos, mainPart)
+
+        if isSlotClearOfWalls(genPos, groundPos, genModel) and not isSlotOccupiedByOtherPlayer(groundPos) then
+            -- Face directly at the generator center
+            return CFrame.lookAt(groundPos, Vector3.new(genPos.X, groundPos.Y, genPos.Z))
         end
     end
 
-    return frontCFrame
+    -- Fallback: Front offset
+    local fallbackPos = getGroundPosition((genCFrame * CFrame.new(0, 0, -2.5)).Position, mainPart)
+    return CFrame.lookAt(fallbackPos, Vector3.new(genPos.X, fallbackPos.Y, genPos.Z))
 end
 
 local function getOccupantCount(mainPart)
@@ -1724,6 +1854,20 @@ local function getOccupantCount(mainPart)
     end
 
     return count
+end
+
+local function checkAnyGeneratorsLeft()
+    local gameMap = getActiveMap()
+    local searchScope = gameMap or workspace
+
+    for _, obj in ipairs(searchScope:GetDescendants()) do
+        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) then
+            if not isGeneratorCompleted(obj) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function getIncompleteGenerators()
@@ -1750,19 +1894,9 @@ local function getIncompleteGenerators()
     return incompleteGens
 end
 
-local function checkAnyGeneratorsLeft()
-    local gameMap = getActiveMap()
-    local searchScope = gameMap or workspace
-
-    for _, obj in ipairs(searchScope:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) then
-            if not isGeneratorCompleted(obj) then
-                return true
-            end
-        end
-    end
-    return false
-end
+--------------------------------------------------------------------------------
+-- AUTO REPAIR MAIN THREAD
+--------------------------------------------------------------------------------
 
 task.spawn(function()
     while true do
@@ -1771,12 +1905,12 @@ task.spawn(function()
         if fullAutoGenActive then
             local myChar = player.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
 
-            if myRoot then
+            if myRoot and myHum and myHum.Health > 0 then
                 local incompleteList = getIncompleteGenerators()
 
                 if #incompleteList == 0 then
-                    -- Verify if every single generator in the entire map is completed
                     if not checkAnyGeneratorsLeft() then
                         fullAutoGenActive = false
                         if autoGenFullToggle then
@@ -1784,8 +1918,8 @@ task.spawn(function()
                         end
 
                         Rayfield:Notify({
-                            Title = "Auto Gen Finished",
-                            Content = "All generators in this round are completed!",
+                            Title = "Auto Gen Complete",
+                            Content = "All generators in this round are finished!",
                             Duration = 4,
                             Image = 4483362458,
                         })
@@ -1797,14 +1931,23 @@ task.spawn(function()
                     local genModel = targetGenData.Model
                     local mainPart = targetGenData.Main
 
-                    -- Lock into a single slot coordinate and do not alter it mid-repair to avoid dropping puzzles
-                    local lockedSlotCFrame = getBestRepairCFrame(mainPart)
-                    myRoot.CFrame = lockedSlotCFrame
+                    -- Calculate stable repair CFrame
+                    local targetCFrame = getOptimalRepairCFrame(mainPart, genModel)
+                    
+                    -- Teleport cleanly onto the floor
+                    myRoot.CFrame = targetCFrame
+                    myRoot.AssemblyLinearVelocity = Vector3.zero
+                    myRoot.AssemblyAngularVelocity = Vector3.zero
+                    task.wait(0.15)
 
+                    -- Stay stationary on this generator until 100% complete
                     while fullAutoGenActive and not isGeneratorCompleted(genModel) and genModel:IsDescendantOf(workspace) do
                         if getOccupantCount(mainPart) >= MAX_OCCUPANTS then
                             break
                         end
+
+                        -- Stop physics drift from canceling the puzzle UI
+                        myRoot.AssemblyLinearVelocity = Vector3.zero
 
                         local remotes = genModel:FindFirstChild("Remotes")
                         local progress = genModel:FindFirstChild("Progress")
@@ -1820,11 +1963,6 @@ task.spawn(function()
                         end
 
                         task.wait(FIXED_GEN_COOLDOWN)
-
-                        -- Keep character pinned stably at the exact initial interaction spot
-                        if myRoot and mainPart and mainPart.Parent then
-                            myRoot.CFrame = lockedSlotCFrame
-                        end
                     end
                 end
             end
