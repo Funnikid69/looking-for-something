@@ -298,28 +298,45 @@ local activeItemESP = {}
 
 -- Character Role Sets
 local SURVIVOR_CLASSES = {
-    ["guest1337"] = "Guest 1337", ["shedletsky"] = "Shedletsky", ["dusekkar"] = "Dusekkar",
-    ["martialartist"] = "Martial Artist", ["chance"] = "Chance", ["twotime"] = "TwoTime",
-    ["007n7"] = "007n7", ["elliot"] = "Elliot", ["veeronica"] = "Veeronica",
-    ["janedoe"] = "Jane Doe", ["messi"] = "Messi", ["noob"] = "Noob"
+    ["guest1337"]     = "Guest 1337",
+    ["shedletsky"]    = "Shedletsky",
+    ["dusekkar"]      = "Dusekkar",
+    ["martialartist"] = "Martial Artist",
+    ["chance"]        = "Chance",
+    ["twotime"]       = "TwoTime",
+    ["007n7"]         = "007n7",
+    ["elliot"]        = "Elliot",
+    ["veeronica"]     = "Veeronica",
+    ["janedoe"]       = "Jane Doe",
+    ["messi"]         = "Messi",
+    ["noob"]          = "Noob",
+    ["taph"]          = "Taph",
+    ["builderman"]    = "Builderman",
 }
 
 local KILLER_CLASSES = {
-    ["slasher"] = "Slasher", ["jason"] = "Jason", ["c00lkidd"] = "c00lkidd",
-    ["1x1x1x1"] = "1x1x1x1", ["noli"] = "Noli", ["swordsmaster"] = "Swordsmaster",
-    ["guest666"] = "Guest 666", ["2011x"] = "2011x", ["johndoe"] = "John Doe",
-    ["azure"] = "Azure"
+    ["slasher"]         = "Slasher",
+    ["jason"]           = "Jason",
+    ["c00lkidd"]        = "c00lkidd",
+    ["1x1x1x1"]         = "1x1x1x1",
+    ["noli"]            = "Noli",
+    ["swordsmaster"]    = "Swordsmaster",
+    ["guest666"]        = "Guest 666",
+    ["2011x"]           = "2011x",
+    ["johndoe"]         = "John Doe",
+    ["azure"]           = "Azure",
+    ["shedletskyfunny"] = "ShedletskyFunny",
 }
 
 local MAP_BLACKLIST = {
-    ["map"] = true,
-    ["ingame"] = true,
-    ["workspace"] = true,
+    ["map"]        = true,
+    ["ingame"]     = true,
+    ["workspace"]  = true,
     ["generators"] = true,
-    ["generator"] = true,
-    ["spawns"] = true,
-    ["lobby"] = true,
-    ["terrain"] = true,
+    ["generator"]  = true,
+    ["spawns"]     = true,
+    ["lobby"]      = true,
+    ["terrain"]    = true,
 }
 
 --------------------------------------------------------------------------------
@@ -441,7 +458,7 @@ local function applyMinionESP(minion)
 
     if not root then return end
 
-    local minionColor = Color3.fromRGB(255, 130, 0) -- Pure Orange
+    local minionColor = Color3.fromRGB(255, 130, 0)
 
     local highlight = Instance.new("Highlight")
     highlight.Name = "Minion_Highlight"
@@ -631,14 +648,12 @@ local function resolveItemTarget(prompt)
     local parentObj = prompt.Parent
     if not parentObj or not parentObj:IsDescendantOf(workspace) then return nil end
 
-    -- Ignore Generators completely
     local actionText = prompt.ActionText:lower()
     local objectText = prompt.ObjectText:lower()
     if actionText:find("repair") or objectText:find("generator") or parentObj.Name:lower():find("generator") then
         return nil
     end
 
-    -- Ignore Player Characters
     local charModel = prompt:FindFirstAncestorOfClass("Model")
     if charModel then
         if Players:GetPlayerFromCharacter(charModel) or charModel:FindFirstChildOfClass("Humanoid") then
@@ -646,7 +661,6 @@ local function resolveItemTarget(prompt)
         end
     end
 
-    -- Prevent Map Selection
     if charModel and charModel ~= workspace then
         local lowerModelName = charModel.Name:lower()
         if not MAP_BLACKLIST[lowerModelName] and not charModel:FindFirstChild("Progress") and not charModel:FindFirstChild("Remotes") then
@@ -1008,7 +1022,6 @@ local function enableLock()
             end
         end
 
-        -- Only manipulates the camera when an active target is confirmed nearby
         if currentTarget and isTargetValid(currentTarget) then
             local targetRoot = currentTarget:FindFirstChild("HumanoidRootPart")
             if targetRoot then
@@ -1091,35 +1104,50 @@ RS.Heartbeat:Connect(function()
 end)
 
 --------------------------------------------------------------------------------
--- UTILITY TAB: INFINITE STAMINA (UNDRAINABLE HARD-LOCK)
+-- UTILITY TAB: INFINITE STAMINA (FIXED)
 --------------------------------------------------------------------------------
 UtilityTab:CreateSection("Stamina Mods")
 
-local staminaModules = {}
+local infStaminaOn = false
+local MainModule = nil
 
-local function locateStaminaModules()
-    staminaModules = {}
+-- Locate the actual Forsaken MainModule
+local function locateMainModule()
+    -- 1. Check global environment
+    if getgenv and getgenv().MainModule and type(getgenv().MainModule) == "table" then
+        MainModule = getgenv().MainModule
+        return MainModule
+    end
+
+    -- 2. Inspect active Lua garbage collector for Forsaken's core module
+    if getgc then
+        for _, obj in ipairs(getgc(true)) do
+            if type(obj) == "table" and rawget(obj, "Stamina") ~= nil and rawget(obj, "MaxStamina") ~= nil then
+                MainModule = obj
+                if getgenv then getgenv().MainModule = obj end
+                return MainModule
+            end
+        end
+    end
+
+    -- 3. Fallback: Search loaded modules
     if getloadedmodules then
         for _, mod in ipairs(getloadedmodules()) do
-            local name = mod.Name:lower()
-            if name == "main" or name == "playermodule" or name == "stamina" or name == "staminaservice" or name == "sprint" then
+            if mod:IsA("ModuleScript") then
                 local success, res = pcall(require, mod)
-                if success and type(res) == "table" then
-                    if res.Stamina ~= nil or res.MaxStamina ~= nil or res.SprintStamina ~= nil then
-                        table.insert(staminaModules, res)
-                    end
+                if success and type(res) == "table" and res.MaxStamina and res.Stamina ~= nil then
+                    MainModule = res
+                    if getgenv then getgenv().MainModule = res end
+                    return MainModule
                 end
             end
         end
     end
-    if getgenv and getgenv().MainModule and type(getgenv().MainModule) == "table" then
-        table.insert(staminaModules, getgenv().MainModule)
-    end
+
+    return MainModule
 end
 
-locateStaminaModules()
-
-local infStaminaOn = false
+locateMainModule()
 
 local function updateStaminaHUD(state)
     local playerGui = player:FindFirstChild("PlayerGui")
@@ -1128,7 +1156,8 @@ local function updateStaminaHUD(state)
     local tempUI = playerGui:FindFirstChild("TemporaryUI")
     if not tempUI then return end
 
-    local bars = tempUI:FindFirstChild("PlayerInfo") and tempUI.PlayerInfo:FindFirstChild("Bars")
+    local playerInfo = tempUI:FindFirstChild("PlayerInfo")
+    local bars = playerInfo and playerInfo:FindFirstChild("Bars")
     local staminaBar = bars and bars:FindFirstChild("Stamina")
     local originalAmount = staminaBar and staminaBar:FindFirstChild("Amount")
 
@@ -1156,36 +1185,16 @@ local function updateStaminaHUD(state)
     end
 end
 
+-- Hard-lock loop matching ForsakenPlus
 local function applyStaminaLock()
     if not infStaminaOn then return end
 
-    for _, mod in ipairs(staminaModules) do
-        local maxVal = mod.MaxStamina or 100
-        rawset(mod, "Stamina", maxVal)
-        if rawget(mod, "SprintStamina") ~= nil then
-            rawset(mod, "SprintStamina", maxVal)
-        end
-        if rawget(mod, "IsExhausted") ~= nil then
-            rawset(mod, "IsExhausted", false)
-        end
+    if not MainModule then
+        locateMainModule()
     end
 
-    local myChar = player.Character
-    if myChar then
-        if myChar:GetAttribute("Stamina") ~= nil then
-            myChar:SetAttribute("Stamina", 100)
-        end
-        if myChar:GetAttribute("Exhausted") ~= nil then
-            myChar:SetAttribute("Exhausted", false)
-        end
-        if myChar:GetAttribute("Draining") ~= nil then
-            myChar:SetAttribute("Draining", false)
-        end
-
-        local staminaVal = myChar:FindFirstChild("Stamina")
-        if staminaVal and (staminaVal:IsA("NumberValue") or staminaVal:IsA("IntValue")) then
-            staminaVal.Value = 100
-        end
+    if MainModule and MainModule.MaxStamina then
+        rawset(MainModule, "Stamina", MainModule.MaxStamina)
     end
 end
 
@@ -1195,18 +1204,18 @@ UtilityTab:CreateToggle({
     Callback = function(value)
         infStaminaOn = value
         if value then
-            locateStaminaModules()
+            locateMainModule()
         end
         updateStaminaHUD(value)
     end,
 })
 
-RS.RenderStepped:Connect(applyStaminaLock)
 RS.Heartbeat:Connect(applyStaminaLock)
+RS.RenderStepped:Connect(applyStaminaLock)
 
 player.CharacterAdded:Connect(function()
-    task.wait(0.8)
-    locateStaminaModules()
+    task.wait(1)
+    locateMainModule()
     if infStaminaOn then
         updateStaminaHUD(true)
     end
@@ -1528,7 +1537,7 @@ ItemsTab:CreateButton({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 7: FULLY AUTOMATED GENERATOR ROUTE (SMART SIDE ALLOCATION)
+-- PART 7: FULLY AUTOMATED GENERATOR ROUTE (FIXED SLOT DETECTION)
 --------------------------------------------------------------------------------
 
 local Players = game:GetService("Players")
@@ -1537,11 +1546,11 @@ local player = Players.LocalPlayer
 local fullAutoGenActive = false
 local autoGenFullToggle = nil
 local FIXED_GEN_COOLDOWN = 1.5
-local MAX_REPAIR_DISTANCE = 9
+local MAX_REPAIR_DISTANCE = 8.5
 local MAX_OCCUPANTS = 3
-local SLOT_DISTANCE_OCCUPIED = 3.2
+local EXACT_SLOT_THRESHOLD = 2.2 -- Strict radius to prevent false occupied triggers
 
--- 4 repair offset sides (Front is preferred priority)
+-- Predefined cardinal slots (Front is the absolute default priority)
 local REPAIR_SLOTS = {
     { Offset = CFrame.new(0, 3, -4), Name = "Front" },
     { Offset = CFrame.new(0, 3, 4) * CFrame.Angles(0, math.pi, 0), Name = "Back" },
@@ -1579,14 +1588,19 @@ local function isGeneratorCompleted(genModel)
     return false
 end
 
--- Check if another player is currently standing in a specific repair side
-local function isSlotOccupiedByOther(targetWorldPos)
+-- Strictly checks if a real, living player is actively occupying an exact slot position
+local function isSlotOccupiedByRealPlayer(slotWorldPos)
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
+        if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
+
             if hrp and hum and hum.Health > 0 then
-                if (hrp.Position - targetWorldPos).Magnitude <= SLOT_DISTANCE_OCCUPIED then
+                -- Ignore falling, ragdolled, or jumping players passing overhead
+                local flatDistance = (Vector3.new(hrp.Position.X, slotWorldPos.Y, hrp.Position.Z) - slotWorldPos).Magnitude
+                local heightDiff = math.abs(hrp.Position.Y - slotWorldPos.Y)
+
+                if flatDistance <= EXACT_SLOT_THRESHOLD and heightDiff <= 2.5 then
                     return true
                 end
             end
@@ -1595,24 +1609,33 @@ local function isSlotOccupiedByOther(targetWorldPos)
     return false
 end
 
--- Pick the best available slot (defaults to Front, switches only if occupied)
+-- Returns the designated repair CFrame, strictly preferring Front unless actually occupied
 local function getBestRepairCFrame(mainPart)
-    for _, slot in ipairs(REPAIR_SLOTS) do
-        local targetCFrame = mainPart.CFrame * slot.Offset
-        if not isSlotOccupiedByOther(targetCFrame.Position) then
-            return targetCFrame
+    -- 1. Try default Front slot first
+    local frontCFrame = mainPart.CFrame * REPAIR_SLOTS[1].Offset
+    if not isSlotOccupiedByRealPlayer(frontCFrame.Position) then
+        return frontCFrame
+    end
+
+    -- 2. If someone is truly standing on Front, pick the next vacant slot
+    for i = 2, #REPAIR_SLOTS do
+        local slotCFrame = mainPart.CFrame * REPAIR_SLOTS[i].Offset
+        if not isSlotOccupiedByRealPlayer(slotCFrame.Position) then
+            return slotCFrame
         end
     end
-    -- Fallback to default front if all slots are contested
-    return mainPart.CFrame * REPAIR_SLOTS[1].Offset
+
+    -- 3. Fallback to Front
+    return frontCFrame
 end
 
+-- Counts how many real players are currently within interaction range of the generator
 local function getOccupantCount(mainPart)
     local count = 0
     if not mainPart then return count end
 
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
+        if p ~= player and p.Character and p.Character:IsDescendantOf(workspace) then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
             if hrp and hum and hum.Health > 0 then
@@ -1695,18 +1718,20 @@ task.spawn(function()
                     local genModel = targetGenData.Model
                     local mainPart = targetGenData.Main
 
-                    -- Calculate initial best slot (defaults to Front)
+                    -- Assign slot: guaranteed Front unless an active player is detected right there
                     local assignedCFrame = getBestRepairCFrame(mainPart)
                     myRoot.CFrame = assignedCFrame
 
                     while fullAutoGenActive and not isGeneratorCompleted(genModel) and genModel:IsDescendantOf(workspace) do
+                        -- Stop if 3 other players arrive
                         if getOccupantCount(mainPart) >= MAX_OCCUPANTS then
                             break
                         end
 
-                        -- If someone steps into your spot, adjust to another free side
-                        if isSlotOccupiedByOther(assignedCFrame.Position) then
+                        -- If another player steps into your specific position, adjust to a vacant side
+                        if isSlotOccupiedByRealPlayer(assignedCFrame.Position) then
                             assignedCFrame = getBestRepairCFrame(mainPart)
+                            myRoot.CFrame = assignedCFrame
                         end
 
                         local remotes = genModel:FindFirstChild("Remotes")
@@ -1724,7 +1749,7 @@ task.spawn(function()
 
                         task.wait(FIXED_GEN_COOLDOWN)
 
-                        -- Pin back to the designated slot
+                        -- Keep character locked to the chosen slot
                         if myRoot and mainPart and mainPart.Parent then
                             myRoot.CFrame = assignedCFrame
                         end
