@@ -36,13 +36,14 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
---// 6 MAIN TABS
+--// 7 MAIN TABS
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 local UtilityTab = Window:CreateTab("Movement & Misc", 4483362458)
 local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
 local ItemsTab = Window:CreateTab("Items", 4483362458)
+local AntiTab = Window:CreateTab("Anti", 4483362458)
 
 --// CHARACTER & STATE TRACKING
 local char = player.Character or player.CharacterAdded:Wait()
