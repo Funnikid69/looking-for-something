@@ -21,6 +21,7 @@ local RS = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 local camera = workspace.CurrentCamera
 
 --// WINDOW SETUP (NOVASAKEN)
@@ -35,7 +36,7 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
---// 6 ACTIVE TABS (PART 7 AUTO GEN TAB REMOVED)
+--// 6 MAIN TABS
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
@@ -71,6 +72,71 @@ workspace.DescendantAdded:Connect(function(descendant)
             Duration = 4,
             Image = 4483362458,
         })
+    end
+end)
+
+--// GENERATOR COMPLETION LISTENER
+local allGensNotified = false
+
+local function isGenComplete(genModel)
+    if not genModel or not genModel.Parent or not genModel:IsDescendantOf(workspace) then 
+        return true 
+    end
+
+    if genModel:GetAttribute("Completed") == true 
+        or genModel:GetAttribute("Finished") == true 
+        or genModel:GetAttribute("Done") == true then
+        return true
+    end
+
+    local progressVal = genModel:FindFirstChild("Progress")
+    if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
+        if progressVal.Value >= 100 then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function getGeneratorSearchScope()
+    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map"))
+        or (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
+        or workspace:FindFirstChild("Map")
+        or workspace
+end
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        local scope = getGeneratorSearchScope()
+        local totalGens = 0
+        local incompleteGens = 0
+
+        for _, obj in ipairs(scope:GetDescendants()) do
+            if obj:IsA("Model") and obj.Name:lower():find("generator") and (obj:FindFirstChild("Main") or obj:FindFirstChild("Progress")) then
+                totalGens = totalGens + 1
+                if not isGenComplete(obj) then
+                    incompleteGens = incompleteGens + 1
+                end
+            end
+        end
+
+        if totalGens > 0 then
+            if incompleteGens == 0 and not allGensNotified then
+                allGensNotified = true
+                Rayfield:Notify({
+                    Title = "Generators Finished",
+                    Content = "All of the generators are finished!",
+                    Duration = 4,
+                    Image = 4483362458,
+                })
+            elseif incompleteGens > 0 then
+                allGensNotified = false
+            end
+        else
+            allGensNotified = false
+        end
     end
 end)
 
@@ -1697,5 +1763,278 @@ ItemsTab:CreateButton({
     Name = "Teleport to Crate",
     Callback = function()
         teleportToItem({"crate", "chest", "box"}, "Crate")
+    end,
+})
+--------------------------------------------------------------------------------
+-- PART 7: ANTI TAB (ANTI-SLOWNESS, NOLI NPC, JOHN DOE FOOTPRINTS & SPIKES)
+--------------------------------------------------------------------------------
+
+local Lighting = game:GetService("Lighting")
+
+-- Environment Dynamic Resolvers
+local function getInGameFolder()
+    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
+        or workspace:FindFirstChild("Ingame")
+        or workspace
+end
+
+local function getKillersFolder()
+    local ingame = getInGameFolder()
+    return (ingame and ingame:FindFirstChild("Killers"))
+        or workspace:FindFirstChild("Killers")
+end
+
+local function getSpeedMultipliers()
+    local myChar = player.Character
+    return myChar and myChar:FindFirstChild("SpeedMultipliers")
+end
+
+--------------------------------------------------------------------------------
+-- 1. ANTI SLOWNESS
+--------------------------------------------------------------------------------
+local antiSlownessEnabled = false
+
+local function checkSlownessInstance(valueInst)
+    if not antiSlownessEnabled or not valueInst then return end
+    if valueInst.Name == "Sprinting" or valueInst.Name:lower() == "emoting" then return end
+
+    if valueInst.Name == "DirectionalMovement" or valueInst.Name == "FixingGenerator" or valueInst.Name:upper() == "ENRAGED" then
+        if valueInst.Value < 1 then
+            valueInst.Value = 1
+        end
+        valueInst:GetPropertyChangedSignal("Value"):Connect(function()
+            if antiSlownessEnabled and valueInst.Value < 1 then
+                valueInst.Value = 1
+            end
+        end)
+    elseif valueInst.Value > 0.03 and valueInst.Value < 1 then
+        valueInst:Destroy()
+    else
+        valueInst:GetPropertyChangedSignal("Value"):Connect(function()
+            if antiSlownessEnabled and valueInst.Value > 0.03 and valueInst.Value < 1 then
+                valueInst:Destroy()
+            end
+        end)
+    end
+end
+
+local function applyAntiSlowness()
+    local sm = getSpeedMultipliers()
+    if sm then
+        for _, child in ipairs(sm:GetChildren()) do
+            checkSlownessInstance(child)
+        end
+    end
+end
+
+local function hookSpeedMultipliers(targetChar)
+    if not targetChar then return end
+    local sm = targetChar:WaitForChild("SpeedMultipliers", 5)
+    if sm then
+        sm.ChildAdded:Connect(function(child)
+            if not child:IsA("NumberValue") or child.Name == "Sprinting" or child.Name:lower() == "emoting" then
+                return
+            end
+            checkSlownessInstance(child)
+        end)
+        if antiSlownessEnabled then
+            applyAntiSlowness()
+        end
+    end
+end
+
+player.CharacterAdded:Connect(hookSpeedMultipliers)
+if player.Character then
+    task.spawn(function()
+        hookSpeedMultipliers(player.Character)
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- 2. DISABLE NOLI NPC
+--------------------------------------------------------------------------------
+local disableNoliNPC = false
+
+local function handleNoliNPC(state)
+    local killers = getKillersFolder()
+    local ingame = getInGameFolder()
+
+    if state then
+        if killers then
+            for _, v in ipairs(killers:GetChildren()) do
+                if v.Name:lower() == "noli" and not Players:GetPlayerFromCharacter(v) then
+                    v.Parent = Lighting
+                    if v:IsA("Model") then
+                        v:PivotTo(v:GetPivot() * CFrame.new(0, -100, 0))
+                    end
+                end
+            end
+        end
+
+        if workspace:FindFirstChild("Themes") then
+            for _, v in ipairs(workspace.Themes:GetChildren()) do
+                if v.Name:find("FakeLayer") and v:IsA("Sound") then
+                    v:Destroy()
+                end
+            end
+        end
+    else
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v.Name:lower() == "noli" then
+                v.Parent = ingame or workspace
+                if v:IsA("Model") then
+                    v:PivotTo(v:GetPivot() * CFrame.new(0, 100, 0))
+                end
+            end
+        end
+    end
+end
+
+local function hookKillersFolder()
+    local killers = getKillersFolder()
+    if killers then
+        killers.ChildAdded:Connect(function(child)
+            task.wait(0.5)
+            if disableNoliNPC then
+                handleNoliNPC(true)
+            end
+        end)
+    end
+end
+
+hookKillersFolder()
+
+--------------------------------------------------------------------------------
+-- 3. DISABLE JOHN DOE FOOTPRINTS
+--------------------------------------------------------------------------------
+local disableFootprints = false
+
+local function handleFootprints(state)
+    local ingame = getInGameFolder()
+    if not ingame then return end
+
+    for _, v in ipairs(ingame:GetChildren()) do
+        if v:IsA("Folder") and v.Name:find("Shadows") then
+            for _, part in ipairs(v:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanTouch = not state
+                end
+            end
+            if not v:GetAttribute("Checked") then
+                v:SetAttribute("Checked", true)
+                v.ChildAdded:Connect(function(grandChild)
+                    if grandChild:IsA("BasePart") then
+                        grandChild.CanTouch = not disableFootprints
+                    end
+                end)
+            end
+        end
+    end
+end
+
+local function hookFootprintsFolder()
+    local ingame = getInGameFolder()
+    if ingame then
+        ingame.ChildAdded:Connect(function(child)
+            if child:IsA("Folder") and child.Name:find("Shadows") then
+                task.wait()
+                for _, part in ipairs(child:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CanTouch = not disableFootprints
+                    end
+                end
+                if not child:GetAttribute("Checked") then
+                    child:SetAttribute("Checked", true)
+                    child.ChildAdded:Connect(function(v)
+                        if v:IsA("BasePart") then
+                            v.CanTouch = not disableFootprints
+                        end
+                    end)
+                end
+            end
+        end)
+    end
+end
+
+hookFootprintsFolder()
+
+--------------------------------------------------------------------------------
+-- 4. SMALLER JOHN DOE SPIKE COLLISIONS
+--------------------------------------------------------------------------------
+local smallerSpikesEnabled = false
+
+local function updateSpikeCollisions(state)
+    local ingame = getInGameFolder()
+    if not ingame then return end
+
+    for _, v in ipairs(ingame:GetChildren()) do
+        if v.Name == "SpikeCollision" and v:IsA("Part") then
+            v.Size = state and Vector3.new(11, 3.5, 3.5) or Vector3.new(11, 5, 5)
+            v.Shape = state and Enum.PartType.Cylinder or Enum.PartType.Block
+        end
+    end
+end
+
+local function hookSpikeCollisions()
+    local ingame = getInGameFolder()
+    if ingame then
+        ingame.ChildAdded:Connect(function(child)
+            if child.Name == "SpikeCollision" and child:IsA("Part") then
+                task.delay(3.5, function()
+                    if child and child.Parent then
+                        child.Size = smallerSpikesEnabled and Vector3.new(11, 3.5, 3.5) or Vector3.new(11, 5, 5)
+                        child.Shape = smallerSpikesEnabled and Enum.PartType.Cylinder or Enum.PartType.Block
+                    end
+                end)
+            end
+        end)
+    end
+end
+
+hookSpikeCollisions()
+
+--------------------------------------------------------------------------------
+-- ANTI TAB RAYFIELD ELEMENTS
+--------------------------------------------------------------------------------
+
+AntiTab:CreateSection("Movement & Debuffs")
+
+AntiTab:CreateToggle({
+    Name = "Anti Slowness",
+    CurrentValue = false,
+    Callback = function(value)
+        antiSlownessEnabled = value
+        if value then
+            applyAntiSlowness()
+        end
+    end,
+})
+
+AntiTab:CreateSection("Killer Countermeasures")
+
+AntiTab:CreateToggle({
+    Name = "Disable Noli's NPC",
+    CurrentValue = false,
+    Callback = function(value)
+        disableNoliNPC = value
+        handleNoliNPC(value)
+    end,
+})
+
+AntiTab:CreateToggle({
+    Name = "Disable John Doe's Footprints",
+    CurrentValue = false,
+    Callback = function(value)
+        disableFootprints = value
+        handleFootprints(value)
+    end,
+})
+
+AntiTab:CreateToggle({
+    Name = "Smaller Spike Collisions",
+    CurrentValue = false,
+    Callback = function(value)
+        smallerSpikesEnabled = value
+        updateSpikeCollisions(value)
     end,
 })
