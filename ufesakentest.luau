@@ -76,12 +76,12 @@ workspace.DescendantAdded:Connect(function(descendant)
     end
 end)
 
---// GENERATOR COMPLETION LISTENER
+--// 5/5 GENERATOR COMPLETION LISTENER
 local allGensNotified = false
 
 local function isGenComplete(genModel)
     if not genModel or not genModel.Parent or not genModel:IsDescendantOf(workspace) then 
-        return true 
+        return false 
     end
 
     if genModel:GetAttribute("Completed") == true 
@@ -111,29 +111,29 @@ task.spawn(function()
     while true do
         task.wait(1)
         local scope = getGeneratorSearchScope()
-        local totalGens = 0
-        local incompleteGens = 0
+        local completedGens = 0
+        local countedModels = {}
 
         for _, obj in ipairs(scope:GetDescendants()) do
-            if obj:IsA("Model") and obj.Name:lower():find("generator") and (obj:FindFirstChild("Main") or obj:FindFirstChild("Progress")) then
-                totalGens = totalGens + 1
-                if not isGenComplete(obj) then
-                    incompleteGens = incompleteGens + 1
+            if obj:IsA("Model") and obj.Name:lower():find("generator") and not countedModels[obj] then
+                if obj:FindFirstChild("Main") or obj:FindFirstChild("Progress") or obj:GetAttribute("Completed") ~= nil then
+                    countedModels[obj] = true
+                    if isGenComplete(obj) then
+                        completedGens = completedGens + 1
+                    end
                 end
             end
         end
 
-        if totalGens > 0 then
-            if incompleteGens == 0 and not allGensNotified then
+        if completedGens >= 5 then
+            if not allGensNotified then
                 allGensNotified = true
                 Rayfield:Notify({
                     Title = "Generators Finished",
-                    Content = "All of the generators are finished!",
+                    Content = "All of the generators are finished! (5/5)",
                     Duration = 4,
                     Image = 4483362458,
                 })
-            elseif incompleteGens > 0 then
-                allGensNotified = false
             end
         else
             allGensNotified = false
@@ -1158,7 +1158,7 @@ CombatTab:CreateToggle({
 
 CombatTab:CreateSlider({
     Name = "Lunge Range",
-    Range = {1, 30},
+    Range = {1, 200},
     Increment = 0.5,
     CurrentValue = 9.6,
     Callback = function(value)
@@ -1282,6 +1282,150 @@ RS.Heartbeat:Connect(function()
                 hrp.CFrame = hrp.CFrame + (move * speed)
             end
         end
+    end
+end)
+
+--// INVISIBILITY (DISAPPEAR CORE WITH AGGRESSIVE OVERRIDE)
+UtilityTab:CreateSection("Stealth Mods")
+
+local invisOn = false
+local invisNoclipConn = nil
+local invisCamConn = nil
+local invisAnimTrack = nil
+local invisAnimObj = Instance.new("Animation")
+invisAnimObj.AnimationId = "rbxassetid://105781160624925"
+
+local function playInvisAnim(h)
+    if not h then return end
+    pcall(function()
+        invisAnimTrack = h:LoadAnimation(invisAnimObj)
+        invisAnimTrack.Priority = Enum.AnimationPriority.Action4
+
+        local t = 0
+        while invisAnimTrack.Length <= 0 and t < 1 do
+            t = t + task.wait(0.05)
+        end
+
+        invisAnimTrack:Play()
+        t = 0
+        while not invisAnimTrack.IsPlaying and t < 1 do
+            t = t + task.wait(0.05)
+        end
+
+        invisAnimTrack:AdjustSpeed(0)
+        invisAnimTrack.TimePosition = 0
+    end)
+end
+
+local function applyInvisState(state)
+    local myChar = player.Character
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    if not state then
+        -- Cleanup connections
+        if invisNoclipConn then
+            invisNoclipConn:Disconnect()
+            invisNoclipConn = nil
+        end
+        if invisCamConn then
+            invisCamConn:Disconnect()
+            invisCamConn = nil
+        end
+
+        -- Stop invis animation and restore normal camera
+        if invisAnimTrack then
+            pcall(function()
+                invisAnimTrack:Stop(0)
+                invisAnimTrack:Destroy()
+            end)
+            invisAnimTrack = nil
+        end
+
+        pcall(function()
+            if myHum then
+                workspace.CurrentCamera.CameraSubject = myHum
+            end
+        end)
+    else
+        -- 1. Setup Noclip collision filter
+        local function noclipStep()
+            local c = player.Character
+            if not c then return end
+            for _, v in ipairs(c:GetDescendants()) do
+                if v:IsA("BasePart") and v.CanCollide and v.Name ~= "HumanoidRootPart" then
+                    v.CanCollide = false
+                end
+            end
+            local hrp = c:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.CanCollide = true end
+        end
+
+        if invisNoclipConn then invisNoclipConn:Disconnect() end
+        invisNoclipConn = RS.Stepped:Connect(noclipStep)
+
+        -- 2. Lock camera to RootPart
+        if myRoot then
+            workspace.CurrentCamera.CameraSubject = myRoot
+            if invisCamConn then invisCamConn:Disconnect() end
+            invisCamConn = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+                if invisOn and myRoot then
+                    workspace.CurrentCamera.CameraSubject = myRoot
+                end
+            end)
+        end
+
+        -- 3. Override current animations and start the frozen pose
+        if myHum then
+            for _, trk in ipairs(myHum:GetPlayingAnimationTracks()) do
+                pcall(function()
+                    trk.Priority = Enum.AnimationPriority.Core
+                    trk:AdjustSpeed(0)
+                    trk:Stop(0)
+                end)
+            end
+            playInvisAnim(myHum)
+        end
+    end
+end
+
+-- Continuous animation override loop while invisibility is active
+RS.Heartbeat:Connect(function()
+    if not invisOn then return end
+    local myChar = player.Character
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myHum then return end
+
+    -- Verify the freeze pose track is running
+    if not invisAnimTrack or not invisAnimTrack.IsPlaying then
+        playInvisAnim(myHum)
+    end
+
+    -- Kill/override any conflicting movement, emote, or action animations
+    for _, trk in ipairs(myHum:GetPlayingAnimationTracks()) do
+        if trk ~= invisAnimTrack then
+            pcall(function()
+                trk.Priority = Enum.AnimationPriority.Core
+                trk:AdjustSpeed(0)
+                trk:Stop(0)
+            end)
+        end
+    end
+end)
+
+UtilityTab:CreateToggle({
+    Name = "Invisibility",
+    CurrentValue = false,
+    Callback = function(value)
+        invisOn = value
+        applyInvisState(value)
+    end,
+})
+
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(0.3)
+    if invisOn then
+        applyInvisState(true)
     end
 end)
 
@@ -1423,7 +1567,6 @@ local function isGenFinished(genModel)
     return false
 end
 
--- Collects only incomplete or semi-completed generators
 local function getIncompleteGenerators()
     local searchScope = GetGameMap()
     local incomplete = {}
@@ -1466,7 +1609,6 @@ local function TeleportToNextGen()
 
     local targetGen = incompleteList[CurrentGenIndex]
     if targetGen and targetGen.Main then
-        -- Positions 2.8 studs in front facing the generator safely on the ground
         local mainCFrame = targetGen.Main.CFrame
         local targetPos = (mainCFrame * CFrame.new(0, 0, -2.8)).Position
         targetPos = Vector3.new(targetPos.X, localRoot.Position.Y, targetPos.Z)
