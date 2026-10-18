@@ -44,6 +44,7 @@ local UtilityTab = Window:CreateTab("Movement & Misc", 4483362458)
 local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
 local ItemsTab = Window:CreateTab("Items", 4483362458)
 local AntiTab = Window:CreateTab("Anti", 4483362458)
+local AimTab = Window:CreateTab("Aim", 4483362458)
 
 --// CHARACTER & STATE TRACKING
 local char = player.Character or player.CharacterAdded:Wait()
@@ -2262,5 +2263,174 @@ AntiTab:CreateToggle({
     Callback = function(value)
         smallerSpikesEnabled = value
         updateSpikeCollisions(value)
+    end,
+})
+--------------------------------------------------------------------------------
+-- PART 8: AIM TAB (ABILITY-TRIGGERED AIMBOTS)
+--------------------------------------------------------------------------------
+
+local slasherAimbotOn = false
+local shedletskyAimbotOn = false
+
+local KILLER_CLASSES = {
+    ["slasher"]         = true,
+    ["jason"]           = true,
+    ["c00lkidd"]        = true,
+    ["1x1x1x1"]         = true,
+    ["noli"]            = true,
+    ["swordsmaster"]    = true,
+    ["guest666"]        = true,
+    ["2011x"]           = true,
+    ["johndoe"]         = true,
+    ["azure"]           = true,
+    ["shedletskyfunny"] = true,
+}
+
+--------------------------------------------------------------------------------
+-- TARGET ACQUISITION HELPERS
+--------------------------------------------------------------------------------
+
+local function isPlayerAlive(plr)
+    if not plr or not plr.Character then return false end
+    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+    local root = plr.Character:FindFirstChild("HumanoidRootPart")
+    return hum and root and hum.Health > 0 and plr.Character:IsDescendantOf(workspace)
+end
+
+local function isPlayerKiller(plr)
+    if not plr or not plr.Character then return false end
+    local charType = plr.Character:GetAttribute("Character") 
+        or plr.Character:GetAttribute("CharacterType") 
+        or plr.Character.Name
+    local key = string.lower(tostring(charType))
+    if key == "coolkid" then key = "c00lkidd" end
+    if key == "1x4" then key = "1x1x1x1" end
+    return KILLER_CLASSES[key] == true
+end
+
+-- Find the closest living survivor
+local function getClosestSurvivor()
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest = nil
+    local shortestDist = math.huge
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and isPlayerAlive(p) and not isPlayerKiller(p) then
+            local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+            if tRoot then
+                local dist = (myRoot.Position - tRoot.Position).Magnitude
+                if dist < shortestDist then
+                    shortestDist = dist
+                    closest = p.Character
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Find the active killer in the match
+local function getActiveKiller()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and isPlayerAlive(p) and isPlayerKiller(p) then
+            return p.Character
+        end
+    end
+    return nil
+end
+
+--------------------------------------------------------------------------------
+-- AIM SNAP MECHANIC
+--------------------------------------------------------------------------------
+
+local function snapAimToTarget(targetChar)
+    if not targetChar then return end
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    local targetHead = targetChar:FindFirstChild("Head") or targetRoot
+
+    if not myRoot or not targetRoot then return end
+
+    -- Snap character horizontal orientation towards target
+    local flatTargetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
+    myRoot.CFrame = CFrame.lookAt(myRoot.Position, flatTargetPos)
+
+    -- Snap camera view towards target
+    if camera then
+        local camPos = camera.CFrame.Position
+        camera.CFrame = CFrame.lookAt(camPos, targetHead.Position)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- OUTGOING NETWORK HOOK (__namecall)
+--------------------------------------------------------------------------------
+
+if hookmetamethod then
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+
+        if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
+            if args[1] == "UseActorAbility" then
+                local ability = tostring(args[2])
+
+                -- Slasher detection (Slash, Behead, GashingWound) -> Snap to closest survivor
+                if slasherAimbotOn and (ability == "Slash" or ability == "Behead" or ability == "GashingWound") then
+                    task.spawn(function()
+                        local target = getClosestSurvivor()
+                        if target then
+                            snapAimToTarget(target)
+                        end
+                    end)
+
+                -- Shedletsky detection (Slash) -> Snap to killer
+                elseif shedletskyAimbotOn and ability == "Slash" then
+                    task.spawn(function()
+                        local target = getActiveKiller()
+                        if target then
+                            snapAimToTarget(target)
+                        end
+                    end)
+                end
+            end
+        end
+
+        return oldNamecall(self, ...)
+    end))
+end
+
+--------------------------------------------------------------------------------
+-- RAYFIELD AIM TAB INTERFACE
+--------------------------------------------------------------------------------
+
+AimTab:CreateSection("Killer Combat")
+
+AimTab:CreateToggle({
+    Name = "Slasher Aimbot",
+    CurrentValue = false,
+    Callback = function(value)
+        slasherAimbotOn = value
+        if value and shedletskyAimbotOn then
+            shedletskyAimbotOn = false
+        end
+    end,
+})
+
+AimTab:CreateSection("Survivor Combat")
+
+AimTab:CreateToggle({
+    Name = "Shedletsky Slash Aimbot",
+    CurrentValue = false,
+    Callback = function(value)
+        shedletskyAimbotOn = value
+        if value and slasherAimbotOn then
+            slasherAimbotOn = false
+        end
     end,
 })
