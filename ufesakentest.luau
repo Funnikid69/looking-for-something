@@ -2256,7 +2256,7 @@ AntiTab:CreateToggle({
         handleFootprints(value)
     end,
 })
-
+l
 AntiTab:CreateToggle({
     Name = "Smaller Spike Collisions",
     CurrentValue = false,
@@ -2266,7 +2266,7 @@ AntiTab:CreateToggle({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 8: AIM TAB (ABILITY-TRIGGERED AIMBOTS)
+-- PART 8: AIM TAB (LOCAL ANIMATION-BASED, NO REMOTES)
 --------------------------------------------------------------------------------
 
 local slasherAimbotOn = false
@@ -2355,11 +2355,11 @@ local function snapAimToTarget(targetChar)
 
     if not myRoot or not targetRoot then return end
 
-    -- Snap character horizontal orientation towards target
+    -- Turn character orientation toward target
     local flatTargetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
     myRoot.CFrame = CFrame.lookAt(myRoot.Position, flatTargetPos)
 
-    -- Snap camera view towards target
+    -- Aim camera toward target head/torso
     if camera then
         local camPos = camera.CFrame.Position
         camera.CFrame = CFrame.lookAt(camPos, targetHead.Position)
@@ -2367,43 +2367,55 @@ local function snapAimToTarget(targetChar)
 end
 
 --------------------------------------------------------------------------------
--- OUTGOING NETWORK HOOK (__namecall)
+-- LOCAL ANIMATION LISTENER (ZERO REMOTES)
 --------------------------------------------------------------------------------
 
-if hookmetamethod then
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
+local lastTriggerTime = 0
+local TRIGGER_COOLDOWN = 0.4 -- Prevents snapping every frame of the same animation
 
-        if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
-            if args[1] == "UseActorAbility" then
-                local ability = tostring(args[2])
+RS.Heartbeat:Connect(function()
+    if not slasherAimbotOn and not shedletskyAimbotOn then return end
 
-                -- Slasher detection (Slash, Behead, GashingWound) -> Snap to closest survivor
-                if slasherAimbotOn and (ability == "Slash" or ability == "Behead" or ability == "GashingWound") then
-                    task.spawn(function()
-                        local target = getClosestSurvivor()
-                        if target then
-                            snapAimToTarget(target)
-                        end
-                    end)
+    local now = os.clock()
+    if now - lastTriggerTime < TRIGGER_COOLDOWN then return end
 
-                -- Shedletsky detection (Slash) -> Snap to killer
-                elseif shedletskyAimbotOn and ability == "Slash" then
-                    task.spawn(function()
-                        local target = getActiveKiller()
-                        if target then
-                            snapAimToTarget(target)
-                        end
-                    end)
+    local myChar = player.Character
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myHum or myHum.Health <= 0 then return end
+
+    for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
+        local animObj = track.Animation
+        local animName = animObj and animObj.Name:lower() or ""
+
+        -- Slasher: Detects Slash, Behead, or GashingWound animations
+        if slasherAimbotOn then
+            if animName:find("slash") or animName:find("behead") or animName:find("gashing") or animName:find("wound") then
+                if track.TimePosition < 0.35 then
+                    lastTriggerTime = now
+                    local target = getClosestSurvivor()
+                    if target then
+                        snapAimToTarget(target)
+                    end
+                    break
                 end
             end
         end
 
-        return oldNamecall(self, ...)
-    end))
-end
+        -- Shedletsky: Detects Slash animation
+        if shedletskyAimbotOn then
+            if animName:find("slash") or animName:find("sword") then
+                if track.TimePosition < 0.35 then
+                    lastTriggerTime = now
+                    local target = getActiveKiller()
+                    if target then
+                        snapAimToTarget(target)
+                    end
+                    break
+                end
+            end
+        end
+    end
+end)
 
 --------------------------------------------------------------------------------
 -- RAYFIELD AIM TAB INTERFACE
