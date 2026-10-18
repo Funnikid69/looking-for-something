@@ -2256,7 +2256,6 @@ AntiTab:CreateToggle({
         handleFootprints(value)
     end,
 })
-l
 AntiTab:CreateToggle({
     Name = "Smaller Spike Collisions",
     CurrentValue = false,
