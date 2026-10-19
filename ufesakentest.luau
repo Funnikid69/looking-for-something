@@ -36,7 +36,7 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
---// 7 MAIN TABS
+--// 8 MAIN TABS
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
@@ -154,15 +154,71 @@ local currentLockedTarget = nil
 local LowHpToggle
 local AllPlayersToggle
 --------------------------------------------------------------------------------
--- PART 2: AUTO-FARM SYSTEM
+-- PART 2: AUTO-FARM SYSTEM (WHITELISTED SURVIVORS & KILLER VERIFICATION)
 --------------------------------------------------------------------------------
+
+local SURVIVOR_WHITELIST = {
+    ["guest1337"]     = "Guest 1337",
+    ["shedletsky"]    = "Shedletsky",
+    ["dusekkar"]      = "Dusekkar",
+    ["chance"]        = "Chance",
+    ["twotime"]       = "TwoTime",
+    ["007n7"]         = "007n7",
+    ["elliot"]        = "Elliot",
+    ["veeronica"]     = "Veeronica",
+    ["janedoe"]       = "Jane Doe",
+    ["messi"]         = "Messi",
+    ["noob"]          = "Noob",
+    ["taph"]          = "Taph",
+    ["builderman"]    = "Builderman",
+}
+
+local KILLER_CLASSES = {
+    ["slasher"]         = true,
+    ["jason"]           = true,
+    ["c00lkidd"]        = true,
+    ["1x1x1x1"]         = true,
+    ["noli"]            = true,
+    ["swordsmaster"]    = true,
+    ["guest666"]        = true,
+    ["2011x"]           = true,
+    ["johndoe"]         = true,
+    ["azure"]           = true,
+    ["shedletskyfunny"] = true,
+}
+
+local function isLocalPlayerKiller()
+    local myChar = player.Character
+    if not myChar then return false end
+    local charType = myChar:GetAttribute("Character") 
+        or myChar:GetAttribute("CharacterType") 
+        or myChar.Name
+    local key = string.lower(tostring(charType))
+    if key == "coolkid" then key = "c00lkidd" end
+    if key == "1x4" then key = "1x1x1x1" end
+    return KILLER_CLASSES[key] == true
+end
+
+local function isTargetWhitelistedSurvivor(targetChar)
+    if not targetChar then return false end
+    local charType = targetChar:GetAttribute("Character") 
+        or targetChar:GetAttribute("CharacterType") 
+        or targetChar.Name
+    local key = string.lower(tostring(charType))
+    return SURVIVOR_WHITELIST[key] ~= nil
+end
 
 local function isTargetAliveAndValid(p, maxHpConstraint)
     if not p or not p.Parent or not p.Character or p == player then return false end
-    local tHum = p.Character:FindFirstChild("Humanoid")
-    local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+    local tChar = p.Character
+    local tHum = tChar:FindFirstChild("Humanoid")
+    local tRoot = tChar:FindFirstChild("HumanoidRootPart")
     
-    if not tHum or not tRoot or tHum.Health <= 0 or not p.Character:IsDescendantOf(workspace) then
+    if not tHum or not tRoot or tHum.Health <= 0 or not tChar:IsDescendantOf(workspace) then
+        return false
+    end
+
+    if not isTargetWhitelistedSurvivor(tChar) then
         return false
     end
 
@@ -248,6 +304,12 @@ end
 RS.Stepped:Connect(function()
     if not autoFarmLowHpOn and not autoFarmAllOn then return end
     if not char or not hum or hum.Health <= 0 then return end
+    if not isLocalPlayerKiller() then
+        autoFarmLowHpOn = false
+        autoFarmAllOn = false
+        currentLockedTarget = nil
+        return
+    end
 
     local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
     local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
@@ -314,14 +376,32 @@ LowHpToggle = AutoFarmTab:CreateToggle({
     Name = "Auto Farm Low Health Players",
     CurrentValue = false,
     Callback = function(value)
-        if value and hum and hum.Health <= 30 then
+        if value then
+            if not isLocalPlayerKiller() then
+                task.spawn(function()
+                    if LowHpToggle then LowHpToggle:Set(false) end
+                end)
+                Rayfield:Notify({
+                    Title = "Auto Farm Error",
+                    Content = "Your Currently a Survivor And not a killer!",
+                    Duration = 3,
+                    Image = 4483362458,
+                })
+                return
+            end
+
+            if hum and hum.Health <= 30 then
+                autoFarmLowHpOn = false
+                task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
+                return
+            end
+
+            autoFarmLowHpOn = true
+            if AllPlayersToggle then AllPlayersToggle:Set(false) end
+        else
             autoFarmLowHpOn = false
-            task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
-            return
+            currentLockedTarget = nil
         end
-        autoFarmLowHpOn = value
-        if value and AllPlayersToggle then AllPlayersToggle:Set(false) end
-        if not value then currentLockedTarget = nil end
     end,
 })
 
@@ -329,14 +409,32 @@ AllPlayersToggle = AutoFarmTab:CreateToggle({
     Name = "Auto Farm All Players",
     CurrentValue = false,
     Callback = function(value)
-        if value and hum and hum.Health <= 30 then
+        if value then
+            if not isLocalPlayerKiller() then
+                task.spawn(function()
+                    if AllPlayersToggle then AllPlayersToggle:Set(false) end
+                end)
+                Rayfield:Notify({
+                    Title = "Auto Farm Error",
+                    Content = "Your Currently a Survivor And not a killer!",
+                    Duration = 3,
+                    Image = 4483362458,
+                })
+                return
+            end
+
+            if hum and hum.Health <= 30 then
+                autoFarmAllOn = false
+                task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
+                return
+            end
+
+            autoFarmAllOn = true
+            if LowHpToggle then LowHpToggle:Set(false) end
+        else
             autoFarmAllOn = false
-            task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
-            return
+            currentLockedTarget = nil
         end
-        autoFarmAllOn = value
-        if value and LowHpToggle then LowHpToggle:Set(false) end
-        if not value then currentLockedTarget = nil end
     end,
 })
 
@@ -1075,45 +1173,125 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4 (SECTION 1): COMBAT TAB, MOVEMENT & STEALTH MODS
+-- PART 4 (SECTION 1): COMBAT TAB (KILLER CAMLOCK), MOVEMENT & STEALTH MODS
 --------------------------------------------------------------------------------
 
-local AIM_DISTANCE = 30 
-local MAX_LOCK_DISTANCE = 30
-local DROP_DISTANCE = 35
 local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
 local TURN_SMOOTHNESS = 0.35
+local MAX_SURVIVOR_DISTANCE = 75
 
-local currentTarget = nil
 local isLocked = false
-local lastTargetCheck = 0
+local currentLockedSurvivor = nil
+local KillerCamlockToggle = nil
 
-local function getClosestTarget(maxDistance)
-    local character = player.Character
-    if not character then return nil end
-    local myRoot = character:FindFirstChild("HumanoidRootPart")
+local SURVIVOR_WHITELIST = {
+    ["guest1337"]     = "Guest 1337",
+    ["shedletsky"]    = "Shedletsky",
+    ["dusekkar"]      = "Dusekkar",
+    ["chance"]        = "Chance",
+    ["twotime"]       = "TwoTime",
+    ["007n7"]         = "007n7",
+    ["elliot"]        = "Elliot",
+    ["veeronica"]     = "Veeronica",
+    ["janedoe"]       = "Jane Doe",
+    ["messi"]         = "Messi",
+    ["noob"]          = "Noob",
+    ["taph"]          = "Taph",
+    ["builderman"]    = "Builderman",
+}
+
+local KILLER_CLASSES = {
+    ["slasher"]         = true,
+    ["jason"]           = true,
+    ["c00lkidd"]        = true,
+    ["1x1x1x1"]         = true,
+    ["noli"]            = true,
+    ["swordsmaster"]    = true,
+    ["guest666"]        = true,
+    ["2011x"]           = true,
+    ["johndoe"]         = true,
+    ["azure"]           = true,
+    ["shedletskyfunny"] = true,
+}
+
+--------------------------------------------------------------------------------
+-- ROLE & TARGET VALIDATION HELPERS
+--------------------------------------------------------------------------------
+
+local function isLocalPlayerKiller()
+    local myChar = player.Character
+    if not myChar then return false end
+    local charType = myChar:GetAttribute("Character") 
+        or myChar:GetAttribute("CharacterType") 
+        or myChar.Name
+    local key = string.lower(tostring(charType))
+    if key == "coolkid" then key = "c00lkidd" end
+    if key == "1x4" then key = "1x1x1x1" end
+    return KILLER_CLASSES[key] == true
+end
+
+local function isSurvivorAliveAndValid(p)
+    if not p or not p.Parent or not p.Character or p == player then return false end
+    local tChar = p.Character
+    if not tChar:IsDescendantOf(workspace) then return false end
+
+    local tHum = tChar:FindFirstChildOfClass("Humanoid")
+    local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+    if not tHum or not tRoot or tHum.Health <= 0 then return false end
+
+    local charType = tChar:GetAttribute("Character") 
+        or tChar:GetAttribute("CharacterType") 
+        or tChar.Name
+    local key = string.lower(tostring(charType))
+    if key == "coolkid" then key = "c00lkidd" end
+    if key == "1x4" then key = "1x1x1x1" end
+
+    -- Enforce survivor whitelist
+    if not SURVIVOR_WHITELIST[key] then return false end
+
+    -- Target cannot be another killer
+    if KILLER_CLASSES[key] then return false end
+
+    return true
+end
+
+-- Sticky Lock: Retains current target until eliminated/disconnected; enforces distance and whitelist
+local function getLockedOrClosestSurvivor()
+    if currentLockedSurvivor and isSurvivorAliveAndValid(currentLockedSurvivor) then
+        return currentLockedSurvivor.Character
+    end
+
+    currentLockedSurvivor = nil
+
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
-    
-    local closestTarget = nil
-    local shortestDistance = maxDistance or MAX_LOCK_DISTANCE
+
+    local closest = nil
+    local shortestDist = MAX_SURVIVOR_DISTANCE
 
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local targetChar = p.Character
-            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-            
-            if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
-                local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                if distance <= shortestDistance then
-                    shortestDistance = distance
-                    closestTarget = targetChar
+        if p ~= player and isSurvivorAliveAndValid(p) then
+            local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+            if tRoot then
+                local dist = (myRoot.Position - tRoot.Position).Magnitude
+                if dist <= shortestDist then
+                    shortestDist = dist
+                    closest = p
                 end
             end
         end
     end
-    return closestTarget
+
+    currentLockedSurvivor = closest
+    return closest and closest.Character or nil
 end
+
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if currentLockedSurvivor == leavingPlayer then
+        currentLockedSurvivor = nil
+    end
+end)
 
 --// HITBOX EXPANDER / LUNGE BOOST
 local lungeBoostOn = false
@@ -1167,85 +1345,79 @@ CombatTab:CreateSlider({
     end,
 })
 
---// CAMLOCK TARGET FOCUS
-local function isTargetValid(targetChar)
-    if not targetChar or not targetChar.Parent then return false end
-    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-    local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-    if not targetHrp or not targetHumanoid or targetHumanoid.Health <= 0 then return false end
-
-    local myChar = player.Character
-    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if myHrp then
-        local distance = (myHrp.Position - targetHrp.Position).Magnitude
-        if distance > DROP_DISTANCE then 
-            return false 
-        end
-    end
-    return true
-end
-
+--// KILLER STICKY CAMLOCK
 local function disableLock()
     isLocked = false
-    currentTarget = nil
-    RS:UnbindFromRenderStep("CamAndCharLockLoop")
+    currentLockedSurvivor = nil
+    RS:UnbindFromRenderStep("KillerCamlockLoop")
 end
 
 local function enableLock()
     isLocked = true
-    RS:BindToRenderStep("CamAndCharLockLoop", Enum.RenderPriority.Camera.Value + 1, function()
+    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value + 1, function()
         if not isLocked then return end
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
         if not myRoot then return end
 
-        local now = os.clock()
-        if now - lastTargetCheck > 0.1 then
-            lastTargetCheck = now
-            if not isTargetValid(currentTarget) then 
-                currentTarget = getClosestTarget(MAX_LOCK_DISTANCE) 
-            end
-        end
-
-        if currentTarget and isTargetValid(currentTarget) then
-            local targetRoot = currentTarget:FindFirstChild("HumanoidRootPart")
+        local targetChar = getLockedOrClosestSurvivor()
+        if targetChar then
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
             if targetRoot then
                 local myPos = myRoot.Position
                 local targetPos = targetRoot.Position
                 local targetAimPos = targetPos + Vector3.new(0, 1.5, 0)
                 
+                -- Smoothly face character towards target
                 local charLookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
                 myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.lookAt(myPos, charLookTarget), TURN_SMOOTHNESS)
                 
+                -- Smoothly position camera behind player focusing target
                 local flatDirection = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z).Unit
                 if flatDirection.Magnitude == 0 then flatDirection = Vector3.new(0, 0, 1) end
                 local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
                 camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
             end
-        else
-            currentTarget = nil
         end
     end)
 end
 
 CombatTab:CreateSection("Combat Utility")
 
-CombatTab:CreateToggle({
-    Name = "Camlock Target Focus",
+KillerCamlockToggle = CombatTab:CreateToggle({
+    Name = "Killer Camlock",
     CurrentValue = false,
     Callback = function(value)
-        if value then enableLock() else disableLock() end
-    end,
-})
+        if value then
+            if not isLocalPlayerKiller() then
+                task.spawn(function()
+                    if KillerCamlockToggle then
+                        KillerCamlockToggle:Set(false)
+                    end
+                end)
+                Rayfield:Notify({
+                    Title = "Camlock Error",
+                    Content = "You're not a killer!",
+                    Duration = 3,
+                    Image = 4483362458,
+                })
+                return
+            end
 
-CombatTab:CreateSlider({
-    Name = "Camlock Max Distance",
-    Range = {10, 60},
-    Increment = 1,
-    CurrentValue = 30,
-    Callback = function(value)
-        MAX_LOCK_DISTANCE = tonumber(value) or 30
-        DROP_DISTANCE = MAX_LOCK_DISTANCE + 5
+            local target = getLockedOrClosestSurvivor()
+            if not target then
+                Rayfield:Notify({
+                    Title = "Camlock",
+                    Content = "No whitelisted survivors nearby to lock onto!",
+                    Duration = 3,
+                    Image = 4483362458,
+                })
+            end
+
+            enableLock()
+        else
+            disableLock()
+        end
     end,
 })
 
@@ -1620,7 +1792,7 @@ UtilityTab:CreateToggle({
 UtilityTab:CreateSection("Generator Automation")
 
 local AutoGenEnabled = false
-local AutoGenCooldown = 1.5
+local AutoGenCooldown = 1.5 -- Default fixed cooldown
 local CurrentGenIndex = 1
 
 local function GetGameMap()
@@ -1720,7 +1892,7 @@ local function RunTimedAutoGen()
 
     for _, object in ipairs(searchScope:GetDescendants()) do
         if object:IsA("Model") and object.Name:lower():find("generator") and not isGenFinished(object) then
-            local mainPart = object:FindFirstChild("Main") or object.PrimaryPart or object:FindFirstChildWhichIsA("BasePart", true)
+            local mainPart = object:FindFirstChild("Main") or object.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
             if mainPart and (mainPart.Position - localRoot.Position).Magnitude <= 7.5 then
                 local remotes = object:FindFirstChild("Remotes")
                 local remoteEvent = remotes and remotes:FindFirstChildOfClass("RemoteEvent")
@@ -1755,16 +1927,6 @@ UtilityTab:CreateButton({
     Name = "TP to Next Gen",
     Callback = function()
         pcall(TeleportToNextGen)
-    end,
-})
-
-UtilityTab:CreateSlider({
-    Name = "Auto Gen Cooldown",
-    Range = {0.5, 5},
-    Increment = 0.1,
-    CurrentValue = 1.5,
-    Callback = function(value)
-        AutoGenCooldown = tonumber(value) or 1.5
     end,
 })
 
@@ -2256,6 +2418,7 @@ AntiTab:CreateToggle({
         handleFootprints(value)
     end,
 })
+
 AntiTab:CreateToggle({
     Name = "Smaller Spike Collisions",
     CurrentValue = false,
