@@ -2265,11 +2265,22 @@ AntiTab:CreateToggle({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 8: AIM TAB (LOCAL ANIMATION-BASED, NO REMOTES)
+-- PART 8: AIM TAB (EXACT ANIMATION ID DETECTION, NO REMOTES)
 --------------------------------------------------------------------------------
 
 local slasherAimbotOn = false
 local shedletskyAimbotOn = false
+
+-- Animation ID Lookup Sets (Cleaned Numeric IDs)
+local SLASHER_ANIM_IDS = {
+    ["114384283102737"] = true, -- Slasher Behead
+    ["98906674546879"]  = true, -- Slasher Slash
+    ["120537271555083"] = true, -- Slasher Behead (Alt)
+}
+
+local SHEDLETSKY_ANIM_IDS = {
+    ["106976963660502"] = true, -- Shedletsky Slash
+}
 
 local KILLER_CLASSES = {
     ["slasher"]         = true,
@@ -2354,7 +2365,7 @@ local function snapAimToTarget(targetChar)
 
     if not myRoot or not targetRoot then return end
 
-    -- Turn character orientation toward target
+    -- Turn character horizontal orientation toward target
     local flatTargetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
     myRoot.CFrame = CFrame.lookAt(myRoot.Position, flatTargetPos)
 
@@ -2365,12 +2376,18 @@ local function snapAimToTarget(targetChar)
     end
 end
 
+-- Extracts raw numeric asset ID from strings like "rbxassetid://12345" or web URLs
+local function extractNumericId(rawAnimId)
+    if not rawAnimId then return "" end
+    return tostring(rawAnimId):match("%d+") or ""
+end
+
 --------------------------------------------------------------------------------
 -- LOCAL ANIMATION LISTENER (ZERO REMOTES)
 --------------------------------------------------------------------------------
 
 local lastTriggerTime = 0
-local TRIGGER_COOLDOWN = 0.4 -- Prevents snapping every frame of the same animation
+local TRIGGER_COOLDOWN = 0.4 -- Prevents continuous snapping throughout the same attack
 
 RS.Heartbeat:Connect(function()
     if not slasherAimbotOn and not shedletskyAimbotOn then return end
@@ -2384,33 +2401,30 @@ RS.Heartbeat:Connect(function()
 
     for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
         local animObj = track.Animation
-        local animName = animObj and animObj.Name:lower() or ""
+        local rawId = animObj and animObj.AnimationId or ""
+        local numericId = extractNumericId(rawId)
 
-        -- Slasher: Detects Slash, Behead, or GashingWound animations
-        if slasherAimbotOn then
-            if animName:find("slash") or animName:find("behead") or animName:find("gashing") or animName:find("wound") then
-                if track.TimePosition < 0.35 then
-                    lastTriggerTime = now
-                    local target = getClosestSurvivor()
-                    if target then
-                        snapAimToTarget(target)
-                    end
-                    break
+        -- Slasher Aimbot (Behead / Slash IDs)
+        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] then
+            if track.TimePosition < 0.4 then
+                lastTriggerTime = now
+                local target = getClosestSurvivor()
+                if target then
+                    snapAimToTarget(target)
                 end
+                break
             end
         end
 
-        -- Shedletsky: Detects Slash animation
-        if shedletskyAimbotOn then
-            if animName:find("slash") or animName:find("sword") then
-                if track.TimePosition < 0.35 then
-                    lastTriggerTime = now
-                    local target = getActiveKiller()
-                    if target then
-                        snapAimToTarget(target)
-                    end
-                    break
+        -- Shedletsky Slash Aimbot
+        if shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] then
+            if track.TimePosition < 0.4 then
+                lastTriggerTime = now
+                local target = getActiveKiller()
+                if target then
+                    snapAimToTarget(target)
                 end
+                break
             end
         end
     end
