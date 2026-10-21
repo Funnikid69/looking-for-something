@@ -58,9 +58,10 @@ player.CharacterAdded:Connect(function(c)
 end)
 
 --------------------------------------------------------------------------------
--- SAFE SPACE SETUP
+-- SAFE SPACE SETUP (CENTERED AT NEW MAP COORDS)
 --------------------------------------------------------------------------------
-local SAFE_SPACE_CFRAME = CFrame.new(0, 5000, 0)
+local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
+local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
 local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
 
 if not safeSpacePart then
@@ -72,6 +73,8 @@ if not safeSpacePart then
     safeSpacePart.Material = Enum.Material.SmoothPlastic
     safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
     safeSpacePart.Parent = workspace
+else
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
 end
 
 local function teleportToSafeSpace()
@@ -82,7 +85,7 @@ local function teleportToSafeSpace()
 end
 
 --------------------------------------------------------------------------------
--- ANTI-VOID SYSTEM
+-- ANTI-VOID SYSTEM (CENTERED AT NEW MAP COORDS)
 --------------------------------------------------------------------------------
 local ANTI_VOID_HEIGHT = -150
 local antiVoidPart = workspace:FindFirstChild("AntiVoidPlate")
@@ -91,20 +94,22 @@ if not antiVoidPart then
     antiVoidPart = Instance.new("Part")
     antiVoidPart.Name = "AntiVoidPlate"
     antiVoidPart.Size = Vector3.new(10000, 10, 10000)
-    antiVoidPart.CFrame = CFrame.new(0, ANTI_VOID_HEIGHT, 0)
+    antiVoidPart.CFrame = CFrame.new(MAP_CENTER.X, ANTI_VOID_HEIGHT, MAP_CENTER.Z)
     antiVoidPart.Anchored = true
     antiVoidPart.CanCollide = true
     antiVoidPart.Transparency = 0.6
     antiVoidPart.Material = Enum.Material.ForceField
     antiVoidPart.Color = Color3.fromRGB(255, 0, 80)
     antiVoidPart.Parent = workspace
+else
+    antiVoidPart.CFrame = CFrame.new(MAP_CENTER.X, ANTI_VOID_HEIGHT, MAP_CENTER.Z)
 end
 
 antiVoidPart.Touched:Connect(function(hit)
     if char and hit:IsDescendantOf(char) then
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if hrp then
-            hrp.CFrame = CFrame.new(0, 50, 0)
+            hrp.CFrame = CFrame.new(MAP_CENTER.X, 50, MAP_CENTER.Z)
         end
     end
 end)
@@ -205,6 +210,30 @@ end
 --------------------------------------------------------------------------------
 -- PART 2: ACTION & AUTO-FARM SYSTEM (IDLE SAFE SPACE TELEPORT)
 --------------------------------------------------------------------------------
+
+local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
+local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
+
+local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
+if not safeSpacePart then
+    safeSpacePart = Instance.new("Part")
+    safeSpacePart.Name = "SafeSpaceBaseplate"
+    safeSpacePart.Size = Vector3.new(200, 5, 200)
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+    safeSpacePart.Anchored = true
+    safeSpacePart.Material = Enum.Material.SmoothPlastic
+    safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
+    safeSpacePart.Parent = workspace
+else
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+end
+
+local function teleportToSafeSpace()
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        myRoot.CFrame = SAFE_SPACE_CFRAME * CFrame.new(0, 5, 0)
+    end
+end
 
 local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) 
     and ReplicatedStorage.CharacterAbilities:WaitForChild("Shedletsky", 5) 
@@ -663,7 +692,7 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT TAB & UTILITY TAB (HITBOX EXPANDER INTEGRATED)
+-- PART 4: COMBAT TAB & UTILITY TAB (SLIDER MAX UPDATED TO 250)
 --------------------------------------------------------------------------------
 
 local AIM_DISTANCE = 30 
@@ -827,7 +856,7 @@ CombatTab:CreateToggle({
 
 CombatTab:CreateSlider({
     Name = "Lunge Range",
-    Range = {1, 30},
+    Range = {1, 250},
     Increment = 0.5,
     CurrentValue = 9.6,
     Callback = function(value)
