@@ -115,65 +115,40 @@ antiVoidPart.Touched:Connect(function(hit)
 end)
 
 --------------------------------------------------------------------------------
--- CHARACTER ABILITY CONFIGURATIONS (JASON, SHEDLETSKY & NOLI)
+-- CHARACTER ABILITY CONFIGURATIONS (SHEDLETSKY, NOLI & C00LKIDD)
 --------------------------------------------------------------------------------
-local charAbilitiesFolder = ReplicatedStorage:WaitForChild("CharacterAbilities", 5)
-local jasonFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Jason")
-local shedFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Shedletsky")
-local noliFolder = charAbilitiesFolder and charAbilitiesFolder:FindFirstChild("Noli")
-
-local JasonAbilities = {
-    ["MainAbility"] = {
-        ["Cooldown"] = 1.9,
-        ["LastUsed"] = 0,
-        ["Remote"] = jasonFolder and jasonFolder:FindFirstChild("JasonAttackRemote")
-    },
-    ["AltAbility1"] = {
-        ["Cooldown"] = 15,
-        ["LastUsed"] = 0,
-        ["Remote"] = jasonFolder and jasonFolder:FindFirstChild("Behead")
-    },
-    ["AltAbility2"] = {
-        ["Cooldown"] = 25,
-        ["LastUsed"] = 0,
-        ["Remote"] = jasonFolder and jasonFolder:FindFirstChild("GashingWound")
-    },
-    ["AltAbility3"] = {
-        ["Cooldown"] = 20,
-        ["LastUsed"] = 0,
-        ["Remote"] = jasonFolder and jasonFolder:FindFirstChild("Enraged")
-    }
-}
+local charRemotesFolder = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
+local shedFolder = charRemotesFolder and charRemotesFolder:FindFirstChild("Shedletsky")
+local noliFolder = charRemotesFolder and charRemotesFolder:FindFirstChild("Noli")
+local coolkidFolder = charRemotesFolder and (charRemotesFolder:FindFirstChild("Coolkid") or charRemotesFolder:FindFirstChild("c00lkidd"))
 
 local ShedletskyAbilities = {
     ["Slash"] = {
         ["Cooldown"] = 15,
         ["LastUsed"] = 0,
         ["Remote"] = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
-    },
-    ["Fried Chicken"] = {
-        ["Cooldown"] = 15,
-        ["LastUsed"] = 0,
-        ["Remote"] = shedFolder and shedFolder:FindFirstChild("ShedletskyChickenRemote")
     }
 }
 
 local NoliAbilities = {
-    ["MainAbility"] = {
-        ["Cooldown"] = 1.8,
-        ["LastUsed"] = 0,
-        ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliAttackRemote")
-    },
-    ["AltAbility2"] = {
+    ["AltAbility2"] = { -- Nova
         ["Cooldown"] = 0,
         ["LastUsed"] = 0,
         ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
     }
 }
 
-local JASON_AUTO_ABILITIES = { "MainAbility", "AltAbility1", "AltAbility2" }
-local SHEDLETSKY_AUTO_ABILITIES = { "Slash", "Fried Chicken" }
-local NOLI_AUTO_ABILITIES = { "MainAbility", "AltAbility2" }
+local CoolkidAbilities = {
+    ["Walkspeed"] = {
+        ["Cooldown"] = 1,
+        ["LastUsed"] = 0,
+        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
+    }
+}
+
+local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
+local NOLI_AUTO_ABILITIES = { "AltAbility2" }
+local COOLKID_AUTO_ABILITIES = { "Walkspeed" }
 
 local autoFarmLowHpOn = false
 local autoFarmAllOn = false
@@ -200,7 +175,7 @@ local function canUseCharacter()
     if not char or not hum or hum.Health <= 0 then return false end
     local cType = getCurrentCharacterType()
 
-    if cType == "Jason" or cType == "Slasher" or cType == "Noli" then
+    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" then
         return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
     elseif cType == "Shedletsky" then
         return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
@@ -235,27 +210,31 @@ local function teleportToSafeSpace()
     end
 end
 
-local shedletskyRemote = ReplicatedStorage:WaitForChild("CharacterAbilities", 5) 
-    and ReplicatedStorage.CharacterAbilities:WaitForChild("Shedletsky", 5) 
-    and ReplicatedStorage.CharacterAbilities.Shedletsky:WaitForChild("ShedletskyAttackRemote", 5)
+-- Remote Cache References (CharacterRemotes)
+local charRemotes = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
+
+local shedletskyRemote = charRemotes and charRemotes:FindFirstChild("Shedletsky") and charRemotes.Shedletsky:FindFirstChild("ShedletskyAttackRemote")
+local noliNovaRemote = charRemotes and charRemotes:FindFirstChild("Noli") and charRemotes.Noli:FindFirstChild("NoliNova")
+local coolkidRemote = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd")) and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd")):FindFirstChild("Walkspeed")
 
 local function castCharacterAction(actionName, targetPosition)
     if not canUseCharacter() then return end
     local cType = getCurrentCharacterType()
 
+    -- 1. Shedletsky Slash
     if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
         if not shedletskyRemote then
-            local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-            local shedFolder = charAbilities and charAbilities:FindFirstChild("Shedletsky", true)
-            shedletskyRemote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote", true)
+            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+            local shedFolder = remotesFolder and remotesFolder:FindFirstChild("Shedletsky")
+            shedletskyRemote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
         end
 
         if shedletskyRemote then
-            local data = ShedletskyAbilities["Slash"]
+            local data = ShedletskyAbilities and ShedletskyAbilities["Slash"]
             local now = os.clock()
             
-            if data and (now - data.LastUsed >= data.Cooldown) then
-                data.LastUsed = now
+            if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                if data then data.LastUsed = now end
 
                 if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
                     local myRoot = char.HumanoidRootPart
@@ -276,22 +255,54 @@ local function castCharacterAction(actionName, targetPosition)
         return
     end
 
-    local abilityTable = ((cType == "Jason" or cType == "Slasher") and JasonAbilities) or (cType == "Noli" and NoliAbilities)
-    if not abilityTable then return end
+    -- 2. Noli Nova
+    if cType and cType == "Noli" and actionName == "AltAbility2" then
+        if not noliNovaRemote then
+            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+            local nFolder = remotesFolder and remotesFolder:FindFirstChild("Noli")
+            noliNovaRemote = nFolder and nFolder:FindFirstChild("NoliNova")
+        end
 
-    local data = abilityTable[actionName]
-    if data and data.Remote then
-        local now = os.clock()
-        if now - data.LastUsed >= data.Cooldown then
-            data.LastUsed = now
+        if noliNovaRemote then
+            local data = NoliAbilities and NoliAbilities["AltAbility2"]
+            local now = os.clock()
 
-            if cType == "Noli" and actionName == "AltAbility2" then
-                local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-                data.Remote:FireServer(aimPos, true)
-            else
-                data.Remote:FireServer()
+            if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                if data then data.LastUsed = now end
+
+                task.spawn(function()
+                    pcall(function()
+                        noliNovaRemote:FireServer()
+                    end)
+                end)
             end
         end
+        return
+    end
+
+    -- 3. c00lkidd Walkspeed
+    if cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) and actionName == "Walkspeed" then
+        if not coolkidRemote then
+            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+            local ckFolder = remotesFolder and (remotesFolder:FindFirstChild("Coolkid") or remotesFolder:FindFirstChild("c00lkidd"))
+            coolkidRemote = ckFolder and ckFolder:FindFirstChild("Walkspeed")
+        end
+
+        if coolkidRemote then
+            local data = CoolkidAbilities and CoolkidAbilities["Walkspeed"]
+            local now = os.clock()
+
+            if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                if data then data.LastUsed = now end
+
+                task.spawn(function()
+                    pcall(function()
+                        coolkidRemote:FireServer()
+                    end)
+                end)
+            end
+        end
+        return
     end
 end
 
@@ -440,10 +451,12 @@ RS.Heartbeat:Connect(function()
     local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
     local targetP = currentLockedTarget
 
+    -- Executes ability remotes when auto-farming an alive, valid player
     if targetP and isTargetAliveAndValid(targetP, maxHpConstraint) then
-        local autoList = ((cType == "Jason" or cType == "Slasher") and JASON_AUTO_ABILITIES) 
-            or (cType and cType:lower():find("shedletsky") and {"Slash"}) 
-            or (cType == "Noli" and NOLI_AUTO_ABILITIES) or {}
+        local autoList = (cType and cType:lower():find("shedletsky") and SHEDLETSKY_AUTO_ABILITIES) 
+            or (cType == "Noli" and NOLI_AUTO_ABILITIES) 
+            or (cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) and COOLKID_AUTO_ABILITIES)
+            or {}
 
         local myRoot = char and char:FindFirstChild("HumanoidRootPart")
         if myRoot then
