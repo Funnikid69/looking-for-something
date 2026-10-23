@@ -1185,7 +1185,7 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (STRICT SURVIVOR WHITELIST)
+-- PART 6: GUEST1337 AUTO FARM (UPDATED CHARGE REMOTE)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
@@ -1227,8 +1227,40 @@ local function isAllowedCharacter(playerTarget)
     return false
 end
 
+-- Direct Reference & Fallback Finder for Updated Structure
+local function findChargeRemote()
+    local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+    if charRemotes then
+        local guestFolder = charRemotes:FindFirstChild("Guest1337") or charRemotes:FindFirstChild("Guest")
+        if guestFolder then
+            local obj = guestFolder:FindFirstChild("ChargeRemote")
+            if obj then return obj end
+        end
+    end
+
+    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
+    if charAbilities then
+        local guestFolder = charAbilities:FindFirstChild("Guest1337", true) or charAbilities:FindFirstChild("Guest", true)
+        if guestFolder then
+            local obj = guestFolder:FindFirstChild("ChargeRemote", true) or guestFolder:FindFirstChild("Charge", true)
+            if obj then return obj end
+        end
+    end
+
+    return ReplicatedStorage:FindFirstChild("ChargeRemote", true)
+end
+
 local function findGuestRemote(possibleNames)
     for _, name in ipairs(possibleNames) do
+        local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+        if charRemotes then
+            local guestFolder = charRemotes:FindFirstChild("Guest1337") or charRemotes:FindFirstChild("Guest")
+            if guestFolder then
+                local obj = guestFolder:FindFirstChild(name)
+                if obj then return obj end
+            end
+        end
+
         local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
         if charAbilities then
             local guestFolder = charAbilities:FindFirstChild("Guest1337", true)
@@ -1245,7 +1277,7 @@ local function findGuestRemote(possibleNames)
 end
 
 local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
-local chargeRemote = findGuestRemote({"ChargeRemote", "Charge"})
+local chargeRemote = findChargeRemote()
 
 local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
     if not remoteObj then return end
@@ -1264,7 +1296,7 @@ end
 
 local function executeGuestAbilities(targetChar, targetHrp)
     if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
-    if not chargeRemote then chargeRemote = findGuestRemote({"ChargeRemote", "Charge"}) end
+    if not chargeRemote then chargeRemote = findChargeRemote() end
 
     safeTriggerRemote(chargeRemote, targetChar, targetHrp)
     safeTriggerRemote(punchRemote, targetChar, targetHrp)
