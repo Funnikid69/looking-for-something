@@ -722,123 +722,10 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT TAB & UTILITY TAB (SLIDER MAX UPDATED TO 250)
+-- PART 4: COMBAT TAB & UTILITY TAB (KILLER CAMLOCK REWORKED)
 --------------------------------------------------------------------------------
 
-local AIM_DISTANCE = 30 
-
-local function isMatchingCharacter(charName)
-    local character = player.Character
-    if not character then return false end
-    
-    local currentName = character.Name
-    local charAttr = character:GetAttribute("Character") or character:GetAttribute("CharacterType")
-    
-    if type(charName) == "table" then
-        for _, name in ipairs(charName) do
-            if currentName:find(name) or (charAttr and tostring(charAttr):find(name)) then
-                return true
-            end
-        end
-        return false
-    end
-    return currentName:find(charName) or (charAttr and tostring(charAttr):find(charName))
-end
-
-local function getClosestTarget()
-    local character = player.Character
-    if not character then return nil end
-    local myRoot = character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-    
-    local closestTarget = nil
-    local shortestDistance = math.huge
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local targetChar = p.Character
-            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-            local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-            
-            if targetRoot and targetHumanoid and targetHumanoid.Health > 0 then
-                local distance = (myRoot.Position - targetRoot.Position).Magnitude
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    closestTarget = targetChar
-                end
-            end
-        end
-    end
-    return closestTarget
-end
-
-local function aimAtTarget(targetChar)
-    local character = player.Character
-    if character and character:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
-        local myRoot = character.HumanoidRootPart
-        local targetPos = targetChar.HumanoidRootPart.Position
-        local distance = (myRoot.Position - targetPos).Magnitude
-
-        if distance <= AIM_DISTANCE then
-            myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPos.X, myRoot.Position.Y, targetPos.Z))
-            return true
-        end
-    end
-    return false
-end
-
-CombatTab:CreateSection("Main Attacks")
-
---------------------------------------------------------------------------------
--- AUTOMATED ATTACKS (REMOTE CACHED & THROTTLED)
---------------------------------------------------------------------------------
-
-local function findRemoteByName(remoteName, folderName)
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities and folderName then
-        local folder = charAbilities:FindFirstChild(folderName, true)
-        if folder then
-            local obj = folder:FindFirstChild(remoteName, true)
-            if obj then return obj end
-        end
-    end
-    return ReplicatedStorage:FindFirstChild(remoteName, true)
-end
-
--- Auto Attack (Slasher M1)
-local autoAttackOn = false
-local attackRemote = nil
-
-task.spawn(function()
-    while true do
-        if autoAttackOn then
-            if isMatchingCharacter({"Jason", "Slasher"}) then
-                if not attackRemote then attackRemote = findRemoteByName("JasonAttackRemote", "Jason") end
-                if attackRemote then
-                    local target = getClosestTarget()
-                    local isClose = target and aimAtTarget(target)
-                    if isClose and target:FindFirstChild("HumanoidRootPart") then
-                        attackRemote:FireServer(target.HumanoidRootPart.Position)
-                    else
-                        attackRemote:FireServer()
-                    end
-                end
-            end
-            task.wait(0.12)
-        else
-            task.wait(0.3)
-        end
-    end
-end)
-
-CombatTab:CreateToggle({
-    Name = "Auto Attack (Slasher M1)",
-    CurrentValue = false,
-    Callback = function(value)
-        autoAttackOn = value
-        if value and not attackRemote then attackRemote = findRemoteByName("JasonAttackRemote", "Jason") end
-    end,
-})
+local CoreGui = game:GetService("CoreGui")
 
 --------------------------------------------------------------------------------
 -- HITBOX EXPANDER / LUNGE BOOST SYSTEM
@@ -895,75 +782,267 @@ CombatTab:CreateSlider({
 })
 
 --------------------------------------------------------------------------------
--- CAMLOCK TARGET FOCUS (OPTIMIZED RENDERSTEP)
+-- KILLER CAMLOCK SYSTEM (ALL-PLAYER TARGETING & DYNAMIC GUI)
 --------------------------------------------------------------------------------
-local DROP_DISTANCE = 35
-local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
+CombatTab:CreateSection("Killer Camlock")
+
+local CAMERA_OFFSET = Vector3.new(0, 4.5, 10)
 local TURN_SMOOTHNESS = 0.35
-local currentTarget = nil
+local MAX_TARGET_DISTANCE = 75
+
+local KILLER_CLASSES = {
+    ["slasher"]         = true,
+    ["jason"]           = true,
+    ["coolkid"]         = true,
+    ["c00lkidd"]        = true,
+    ["coolkidrework"]   = true,
+    ["1x4"]             = true,
+    ["1x1x1x1"]         = true,
+    ["noli"]            = true,
+    ["swordsmaster"]    = true,
+    ["guest666"]        = true,
+    ["2011x"]           = true,
+    ["johndoe"]         = true,
+    ["azure"]           = true,
+}
+
 local isLocked = false
-local lastTargetCheck = 0
+local currentLockedTarget = nil
 
-local function isTargetValid(targetChar)
-    if not targetChar or not targetChar.Parent then return false end
-    local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-    local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
-    if not targetHrp or not targetHumanoid or targetHumanoid.Health <= 0 then return false end
+-- GUI Instance References
+local GUI_NAME = "KillerCamlockUI"
+local oldGui = CoreGui:FindFirstChild(GUI_NAME) or (player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild(GUI_NAME))
+if oldGui then oldGui:Destroy() end
 
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = GUI_NAME
+screenGui.ResetOnSpawn = false
+screenGui.Enabled = false
+
+pcall(function() screenGui.Parent = CoreGui end)
+if not screenGui.Parent then screenGui.Parent = player:WaitForChild("PlayerGui") end
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 200, 0, 95)
+mainFrame.Position = UDim2.new(0.08, 0, 0.45, 0)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local header = Instance.new("TextLabel")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 32)
+header.Position = UDim2.new(0, 0, 0, 0)
+header.BackgroundColor3 = Color3.fromRGB(150, 15, 15)
+header.BorderSizePixel = 0
+header.Font = Enum.Font.GothamBold
+header.Text = "Killers Aimbot"
+header.TextColor3 = Color3.fromRGB(245, 245, 245)
+header.TextSize = 14
+header.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 8)
+headerCorner.Parent = header
+
+local headerGradient = Instance.new("UIGradient")
+headerGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 5, 5)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 20, 20)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 5, 5)),
+})
+headerGradient.Parent = header
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(1, 0, 0, 52)
+toggleButton.Position = UDim2.new(0, 0, 0, 38)
+toggleButton.BackgroundColor3 = Color3.fromRGB(120, 10, 10)
+toggleButton.BorderSizePixel = 0
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Text = "Aimbot : Off"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextSize = 14
+toggleButton.AutoButtonColor = false
+toggleButton.Parent = mainFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 8)
+buttonCorner.Parent = toggleButton
+
+local buttonGradient = Instance.new("UIGradient")
+buttonGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 3, 3)),
+    ColorSequenceKeypoint.new(0.45, Color3.fromRGB(140, 15, 15)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 20, 20)),
+})
+buttonGradient.Parent = toggleButton
+
+-- Character and Target Logic
+local function getCharacterKey(characterModel)
+    if not characterModel then return "" end
+    local charType = characterModel:GetAttribute("Character")
+        or characterModel:GetAttribute("CharacterType")
+        or characterModel:GetAttribute("Role")
+        or characterModel.Name
+    local key = string.lower(tostring(charType))
+
+    if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
+    if key == "1x1x1x1" then key = "1x4" end
+    return key
+end
+
+local function isLocalPlayerKiller()
     local myChar = player.Character
-    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if myHrp then
-        if (myHrp.Position - targetHrp.Position).Magnitude > DROP_DISTANCE then return false end
-    end
+    if not myChar then return false end
+    local key = getCharacterKey(myChar)
+    return KILLER_CLASSES[key] == true
+end
+
+-- Validates every player (whitelist removed)
+local function isTargetAliveAndValid(p)
+    if not p or not p.Parent or not p.Character or p == player then return false end
+    local tChar = p.Character
+    if not tChar:IsDescendantOf(workspace) then return false end
+
+    local tHum = tChar:FindFirstChildOfClass("Humanoid")
+    local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+    if not tHum or not tRoot or tHum.Health <= 0 then return false end
+
     return true
 end
 
+local function getLockedOrClosestTarget()
+    if currentLockedTarget then
+        if isTargetAliveAndValid(currentLockedTarget) then
+            local myChar = player.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local tRoot = currentLockedTarget.Character:FindFirstChild("HumanoidRootPart")
+            if myRoot and tRoot then
+                local dist = (myRoot.Position - tRoot.Position).Magnitude
+                if dist <= MAX_TARGET_DISTANCE then
+                    return currentLockedTarget.Character
+                end
+            end
+        end
+        currentLockedTarget = nil
+    end
+
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest = nil
+    local shortestDist = MAX_TARGET_DISTANCE
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and isTargetAliveAndValid(p) then
+            local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+            if tRoot then
+                local dist = (myRoot.Position - tRoot.Position).Magnitude
+                if dist <= shortestDist then
+                    shortestDist = dist
+                    closest = p
+                end
+            end
+        end
+    end
+
+    currentLockedTarget = closest
+    return closest and closest.Character or nil
+end
+
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if currentLockedTarget == leavingPlayer then
+        currentLockedTarget = nil
+    end
+end)
+
 local function disableLock()
     isLocked = false
-    currentTarget = nil
-    RS:UnbindFromRenderStep("CamAndCharLockLoop")
+    currentLockedTarget = nil
+    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
+    toggleButton.Text = "Aimbot : Off"
 end
 
 local function enableLock()
     isLocked = true
-    RS:BindToRenderStep("CamAndCharLockLoop", Enum.RenderPriority.Camera.Value + 1, function()
+    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
+    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value + 1, function()
         if not isLocked then return end
+
+        if not isLocalPlayerKiller() then
+            toggleButton.Text = "Not a Killer"
+            currentLockedTarget = nil
+            return
+        end
+
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
+        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
 
-        local now = os.clock()
-        if now - lastTargetCheck > 0.1 then
-            lastTargetCheck = now
-            if not isTargetValid(currentTarget) then 
-                currentTarget = getClosestTarget() 
-            end
+        if not myRoot or not myHum or myHum.Health <= 0 then
+            return
         end
 
-        if currentTarget then
-            local targetRoot = currentTarget:FindFirstChild("HumanoidRootPart")
-            if targetRoot then
-                local myPos = myRoot.Position
-                local targetPos = targetRoot.Position
-                local targetAimPos = targetPos + Vector3.new(0, 1.5, 0)
-                
-                local charLookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-                myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.lookAt(myPos, charLookTarget), TURN_SMOOTHNESS)
-                
-                local flatDirection = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z).Unit
-                if flatDirection.Magnitude == 0 then flatDirection = Vector3.new(0, 0, 1) end
-                local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
-                camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
-            end
+        local targetChar = getLockedOrClosestTarget()
+
+        if not targetChar then
+            toggleButton.Text = "No players nearby"
+            return
         end
+
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+
+        if not targetRoot or not targetHum or targetHum.Health <= 0 then
+            currentLockedTarget = nil
+            toggleButton.Text = "No players nearby"
+            return
+        end
+
+        toggleButton.Text = "Aimbot : On"
+
+        local myPos = myRoot.Position
+        local targetPos = targetRoot.Position
+        local targetAimPos = targetPos + Vector3.new(0, 1.5, 0)
+
+        local horizontalDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
+        if horizontalDiff.Magnitude < 0.1 then
+            return
+        end
+
+        local charLookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
+        myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.lookAt(myPos, charLookTarget), TURN_SMOOTHNESS)
+
+        local flatDirection = horizontalDiff.Unit
+        local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
+        camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
     end)
 end
 
+toggleButton.MouseButton1Click:Connect(function()
+    if isLocked then
+        disableLock()
+    else
+        enableLock()
+    end
+end)
+
+-- Rayfield Toggle Controls GUI and Aimbot State
 CombatTab:CreateToggle({
-    Name = "Camlock Target Focus",
+    Name = "Killer Camlock",
     CurrentValue = false,
     Callback = function(value)
-        if value then enableLock() else disableLock() end
+        if value then
+            screenGui.Enabled = true
+            enableLock()
+        else
+            disableLock()
+            screenGui.Enabled = false
+        end
     end,
 })
 
