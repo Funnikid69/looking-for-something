@@ -571,6 +571,7 @@ AutoFarmTab:CreateButton({
 local espOn = false
 local activeESP = {}
 
+-- Character Role Sets
 local SURVIVOR_CLASSES = {
     ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
     ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
@@ -580,24 +581,39 @@ local SURVIVOR_CLASSES = {
 
 local KILLER_CLASSES = {
     ["slasher"] = true, ["jason"] = true, ["coolkid"] = true,
-    ["1x4"] = true, ["noli"] = true, ["swordsmaster"] = true,
-    ["guest666"] = true, ["2011x"] = true, ["johndoe"] = true,
-    ["azure"] = true
+    ["coolkidrework"] = true, ["1x4"] = true, ["noli"] = true,
+    ["swordsmaster"] = true, ["guest666"] = true, ["2011x"] = true,
+    ["johndoe"] = true, ["azure"] = true
 }
 
-local function getRoleColor(targetChar)
-    if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor" end
-
-    local rawCharType = targetChar:GetAttribute("Character") or targetChar.Name
-    local charType = string.lower(tostring(rawCharType))
-
-    if SURVIVOR_CLASSES[charType] then
-        return Color3.fromRGB(0, 150, 255), "Survivor"
-    elseif KILLER_CLASSES[charType] then
-        return Color3.fromRGB(255, 35, 35), "Killer"
+-- Determine Role Color, Role Name, and Character Name
+local function getCharacterInfo(targetChar)
+    if not targetChar then 
+        return Color3.fromRGB(0, 150, 255), "Survivor", "Unknown" 
     end
 
-    return Color3.fromRGB(0, 150, 255), "Survivor"
+    local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType")
+    
+    if not rawCharType then
+        for _, child in ipairs(targetChar:GetChildren()) do
+            if child:IsA("StringValue") and (SURVIVOR_CLASSES[string.lower(child.Value)] or KILLER_CLASSES[string.lower(child.Value)]) then
+                rawCharType = child.Value
+                break
+            end
+        end
+    end
+
+    rawCharType = rawCharType or targetChar.Name
+    local charType = string.lower(tostring(rawCharType))
+    local charDisplay = tostring(rawCharType)
+
+    if KILLER_CLASSES[charType] then
+        return Color3.fromRGB(255, 35, 35), "Killer", charDisplay
+    elseif SURVIVOR_CLASSES[charType] then
+        return Color3.fromRGB(0, 150, 255), "Survivor", charDisplay
+    end
+
+    return Color3.fromRGB(0, 150, 255), "Survivor", charDisplay
 end
 
 local function removeESP(plr)
@@ -622,7 +638,7 @@ local function applyESP(plr)
         
         if not root or not targetHum then return end
 
-        local roleColor, roleName = getRoleColor(targetChar)
+        local roleColor, roleName, charName = getCharacterInfo(targetChar)
 
         local highlight = Instance.new("Highlight")
         highlight.Name = "ESP_Highlight"
@@ -636,7 +652,7 @@ local function applyESP(plr)
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "ESP_Billboard"
         billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 200, 0, 30)
+        billboard.Size = UDim2.new(0, 250, 0, 30)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.Adornee = head
         billboard.Parent = targetChar
@@ -654,13 +670,14 @@ local function applyESP(plr)
                 highlight.Enabled = false
                 billboard.Enabled = false
             else
-                local updatedColor, updatedRole = getRoleColor(targetChar)
+                local updatedColor, updatedRole, updatedCharName = getCharacterInfo(targetChar)
                 highlight.FillColor = updatedColor
                 label.TextColor3 = updatedColor
 
                 highlight.Enabled = true
                 billboard.Enabled = true
-                label.Text = string.format("%s [%s] | %d HP", plr.Name, updatedRole, math.floor(targetHum.Health))
+                -- Displays: PlayerName [CharacterName - Role] | CurrentHP
+                label.Text = string.format("%s [%s - %s] | %d HP", plr.Name, updatedCharName, updatedRole, math.floor(targetHum.Health))
             end
         end)
 
@@ -1198,11 +1215,21 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (UPDATED CHARGE REMOTE)
+-- PART 6: GUEST1337 AUTO FARM (LOW HEALTH PROTECTION & PINNING ADDED)
 --------------------------------------------------------------------------------
 
 local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
 local currentHardLockedTarget = nil
+
+local GuestLowHpToggle, GuestAllToggle
+local GuestLowHealthToggle
+
+-- Low Health Safety & Platform Pinning State
+local guestLowHealthProtectionOn = false
+local guestHealthThreshold = 30
+local guestProtectionPlatform = nil
+local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local isGuestProtected = false
 
 local SURVIVOR_CLASSES = {
     ["guest1337"]     = true,
@@ -1240,7 +1267,7 @@ local function isAllowedCharacter(playerTarget)
     return false
 end
 
--- Direct Reference & Fallback Finder for Updated Structure
+-- Updated Charge Remote & Remote Finder
 local function findChargeRemote()
     local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
     if charRemotes then
@@ -1385,6 +1412,63 @@ local function getClosestValidPlayer(lowHpOnly)
     return closestPlayer
 end
 
+-- Reusable Low Health Protection Loop (Auto-Return & Farm Disabler)
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if guestLowHealthProtectionOn then
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                local hrp = character:FindFirstChild("HumanoidRootPart")
+
+                if humanoid and hrp and humanoid.Health > 0 then
+                    if humanoid.Health <= guestHealthThreshold then
+                        -- Disable auto farm options immediately
+                        if guestAutoLowHp then
+                            guestAutoLowHp = false
+                            if GuestLowHpToggle then GuestLowHpToggle:Set(false) end
+                        end
+                        if guestAutoAll then
+                            guestAutoAll = false
+                            if GuestAllToggle then GuestAllToggle:Set(false) end
+                        end
+                        currentHardLockedTarget = nil
+
+                        -- Ensure the safe platform exists
+                        if not guestProtectionPlatform or not guestProtectionPlatform.Parent then
+                            guestProtectionPlatform = Instance.new("Part", workspace)
+                            guestProtectionPlatform.Size = Vector3.new(60, 5, 60)
+                            guestProtectionPlatform.Position = savedPos
+                            guestProtectionPlatform.Anchored = true
+                            guestProtectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                            guestProtectionPlatform.Material = Enum.Material.SmoothPlastic
+                            guestProtectionPlatform.Name = "GuestProtectionBaseplate"
+                        end
+
+                        local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
+                        local dist = (hrp.Position - targetPlatformPos).Magnitude
+
+                        -- Snap to platform if not there, fallen off, or teleported away
+                        if not isGuestProtected or dist > 25 then
+                            hrp.CFrame = CFrame.new(targetPlatformPos)
+                            isGuestProtected = true
+                        end
+                    else
+                        -- Reset condition: if health recovers above threshold, release from platform
+                        if isGuestProtected then
+                            isGuestProtected = false
+                        end
+                    end
+                end
+            end
+        else
+            isGuestProtected = false
+        end
+    end
+end)
+
+-- Main Guest Auto Farm Loop
 task.spawn(function()
     while true do
         task.wait(0.03)
@@ -1426,9 +1510,34 @@ task.spawn(function()
     end
 end)
 
-GuestTab:CreateSection("Guest Auto Farm")
+--------------------------------------------------------------------------------
+-- GUEST TAB ELEMENTS (RAYFIELD)
+--------------------------------------------------------------------------------
 
-local GuestLowHpToggle, GuestAllToggle
+GuestTab:CreateSection("Guest Safety & Protection")
+
+GuestLowHealthToggle = GuestTab:CreateToggle({
+    Name = "Low Health Auto-Teleport",
+    CurrentValue = false,
+    Callback = function(value)
+        guestLowHealthProtectionOn = value
+        if not value then
+            isGuestProtected = false
+        end
+    end,
+})
+
+GuestTab:CreateSlider({
+    Name = "Health Threshold",
+    Range = {10, 50},
+    Increment = 5,
+    CurrentValue = 30,
+    Callback = function(value)
+        guestHealthThreshold = value
+    end,
+})
+
+GuestTab:CreateSection("Guest Auto Farm")
 
 GuestLowHpToggle = GuestTab:CreateToggle({
     Name = "Auto Farm Low HP Survivors",
