@@ -44,7 +44,7 @@ local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 local UtilityTab = Window:CreateTab("Movement & Misc", 4483362458)
 local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
-local GuestTab = Window:CreateTab("Guest1337", 4483362458)
+local SonicEXEtab = Window:CreateTab("2011X", 4483362458)
 
 --------------------------------------------------------------------------------
 -- CHARACTER & STATE TRACKING
@@ -131,7 +131,7 @@ local ShedletskyAbilities = {
 }
 
 local NoliAbilities = {
-    ["AltAbility2"] = { -- Nova
+    ["AltAbility2"] = {
         ["Cooldown"] = 0,
         ["LastUsed"] = 0,
         ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
@@ -175,7 +175,7 @@ local function canUseCharacter()
     if not char or not hum or hum.Health <= 0 then return false end
     local cType = getCurrentCharacterType()
 
-    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" then
+    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" or cType == "2011X" then
         return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
     elseif cType == "Shedletsky" then
         return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
@@ -573,17 +573,38 @@ local activeESP = {}
 
 -- Character Role Sets
 local SURVIVOR_CLASSES = {
-    ["guest1337"] = true, ["shedletsky"] = true, ["dusekkar"] = true,
-    ["martialartist"] = true, ["chance"] = true, ["twotime"] = true,
-    ["007n7"] = true, ["elliot"] = true, ["veeronica"] = true,
-    ["janedoe"] = true, ["messi"] = true, ["noob"] = true
+    ["guest1337"]     = true,
+    ["shedletsky"]    = true,
+    ["dusekkar"]      = true,
+    ["martialartist"] = true,
+    ["chance"]        = true,
+    ["twotime"]       = true,
+    ["007n7"]         = true,
+    ["elliot"]        = true,
+    ["veeronica"]     = true,
+    ["janedoe"]       = true,
+    ["messi"]         = true,
+    ["noob"]          = true,
+    ["taph"]          = true,
+    ["builderman"]    = true,
+    ["torchwood"]     = true
 }
 
 local KILLER_CLASSES = {
-    ["slasher"] = true, ["jason"] = true, ["coolkid"] = true,
-    ["coolkidrework"] = true, ["1x4"] = true, ["noli"] = true,
-    ["swordsmaster"] = true, ["guest666"] = true, ["2011x"] = true,
-    ["johndoe"] = true, ["azure"] = true
+    ["slasher"]       = true,
+    ["jason"]         = true,
+    ["coolkid"]       = true,
+    ["c00lkidd"]      = true,
+    ["coolkidrework"] = true,
+    ["1x4"]           = true,
+    ["1x1x1x1"]       = true,
+    ["noli"]          = true,
+    ["swordsmaster"]  = true,
+    ["guest666"]      = true,
+    ["2011x"]         = true,
+    ["johndoe"]       = true,
+    ["azure"]         = true,
+    ["doombringer"]   = true
 }
 
 -- Determine Role Color, Role Name, and Character Name
@@ -676,7 +697,6 @@ local function applyESP(plr)
 
                 highlight.Enabled = true
                 billboard.Enabled = true
-                -- Displays: PlayerName [CharacterName - Role] | CurrentHP
                 label.Text = string.format("%s [%s - %s] | %d HP", plr.Name, updatedCharName, updatedRole, math.floor(targetHum.Health))
             end
         end)
@@ -1209,7 +1229,6 @@ UtilityTab:CreateButton({
         hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
     end,
 })
-
 --------------------------------------------------------------------------------
 -- PART 5: PROTECTION & TELEPORTER (REUSABLE AUTO-PROTECTION PINNING)
 --------------------------------------------------------------------------------
@@ -1398,173 +1417,79 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: GUEST1337 AUTO FARM (LOW HEALTH PROTECTION & PINNING ADDED)
+-- PART 6: 2011X (SONIC.EXE) AUTO FARM (NO COOLDOWN CHECKS / DUAL ABILITY CAST)
 --------------------------------------------------------------------------------
 
-local guestAutoLowHp, guestAutoAll, stickToTargetOn, guestThreshold, guestHitOffset, guestSpeed = false, false, true, 20, 5.5, 16
-local currentHardLockedTarget = nil
+local sonicAutoLowHp = false
+local sonicAutoAll = false
+local stickToTargetOn = true
+local sonicThreshold = 20
+local sonicHitOffset = 5.5
 
-local GuestLowHpToggle, GuestAllToggle
-local GuestLowHealthToggle
+local currentHardLockedTarget = nil
+local SonicLowHpToggle, SonicAllToggle
+local SonicLowHealthToggle
 
 -- Low Health Safety & Platform Pinning State
-local guestLowHealthProtectionOn = false
-local guestHealthThreshold = 30
-local guestProtectionPlatform = nil
+local sonicLowHealthProtectionOn = false
+local sonicHealthThreshold = 30
+local sonicProtectionPlatform = nil
 local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
-local isGuestProtected = false
+local isSonicProtected = false
 
-local SURVIVOR_CLASSES = {
-    ["guest1337"]     = true,
-    ["guest"]         = true,
-    ["shedletsky"]    = true,
-    ["dusekkar"]      = true,
-    ["martialartist"] = true,
-    ["chance"]        = true,
-    ["twotime"]       = true,
-    ["007n7"]         = true,
-    ["elliot"]        = true,
-    ["veeronica"]     = true,
-    ["janedoe"]       = true,
-    ["messi"]         = true,
-    ["noob"]          = true,
-}
-
-local function isAllowedCharacter(playerTarget)
-    if not playerTarget or not playerTarget.Parent or not playerTarget.Character then return false end
-    local char = playerTarget.Character
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-
-    if not hum or not hrp or hum.Health <= 0 then return false end
-
-    local charType = string.lower(tostring(char:GetAttribute("Character") or char:GetAttribute("CharacterType") or char.Name))
-    if SURVIVOR_CLASSES[charType] or SURVIVOR_CLASSES[string.lower(playerTarget.Name)] then 
-        return true 
-    end
-
-    for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("StringValue") and SURVIVOR_CLASSES[string.lower(child.Value)] then return true end
-    end
-
-    return false
-end
-
--- Updated Charge Remote & Remote Finder
-local function findChargeRemote()
+--------------------------------------------------------------------------------
+-- 2011X DIRECT REMOTE FIRING (UNRESTRICTED DUAL CAST)
+--------------------------------------------------------------------------------
+local function findSonicRemote(name)
     local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
     if charRemotes then
-        local guestFolder = charRemotes:FindFirstChild("Guest1337") or charRemotes:FindFirstChild("Guest")
-        if guestFolder then
-            local obj = guestFolder:FindFirstChild("ChargeRemote")
+        local sonicFolder = charRemotes:FindFirstChild("2011X") or charRemotes:FindFirstChild("Sonic")
+        if sonicFolder then
+            local obj = sonicFolder:FindFirstChild(name)
             if obj then return obj end
         end
     end
-
-    local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-    if charAbilities then
-        local guestFolder = charAbilities:FindFirstChild("Guest1337", true) or charAbilities:FindFirstChild("Guest", true)
-        if guestFolder then
-            local obj = guestFolder:FindFirstChild("ChargeRemote", true) or guestFolder:FindFirstChild("Charge", true)
-            if obj then return obj end
-        end
-    end
-
-    return ReplicatedStorage:FindFirstChild("ChargeRemote", true)
+    return ReplicatedStorage:FindFirstChild(name, true)
 end
 
-local function findGuestRemote(possibleNames)
-    for _, name in ipairs(possibleNames) do
-        local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
-        if charRemotes then
-            local guestFolder = charRemotes:FindFirstChild("Guest1337") or charRemotes:FindFirstChild("Guest")
-            if guestFolder then
-                local obj = guestFolder:FindFirstChild(name)
-                if obj then return obj end
-            end
-        end
+local attackRemote = findSonicRemote("Attack")
+local godspeedRemote = findSonicRemote("Godspeed")
 
-        local charAbilities = ReplicatedStorage:FindFirstChild("CharacterAbilities", true)
-        if charAbilities then
-            local guestFolder = charAbilities:FindFirstChild("Guest1337", true)
-            if guestFolder then
-                local obj = guestFolder:FindFirstChild(name, true)
-                if obj then return obj end
-            end
-        end
-
-        local obj = ReplicatedStorage:FindFirstChild(name, true)
-        if obj then return obj end
+local function fireAttack()
+    if not attackRemote then attackRemote = findSonicRemote("Attack") end
+    if attackRemote then
+        pcall(function()
+            attackRemote:FireServer()
+        end)
     end
-    return nil
 end
 
-local punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"})
-local chargeRemote = findChargeRemote()
-
-local function safeTriggerRemote(remoteObj, targetChar, targetHrp)
-    if not remoteObj then return end
-    pcall(function()
-        if remoteObj:IsA("RemoteEvent") then
-            remoteObj:FireServer()
-            if targetChar then remoteObj:FireServer(targetChar) end
-            if targetHrp then remoteObj:FireServer(targetHrp.Position) end
-        elseif remoteObj:IsA("RemoteFunction") then
-            task.spawn(function()
-                remoteObj:InvokeServer()
-            end)
-        end
-    end)
+local function fireGodspeed()
+    if not godspeedRemote then godspeedRemote = findSonicRemote("Godspeed") end
+    if godspeedRemote then
+        pcall(function()
+            godspeedRemote:FireServer()
+        end)
+    end
 end
 
-local function executeGuestAbilities(targetChar, targetHrp)
-    if not punchRemote then punchRemote = findGuestRemote({"GuestAttackRemote", "PunchRemote", "Attack", "Punch"}) end
-    if not chargeRemote then chargeRemote = findChargeRemote() end
-
-    safeTriggerRemote(chargeRemote, targetChar, targetHrp)
-    safeTriggerRemote(punchRemote, targetChar, targetHrp)
-end
-
-RS.RenderStepped:Connect(function(deltaTime)
-    if not (guestAutoLowHp or guestAutoAll) then return end
-
-    local character = player.Character
-    if not character then return end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoid or not hrp then return end
-
-    humanoid.WalkSpeed = guestSpeed
-
-    for _, attr in ipairs({"SpeedMultiplier", "Slowed", "WalkSpeedModifier", "DisableMovement"}) do
-        if character:GetAttribute(attr) ~= nil then character:SetAttribute(attr, nil) end
-        if humanoid:GetAttribute(attr) ~= nil then humanoid:SetAttribute(attr, nil) end
-    end
-
-    if humanoid.MoveDirection.Magnitude > 0 then
-        local moveVector = humanoid.MoveDirection * guestSpeed * deltaTime
-        hrp.CFrame = hrp.CFrame + Vector3.new(moveVector.X, 0, moveVector.Z)
-    end
-end)
-
+--------------------------------------------------------------------------------
+-- TARGET DETECTION (ALL PLAYERS - NO WHITELIST)
+--------------------------------------------------------------------------------
 local function isTargetValid(targetPlayer, lowHpOnly)
-    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character then return false end
+    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or targetPlayer == player then 
+        return false 
+    end
 
     local targetChar = targetPlayer.Character
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local hum = targetChar:FindFirstChildOfClass("Humanoid")
 
-    if not hrp or not hum or hum.Health <= 0 then
+    if not hrp or not hum or hum.Health <= 0 or not targetChar:IsDescendantOf(workspace) then
         return false
     end
 
-    if not isAllowedCharacter(targetPlayer) then
-        return false
-    end
-
-    if lowHpOnly and hum.Health > guestThreshold then
+    if lowHpOnly and hum.Health > sonicThreshold then
         return false
     end
 
@@ -1595,69 +1520,69 @@ local function getClosestValidPlayer(lowHpOnly)
     return closestPlayer
 end
 
--- Reusable Low Health Protection Loop (Auto-Return & Farm Disabler)
+--------------------------------------------------------------------------------
+-- REUSABLE LOW HEALTH PROTECTION LOOP
+--------------------------------------------------------------------------------
 task.spawn(function()
     while true do
         task.wait(0.2)
-        if guestLowHealthProtectionOn then
+        if sonicLowHealthProtectionOn then
             local character = player.Character
             if character then
                 local humanoid = character:FindFirstChildOfClass("Humanoid")
                 local hrp = character:FindFirstChild("HumanoidRootPart")
 
                 if humanoid and hrp and humanoid.Health > 0 then
-                    if humanoid.Health <= guestHealthThreshold then
-                        -- Disable auto farm options immediately
-                        if guestAutoLowHp then
-                            guestAutoLowHp = false
-                            if GuestLowHpToggle then GuestLowHpToggle:Set(false) end
+                    if humanoid.Health <= sonicHealthThreshold then
+                        if sonicAutoLowHp then
+                            sonicAutoLowHp = false
+                            if SonicLowHpToggle then SonicLowHpToggle:Set(false) end
                         end
-                        if guestAutoAll then
-                            guestAutoAll = false
-                            if GuestAllToggle then GuestAllToggle:Set(false) end
+                        if sonicAutoAll then
+                            sonicAutoAll = false
+                            if SonicAllToggle then SonicAllToggle:Set(false) end
                         end
                         currentHardLockedTarget = nil
 
-                        -- Ensure the safe platform exists
-                        if not guestProtectionPlatform or not guestProtectionPlatform.Parent then
-                            guestProtectionPlatform = Instance.new("Part", workspace)
-                            guestProtectionPlatform.Size = Vector3.new(60, 5, 60)
-                            guestProtectionPlatform.Position = savedPos
-                            guestProtectionPlatform.Anchored = true
-                            guestProtectionPlatform.Color = Color3.fromRGB(0, 200, 100)
-                            guestProtectionPlatform.Material = Enum.Material.SmoothPlastic
-                            guestProtectionPlatform.Name = "GuestProtectionBaseplate"
+                        if not sonicProtectionPlatform or not sonicProtectionPlatform.Parent then
+                            sonicProtectionPlatform = Instance.new("Part", workspace)
+                            sonicProtectionPlatform.Size = Vector3.new(60, 5, 60)
+                            sonicProtectionPlatform.Position = savedPos
+                            sonicProtectionPlatform.Anchored = true
+                            sonicProtectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                            sonicProtectionPlatform.Material = Enum.Material.SmoothPlastic
+                            sonicProtectionPlatform.Name = "SonicProtectionBaseplate"
                         end
 
                         local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
                         local dist = (hrp.Position - targetPlatformPos).Magnitude
 
-                        -- Snap to platform if not there, fallen off, or teleported away
-                        if not isGuestProtected or dist > 25 then
+                        if not isSonicProtected or dist > 25 then
                             hrp.CFrame = CFrame.new(targetPlatformPos)
-                            isGuestProtected = true
+                            isSonicProtected = true
                         end
                     else
-                        -- Reset condition: if health recovers above threshold, release from platform
-                        if isGuestProtected then
-                            isGuestProtected = false
+                        if isSonicProtected then
+                            isSonicProtected = false
                         end
                     end
                 end
             end
         else
-            isGuestProtected = false
+            isSonicProtected = false
         end
     end
 end)
 
--- Main Guest Auto Farm Loop
+--------------------------------------------------------------------------------
+-- MAIN AUTO FARM LOOP (SIMULTANEOUS DUAL ABILITY CAST)
+--------------------------------------------------------------------------------
 task.spawn(function()
     while true do
         task.wait(0.03)
 
-        if guestAutoLowHp or guestAutoAll then
-            local lowHpOnly = guestAutoLowHp and not guestAutoAll
+        if sonicAutoLowHp or sonicAutoAll then
+            local lowHpOnly = sonicAutoLowHp and not sonicAutoAll
             local targetPlayer = nil
 
             if stickToTargetOn then
@@ -1680,11 +1605,17 @@ task.spawn(function()
                 local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
                 if targetHrp and targetHum and targetHum.Health > 0 and myHrp then
+                    for _, part in ipairs(myChar:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+
                     local lookAtPos = Vector3.new(targetHrp.Position.X, myHrp.Position.Y, targetHrp.Position.Z)
-                    local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -guestHitOffset)
+                    local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -sonicHitOffset)
                     myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
 
-                    executeGuestAbilities(targetChar, targetHrp)
+                    -- Fire both abilities directly and simultaneously
+                    task.spawn(fireAttack)
+                    task.spawn(fireGodspeed)
                 end
             end
         else
@@ -1694,55 +1625,70 @@ task.spawn(function()
 end)
 
 --------------------------------------------------------------------------------
--- GUEST TAB ELEMENTS (RAYFIELD)
+-- TAB UI ELEMENTS
 --------------------------------------------------------------------------------
+SonicEXEtab:CreateSection("Standalone Actions")
 
-GuestTab:CreateSection("Guest Safety & Protection")
+SonicEXEtab:CreateButton({
+    Name = "Attack (M1)",
+    Callback = function()
+        fireAttack()
+    end,
+})
 
-GuestLowHealthToggle = GuestTab:CreateToggle({
+SonicEXEtab:CreateButton({
+    Name = "Godspeed",
+    Callback = function()
+        fireGodspeed()
+    end,
+})
+
+SonicEXEtab:CreateSection("2011X Safety & Protection")
+
+SonicLowHealthToggle = SonicEXEtab:CreateToggle({
     Name = "Low Health Auto-Teleport",
     CurrentValue = false,
     Callback = function(value)
-        guestLowHealthProtectionOn = value
+        sonicLowHealthProtectionOn = value
         if not value then
-            isGuestProtected = false
+            isSonicProtected = false
         end
     end,
 })
 
-GuestTab:CreateSlider({
+SonicEXEtab:CreateSlider({
     Name = "Health Threshold",
     Range = {10, 50},
     Increment = 5,
     CurrentValue = 30,
     Callback = function(value)
-        guestHealthThreshold = value
+        sonicHealthThreshold = value
     end,
 })
 
-GuestTab:CreateSection("Guest Auto Farm")
+SonicEXEtab:CreateSection("2011X Auto Farm (All Players)")
 
-GuestLowHpToggle = GuestTab:CreateToggle({
-    Name = "Auto Farm Low HP Survivors",
+SonicLowHpToggle = SonicEXEtab:CreateToggle({
+    Name = "Auto Farm Low HP Players",
     CurrentValue = false,
     Callback = function(value)
-        guestAutoLowHp = value
+        sonicAutoLowHp = value
         currentHardLockedTarget = nil
-        if value and GuestAllToggle then GuestAllToggle:Set(false) end
+        if value and SonicAllToggle then SonicAllToggle:Set(false) end
     end,
 })
 
-GuestAllToggle = GuestTab:CreateToggle({
-    Name = "Auto Farm All Survivors",
+SonicAllToggle = SonicEXEtab:CreateToggle({
+    Name = "Auto Farm All Players",
     CurrentValue = false,
     Callback = function(value)
-        guestAutoAll = value
+        sonicAutoAll = value
         currentHardLockedTarget = nil
-        if value and GuestLowHpToggle then GuestLowHpToggle:Set(false) end
+        if value and SonicLowHpToggle then SonicLowHpToggle:Set(false) end
     end,
 })
 
-GuestTab:CreateToggle({
+SonicEXEtab:CreateToggle({
     Name = "Lock to Target",
     CurrentValue = true,
     Callback = function(value)
@@ -1751,31 +1697,22 @@ GuestTab:CreateToggle({
     end,
 })
 
-GuestTab:CreateSection("Guest Parameters")
+SonicEXEtab:CreateSection("Targeting Parameters")
 
-GuestTab:CreateInput({
+SonicEXEtab:CreateInput({
     Name = "Low HP Threshold",
     PlaceholderText = "20",
     Callback = function(text)
         local v = tonumber(text)
-        if v then guestThreshold = v end
+        if v then sonicThreshold = v end
     end,
 })
 
-GuestTab:CreateInput({
+SonicEXEtab:CreateInput({
     Name = "Hit Distance Offset",
     PlaceholderText = "5.5",
     Callback = function(text)
         local v = tonumber(text)
-        if v then guestHitOffset = v end
-    end,
-})
-
-GuestTab:CreateInput({
-    Name = "Target Walk Speed",
-    PlaceholderText = "16",
-    Callback = function(text)
-        local v = tonumber(text)
-        if v then guestSpeed = v end
+        if v then sonicHitOffset = v end
     end,
 })
