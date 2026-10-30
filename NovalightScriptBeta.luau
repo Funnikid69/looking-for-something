@@ -131,7 +131,7 @@ local ShedletskyAbilities = {
 }
 
 local NoliAbilities = {
-    ["AltAbility2"] = {
+    ["AltAbility2"] = { -- Nova
         ["Cooldown"] = 0,
         ["LastUsed"] = 0,
         ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
@@ -139,6 +139,16 @@ local NoliAbilities = {
 }
 
 local CoolkidAbilities = {
+    ["Attack"] = {
+        ["Cooldown"] = 0.5,
+        ["LastUsed"] = 0,
+        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("CoolkidAttackRemote")
+    },
+    ["Corrupt"] = {
+        ["Cooldown"] = 12,
+        ["LastUsed"] = 0,
+        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
+    },
     ["Walkspeed"] = {
         ["Cooldown"] = 1,
         ["LastUsed"] = 0,
@@ -148,7 +158,7 @@ local CoolkidAbilities = {
 
 local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
 local NOLI_AUTO_ABILITIES = { "AltAbility2" }
-local COOLKID_AUTO_ABILITIES = { "Walkspeed" }
+local COOLKID_AUTO_ABILITIES = { "Attack", "Corrupt", "Walkspeed" }
 
 local autoFarmLowHpOn = false
 local autoFarmAllOn = false
@@ -175,7 +185,7 @@ local function canUseCharacter()
     if not char or not hum or hum.Health <= 0 then return false end
     local cType = getCurrentCharacterType()
 
-    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" or cType == "2011X" then
+    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" or cType == "coolkidrework" or cType == "2011X" then
         return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
     elseif cType == "Shedletsky" then
         return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
@@ -214,8 +224,12 @@ end
 local charRemotes = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
 
 local shedletskyRemote = charRemotes and charRemotes:FindFirstChild("Shedletsky") and charRemotes.Shedletsky:FindFirstChild("ShedletskyAttackRemote")
-local noliNovaRemote = charRemotes and charRemotes:FindFirstChild("Noli") and charRemotes.Noli:FindFirstChild("NoliNova")
-local coolkidRemote = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd")) and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd")):FindFirstChild("Walkspeed")
+local noliNovaRemote   = charRemotes and charRemotes:FindFirstChild("Noli") and charRemotes.Noli:FindFirstChild("NoliNova")
+
+local coolkidFolder = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd"))
+local coolkidWalkspeedRemote = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
+local coolkidCorruptRemote   = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
+local coolkidAttackRemote    = coolkidFolder and coolkidFolder:FindFirstChild("CoolkidAttackRemote")
 
 local function castCharacterAction(actionName, targetPosition)
     if not canUseCharacter() then return end
@@ -280,29 +294,84 @@ local function castCharacterAction(actionName, targetPosition)
         return
     end
 
-    -- 3. c00lkidd Walkspeed
-    if cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) and actionName == "Walkspeed" then
-        if not coolkidRemote then
-            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
-            local ckFolder = remotesFolder and (remotesFolder:FindFirstChild("Coolkid") or remotesFolder:FindFirstChild("c00lkidd"))
-            coolkidRemote = ckFolder and ckFolder:FindFirstChild("Walkspeed")
-        end
+    -- 3. c00lkidd Abilities
+    if cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) then
+        local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+        local ckFolder = remotesFolder and (remotesFolder:FindFirstChild("Coolkid") or remotesFolder:FindFirstChild("c00lkidd"))
 
-        if coolkidRemote then
-            local data = CoolkidAbilities and CoolkidAbilities["Walkspeed"]
-            local now = os.clock()
-
-            if (not data) or (now - data.LastUsed >= data.Cooldown) then
-                if data then data.LastUsed = now end
-
-                task.spawn(function()
-                    pcall(function()
-                        coolkidRemote:FireServer()
-                    end)
-                end)
+        -- Walkspeed
+        if actionName == "Walkspeed" then
+            if not coolkidWalkspeedRemote then
+                coolkidWalkspeedRemote = ckFolder and ckFolder:FindFirstChild("Walkspeed")
             end
+
+            if coolkidWalkspeedRemote then
+                local data = CoolkidAbilities and CoolkidAbilities["Walkspeed"]
+                local now = os.clock()
+
+                if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                    if data then data.LastUsed = now end
+
+                    task.spawn(function()
+                        pcall(function()
+                            coolkidWalkspeedRemote:FireServer()
+                        end)
+                    end)
+                end
+            end
+            return
         end
-        return
+
+        -- Corrupt (Aimed at player target position)
+        if actionName == "Corrupt" then
+            if not coolkidCorruptRemote then
+                coolkidCorruptRemote = ckFolder and ckFolder:FindFirstChild("Corrupt")
+            end
+
+            if coolkidCorruptRemote then
+                local data = CoolkidAbilities and CoolkidAbilities["Corrupt"]
+                local now = os.clock()
+
+                if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                    if data then data.LastUsed = now end
+
+                    local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
+                    task.spawn(function()
+                        pcall(function()
+                            coolkidCorruptRemote:FireServer(aimPos, true)
+                        end)
+                    end)
+                end
+            end
+            return
+        end
+
+        -- Attack (M1 Attack Remote)
+        if actionName == "Attack" then
+            if not coolkidAttackRemote then
+                coolkidAttackRemote = ckFolder and ckFolder:FindFirstChild("CoolkidAttackRemote")
+            end
+
+            if coolkidAttackRemote then
+                local data = CoolkidAbilities and CoolkidAbilities["Attack"]
+                local now = os.clock()
+
+                if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                    if data then data.LastUsed = now end
+
+                    task.spawn(function()
+                        pcall(function()
+                            if targetPosition then
+                                coolkidAttackRemote:FireServer(targetPosition)
+                            else
+                                coolkidAttackRemote:FireServer()
+                            end
+                        end)
+                    end)
+                end
+            end
+            return
+        end
     end
 end
 
