@@ -722,7 +722,7 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT TAB & UTILITY TAB (KILLER CAMLOCK REWORKED)
+-- PART 4: COMBAT TAB & UTILITY TAB (INFINITE STAMINA INTEGRATED)
 --------------------------------------------------------------------------------
 
 local CoreGui = game:GetService("CoreGui")
@@ -880,7 +880,6 @@ buttonGradient.Color = ColorSequence.new({
 })
 buttonGradient.Parent = toggleButton
 
--- Character and Target Logic
 local function getCharacterKey(characterModel)
     if not characterModel then return "" end
     local charType = characterModel:GetAttribute("Character")
@@ -901,7 +900,6 @@ local function isLocalPlayerKiller()
     return KILLER_CLASSES[key] == true
 end
 
--- Validates every player (whitelist removed)
 local function isTargetAliveAndValid(p)
     if not p or not p.Parent or not p.Character or p == player then return false end
     local tChar = p.Character
@@ -1031,7 +1029,6 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Rayfield Toggle Controls GUI and Aimbot State
 CombatTab:CreateToggle({
     Name = "Killer Camlock",
     CurrentValue = false,
@@ -1047,10 +1044,115 @@ CombatTab:CreateToggle({
 })
 
 --------------------------------------------------------------------------------
--- UTILITY TAB ELEMENTS (LIGHTWEIGHT TPWALK)
+-- UTILITY TAB (MOVEMENT & MISC)
 --------------------------------------------------------------------------------
 UtilityTab:CreateSection("Movement Mods")
 
+-- Infinite Stamina Engine
+local infiniteStaminaOn = false
+local staminaConnections = {}
+local staminaCharAddedConn = nil
+
+local function disconnectStamina()
+    for _, conn in ipairs(staminaConnections) do
+        if conn and conn.Disconnect then
+            conn:Disconnect()
+        end
+    end
+    table.clear(staminaConnections)
+end
+
+local function updateStaminaVisuals()
+    local character = player.Character
+    if not character then return end
+
+    character:SetAttribute("StaminaDisabled", true)
+
+    local playerGui = player:FindFirstChildOfClass("PlayerGui")
+    local coreHud = playerGui and playerGui:FindFirstChild("CoreHud")
+    local playerInfo = coreHud and coreHud:FindFirstChild("PlayerInfo")
+    local bars = playerInfo and playerInfo:FindFirstChild("Bars")
+    local stamina = bars and bars:FindFirstChild("Stamina")
+
+    if not stamina then return end
+
+    local amount = stamina:FindFirstChild("Amount")
+    if amount and amount:IsA("TextLabel") then
+        amount.Text = "100/100"
+    end
+
+    local bar = stamina:FindFirstChild("Bar")
+    local clipping = bar and bar:FindFirstChild("Clipping")
+
+    if clipping then
+        clipping.Size = UDim2.fromScale(1, 1)
+
+        local top = clipping:FindFirstChild("Top")
+        if top then
+            top.Size = UDim2.fromScale(1, 1)
+        end
+    end
+end
+
+local function bindStaminaCharacter(character)
+    disconnectStamina()
+    if not infiniteStaminaOn or not character then return end
+
+    character:SetAttribute("StaminaDisabled", true)
+
+    table.insert(staminaConnections, character.AttributeChanged:Connect(function(attribute)
+        if infiniteStaminaOn and attribute == "StaminaDisabled" and character:GetAttribute("StaminaDisabled") ~= true then
+            character:SetAttribute("StaminaDisabled", true)
+        end
+    end))
+
+    task.spawn(function()
+        while infiniteStaminaOn and character.Parent and player.Character == character do
+            updateStaminaVisuals()
+            task.wait(0.1)
+        end
+    end)
+end
+
+local function enableInfiniteStamina()
+    if player.Character then
+        bindStaminaCharacter(player.Character)
+    end
+    if not staminaCharAddedConn then
+        staminaCharAddedConn = player.CharacterAdded:Connect(function(newChar)
+            if infiniteStaminaOn then
+                bindStaminaCharacter(newChar)
+            end
+        end)
+    end
+end
+
+local function disableInfiniteStamina()
+    disconnectStamina()
+    if staminaCharAddedConn then
+        staminaCharAddedConn:Disconnect()
+        staminaCharAddedConn = nil
+    end
+    local character = player.Character
+    if character then
+        character:SetAttribute("StaminaDisabled", nil)
+    end
+end
+
+UtilityTab:CreateToggle({
+    Name = "Infinite Stamina",
+    CurrentValue = false,
+    Callback = function(value)
+        infiniteStaminaOn = value
+        if value then
+            enableInfiniteStamina()
+        else
+            disableInfiniteStamina()
+        end
+    end,
+})
+
+-- TpWalk
 local tpwalkOn = false
 local speed = 1
 
@@ -1085,6 +1187,7 @@ RS.Heartbeat:Connect(function()
     end
 end)
 
+-- Safe Platform TP
 local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
 local platform
 
@@ -1106,6 +1209,7 @@ UtilityTab:CreateButton({
         hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
     end,
 })
+
 --------------------------------------------------------------------------------
 -- PART 5: PROTECTION & TELEPORTER (REUSABLE AUTO-PROTECTION PINNING)
 --------------------------------------------------------------------------------
