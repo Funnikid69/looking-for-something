@@ -171,6 +171,8 @@ local SURVIVOR_WHITELIST = {
     ["noob"]          = "Noob",
     ["taph"]          = "Taph",
     ["builderman"]    = "Builderman",
+    ["helperbot"]     = "Helperbot",
+    ["torchwood"]     = "Torchwood",
 }
 
 local KILLER_CLASSES = {
@@ -185,6 +187,7 @@ local KILLER_CLASSES = {
     ["johndoe"]         = true,
     ["azure"]           = true,
     ["shedletskyfunny"] = true,
+    ["doombringer"]     = "Doombringer",
 }
 
 local function isLocalPlayerKiller()
@@ -452,28 +455,16 @@ AutoFarmTab:CreateDropdown({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 1): ROLES, MINIONS & GENERATOR ESP
+-- PART 3 (SECTION 1): SURVIVOR & KILLER ESP
 --------------------------------------------------------------------------------
 
-local espOn = false
-local minionEspOn = false
-local zombieEspOn = false
-local generatorEspOn = false
-local itemEspOn = false
-local crateEspOn = false
+local survivorEspOn = false
+local killerEspOn = false
 
-local activeESP = {}
-local activeMinionESP = {}
-local activeZombieESP = {}
-local activeGenESP = {}
-local activeItemESP = {}
-local activeCrateESP = {}
-
-local SURVIVOR_CLASSES = {
+local SURVIVOR_DATA = {
     ["guest1337"]     = "Guest 1337",
     ["shedletsky"]    = "Shedletsky",
     ["dusekkar"]      = "Dusekkar",
-    ["martialartist"] = "Martial Artist",
     ["chance"]        = "Chance",
     ["twotime"]       = "TwoTime",
     ["007n7"]         = "007n7",
@@ -484,12 +475,17 @@ local SURVIVOR_CLASSES = {
     ["noob"]          = "Noob",
     ["taph"]          = "Taph",
     ["builderman"]    = "Builderman",
+    ["helperbot"]     = "Helperbot",
+    ["torchwood"]     = "Torchwood",
 }
 
-local KILLER_CLASSES = {
+local KILLER_DATA = {
     ["slasher"]         = "Slasher",
     ["jason"]           = "Jason",
+    ["coolkid"]         = "c00lkidd",
     ["c00lkidd"]        = "c00lkidd",
+    ["coolkidrework"]   = "c00lkidd",
+    ["1x4"]             = "1x1x1x1",
     ["1x1x1x1"]         = "1x1x1x1",
     ["noli"]            = "Noli",
     ["swordsmaster"]    = "Swordsmaster",
@@ -497,370 +493,164 @@ local KILLER_CLASSES = {
     ["2011x"]           = "2011x",
     ["johndoe"]         = "John Doe",
     ["azure"]           = "Azure",
-    ["shedletskyfunny"] = "ShedletskyFunny",
+    ["shedletskyfunny"] = "Shedletsky (Killer)",
+    ["doombringer"]     = "Doombringer",
 }
 
-local MAP_BLACKLIST = {
-    ["map"]        = true,
-    ["ingame"]     = true,
-    ["workspace"]  = true,
-    ["generators"] = true,
-    ["generator"]  = true,
-    ["spawns"]     = true,
-    ["lobby"]      = true,
-    ["terrain"]    = true,
-}
+local function getCharacterRoleInfo(char)
+    if not char then return "Survivor", "Unknown" end
+    local raw = char:GetAttribute("Character")
+        or char:GetAttribute("CharacterType")
+        or char:GetAttribute("Role")
+        or char.Name
+    local key = string.lower(tostring(raw))
 
-local function getRoleInfo(targetChar)
-    if not targetChar then return nil end
-    local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType") or targetChar.Name
-    local charKey = string.lower(tostring(rawCharType))
+    if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
+    if key == "1x1x1x1" then key = "1x4" end
 
-    if charKey == "coolkid" then charKey = "c00lkidd" end
-    if charKey == "1x4" then charKey = "1x1x1x1" end
-
-    if SURVIVOR_CLASSES[charKey] then
-        return Color3.fromRGB(0, 150, 255), "Survivor", SURVIVOR_CLASSES[charKey]
-    elseif KILLER_CLASSES[charKey] then
-        return Color3.fromRGB(255, 35, 35), "Killer", KILLER_CLASSES[charKey]
+    if KILLER_DATA[key] then
+        return "Killer", KILLER_DATA[key]
+    elseif SURVIVOR_DATA[key] then
+        return "Survivor", SURVIVOR_DATA[key]
     end
 
-    return Color3.fromRGB(0, 150, 255), "Survivor", targetChar.Name
+    return "Survivor", (raw ~= "" and tostring(raw) or "Survivor")
 end
 
-local function removeESP(plr)
-    if activeESP[plr] then
-        if activeESP[plr].Highlight then activeESP[plr].Highlight:Destroy() end
-        if activeESP[plr].Billboard then activeESP[plr].Billboard:Destroy() end
-        if activeESP[plr].Connection then activeESP[plr].Connection:Disconnect() end
-        activeESP[plr] = nil
+local function cleanEspFromCharacter(char)
+    if not char then return end
+    local hl = char:FindFirstChild("ESPHighlight")
+    if hl then hl:Destroy() end
+
+    local head = char:FindFirstChild("Head")
+    if head then
+        local bb = head:FindFirstChild("ESPBillboard")
+        if bb then bb:Destroy() end
     end
 end
 
-local function applyESP(plr)
-    if plr == player then return end
-    removeESP(plr)
+local function applyEspToCharacter(plr)
+    if plr == player or not plr.Character then return end
+    local char = plr.Character
+    local head = char:WaitForChild("Head", 3)
+    local root = char:WaitForChild("HumanoidRootPart", 3)
+    local hum = char:WaitForChild("Humanoid", 3)
+    if not head or not root or not hum then return end
 
-    local function setupChar(targetChar)
-        if not targetChar then return end
-        local root = targetChar:WaitForChild("HumanoidRootPart", 5)
-        local targetHum = targetChar:WaitForChild("Humanoid", 5)
-        local head = targetChar:WaitForChild("Head", 5) or root
-        if not root or not targetHum then return end
+    local role, displayName = getCharacterRoleInfo(char)
+    local isKiller = (role == "Killer")
 
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "ESP_Highlight"
-        highlight.FillTransparency = 0.5
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.OutlineTransparency = 0
-        highlight.Adornee = targetChar
-        highlight.Enabled = false
-        highlight.Parent = targetChar
-
-        local billboard = Instance.new("BillboardGui")
-        billboard.Name = "ESP_Billboard"
-        billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 220, 0, 30)
-        billboard.StudsOffset = Vector3.new(0, 3, 0)
-        billboard.Adornee = head
-        billboard.Enabled = false
-        billboard.Parent = targetChar
-
-        local label = Instance.new("TextLabel", billboard)
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.TextStrokeTransparency = 0
-        label.Font = Enum.Font.SourceSansBold
-        label.TextSize = 13
-
-        local conn = RS.RenderStepped:Connect(function()
-            if not espOn or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
-                highlight.Enabled = false
-                billboard.Enabled = false
-                return
-            end
-
-            local roleColor, roleName, className = getRoleInfo(targetChar)
-            highlight.FillColor = roleColor
-            label.TextColor3 = roleColor
-            highlight.Enabled = true
-            billboard.Enabled = true
-            label.Text = string.format("%s [%s - %s] | %d HP", plr.Name, className, roleName, math.floor(targetHum.Health))
-        end)
-
-        activeESP[plr] = {
-            Highlight = highlight,
-            Billboard = billboard,
-            Connection = conn
-        }
+    if isKiller and not killerEspOn then
+        cleanEspFromCharacter(char)
+        return
+    end
+    if not isKiller and not survivorEspOn then
+        cleanEspFromCharacter(char)
+        return
     end
 
-    if plr.Character then setupChar(plr.Character) end
-    plr.CharacterAdded:Connect(setupChar)
-end
+    local themeColor = isKiller and Color3.fromRGB(255, 35, 35) or Color3.fromRGB(0, 255, 140)
 
---// C00LKIDD MINION ESP (ORANGE)
-local function removeMinionESP(minion)
-    if activeMinionESP[minion] then
-        if activeMinionESP[minion].Highlight then activeMinionESP[minion].Highlight:Destroy() end
-        if activeMinionESP[minion].Billboard then activeMinionESP[minion].Billboard:Destroy() end
-        if activeMinionESP[minion].Connection then activeMinionESP[minion].Connection:Disconnect() end
-        activeMinionESP[minion] = nil
-    end
-end
+    -- Highlight
+    local hl = char:FindFirstChild("ESPHighlight") or Instance.new("Highlight")
+    hl.Name = "ESPHighlight"
+    hl.Adornee = char
+    hl.FillColor = themeColor
+    hl.FillTransparency = 0.55
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.OutlineTransparency = 0.1
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = char
 
-local function applyMinionESP(minion)
-    if not minion or activeMinionESP[minion] then return end
-    if not minion:IsDescendantOf(workspace) then return end
+    -- Billboard Tag
+    local bb = head:FindFirstChild("ESPBillboard") or Instance.new("BillboardGui")
+    bb.Name = "ESPBillboard"
+    bb.Adornee = head
+    bb.Size = UDim2.new(0, 160, 0, 45)
+    bb.StudsOffset = Vector3.new(0, 2.5, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = head
 
-    local root = minion:WaitForChild("HumanoidRootPart", 3) or minion:FindFirstChildWhichIsA("BasePart")
-    local hum = minion:FindFirstChildOfClass("Humanoid")
-    local head = minion:FindFirstChild("Head") or root
-    if not root then return end
-
-    local minionColor = Color3.fromRGB(255, 130, 0)
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Minion_Highlight"
-    highlight.FillColor = minionColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0
-    highlight.Adornee = minion
-    highlight.Parent = minion
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Minion_Billboard"
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 180, 0, 26)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.Adornee = head
-    billboard.Parent = minion
-
-    local label = Instance.new("TextLabel", billboard)
+    local label = bb:FindFirstChild("InfoLabel") or Instance.new("TextLabel")
+    label.Name = "InfoLabel"
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
-    label.TextColor3 = minionColor
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = "c00lkidd Minion"
-
-    local conn = RS.RenderStepped:Connect(function()
-        if not minionEspOn or not minion:IsDescendantOf(workspace) or (hum and hum.Health <= 0) then
-            removeMinionESP(minion)
-        else
-            highlight.Enabled = true
-            billboard.Enabled = true
-            label.Text = hum and string.format("c00lkidd Minion | %d HP", math.floor(hum.Health)) or "c00lkidd Minion"
-        end
-    end)
-
-    activeMinionESP[minion] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Connection = conn
-    }
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.TextColor3 = themeColor
+    label.TextStrokeTransparency = 0.2
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Parent = bb
 end
 
-local function scanMinions()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "PizzaDeliveryRig" or obj.Name:find("PizzaDelivery")) then
-            applyMinionESP(obj)
-        end
-    end
-end
+local function updateEspLoop()
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
-local function clearAllMinionESP()
-    for minion, _ in pairs(activeMinionESP) do
-        removeMinionESP(minion)
-    end
-end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local c = p.Character
+            local hum = c:FindFirstChildOfClass("Humanoid")
+            local root = c:FindFirstChild("HumanoidRootPart")
+            local head = c:FindFirstChild("Head")
 
---// 1X1X1X1 ZOMBIE MINION ESP (DARK GREEN)
-local function removeZombieESP(zombie)
-    if activeZombieESP[zombie] then
-        if activeZombieESP[zombie].Highlight then activeZombieESP[zombie].Highlight:Destroy() end
-        if activeZombieESP[zombie].Billboard then activeZombieESP[zombie].Billboard:Destroy() end
-        if activeZombieESP[zombie].Connection then activeZombieESP[zombie].Connection:Disconnect() end
-        activeZombieESP[zombie] = nil
-    end
-end
+            if hum and root and head and hum.Health > 0 then
+                local role, disp = getCharacterRoleInfo(c)
+                local isKiller = (role == "Killer")
 
-local function applyZombieESP(zombie)
-    if not zombie or activeZombieESP[zombie] then return end
-    if not zombie:IsDescendantOf(workspace) then return end
-
-    local root = zombie:WaitForChild("HumanoidRootPart", 3) or zombie:FindFirstChildWhichIsA("BasePart")
-    local hum = zombie:FindFirstChildOfClass("Humanoid")
-    local head = zombie:FindFirstChild("Head") or root
-    if not root then return end
-
-    local darkGreenColor = Color3.fromRGB(0, 130, 45)
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Zombie_Highlight"
-    highlight.FillColor = darkGreenColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0
-    highlight.Adornee = zombie
-    highlight.Parent = zombie
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Zombie_Billboard"
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 180, 0, 26)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.Adornee = head
-    billboard.Parent = zombie
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = darkGreenColor
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = "1x1x1x1 Zombie"
-
-    local conn = RS.RenderStepped:Connect(function()
-        if not zombieEspOn or not zombie:IsDescendantOf(workspace) or (hum and hum.Health <= 0) then
-            removeZombieESP(zombie)
-        else
-            highlight.Enabled = true
-            billboard.Enabled = true
-            label.Text = hum and string.format("1x1x1x1 Zombie | %d HP", math.floor(hum.Health)) or "1x1x1x1 Zombie"
-        end
-    end)
-
-    activeZombieESP[zombie] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Connection = conn
-    }
-end
-
-local function scanZombies()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "1x1x1x1Zombie" or obj.Name:find("1x1x1x1Zombie")) then
-            applyZombieESP(obj)
-        end
-    end
-end
-
-local function clearAllZombieESP()
-    for zombie, _ in pairs(activeZombieESP) do
-        removeZombieESP(zombie)
-    end
-end
-
---// GENERATOR ESP (YELLOW / WHITE)
-local function removeGenESP(gen)
-    if activeGenESP[gen] then
-        if activeGenESP[gen].Highlight then activeGenESP[gen].Highlight:Destroy() end
-        if activeGenESP[gen].Billboard then activeGenESP[gen].Billboard:Destroy() end
-        if activeGenESP[gen].Connection then activeGenESP[gen].Connection:Disconnect() end
-        activeGenESP[gen] = nil
-    end
-end
-
-local function isGenFinished(genModel)
-    if genModel:GetAttribute("Completed") == true or genModel:GetAttribute("Finished") == true or genModel:GetAttribute("Done") == true then
-        return true
-    end
-    local progress = genModel:FindFirstChild("Progress")
-    if progress and (progress:IsA("NumberValue") or progress:IsA("IntValue")) then
-        if progress.Value >= 100 then return true end
-    end
-    return false
-end
-
-local function applyGenESP(genModel)
-    if not genModel or activeGenESP[genModel] then return end
-    if not genModel:IsDescendantOf(workspace) then return end
-
-    local mainPart = genModel:FindFirstChild("Main") or genModel.PrimaryPart or genModel:FindFirstChildWhichIsA("BasePart", true)
-    if not mainPart then return end
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Gen_Highlight"
-    highlight.FillTransparency = 0.5
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0
-    highlight.Adornee = genModel
-    highlight.Parent = genModel
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Gen_Billboard"
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 160, 0, 25)
-    billboard.StudsOffset = Vector3.new(0, 4, 0)
-    billboard.Adornee = mainPart
-    billboard.Parent = genModel
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextStrokeTransparency = 0
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-
-    local conn = RS.RenderStepped:Connect(function()
-        if not generatorEspOn or not genModel:IsDescendantOf(workspace) then
-            highlight.Enabled = false
-            billboard.Enabled = false
-            return
-        end
-
-        highlight.Enabled = true
-        billboard.Enabled = true
-
-        local completed = isGenFinished(genModel)
-        if completed then
-            local whiteColor = Color3.fromRGB(255, 255, 255)
-            highlight.FillColor = whiteColor
-            highlight.OutlineColor = whiteColor
-            label.TextColor3 = whiteColor
-            label.Text = "Generator [DONE]"
-        else
-            local yellowColor = Color3.fromRGB(255, 220, 0)
-            highlight.FillColor = yellowColor
-            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-            label.TextColor3 = yellowColor
-            
-            local progressVal = genModel:FindFirstChild("Progress")
-            if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
-                label.Text = string.format("Generator [%d%%]", math.floor(progressVal.Value))
+                if (isKiller and killerEspOn) or (not isKiller and survivorEspOn) then
+                    applyEspToCharacter(p)
+                    local bb = head:FindFirstChild("ESPBillboard")
+                    local lbl = bb and bb:FindFirstChild("InfoLabel")
+                    if lbl and myRoot then
+                        local dist = math.floor((myRoot.Position - root.Position).Magnitude)
+                        lbl.Text = string.format("%s\n[%s] - %d HP\n%dm", p.DisplayName, disp, math.floor(hum.Health), dist)
+                    end
+                else
+                    cleanEspFromCharacter(c)
+                end
             else
-                label.Text = "Generator"
+                cleanEspFromCharacter(c)
             end
         end
-    end)
-
-    activeGenESP[genModel] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Connection = conn
-    }
+    end
 end
 
-local function scanGenerators()
-    local map = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map")
-    local searchScope = map or workspace
+RS.Heartbeat:Connect(updateEspLoop)
 
-    for _, obj in ipairs(searchScope:GetDescendants()) do
-        if obj:IsA("Model") and (obj.Name == "Generator" or obj.Name:find("Generator")) and obj:FindFirstChild("Main") then
-            applyGenESP(obj)
+ESPTab:CreateSection("Player ESP")
+
+ESPTab:CreateToggle({
+    Name = "Survivors ESP",
+    CurrentValue = false,
+    Callback = function(value)
+        survivorEspOn = value
+        if not value then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= player and p.Character then
+                    local role = getCharacterRoleInfo(p.Character)
+                    if role ~= "Killer" then cleanEspFromCharacter(p.Character) end
+                end
+            end
         end
-    end
-end
+    end,
+})
 
-local function clearAllGenESP()
-    for gen, _ in pairs(activeGenESP) do
-        removeGenESP(gen)
-    end
-end
+ESPTab:CreateToggle({
+    Name = "Killers ESP",
+    CurrentValue = false,
+    Callback = function(value)
+        killerEspOn = value
+        if not value then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= player and p.Character then
+                    local role = getCharacterRoleInfo(p.Character)
+                    if role == "Killer" then cleanEspFromCharacter(p.Character) end
+                end
+            end
+        end
+    end,
+})
 --------------------------------------------------------------------------------
 -- PART 3 (SECTION 2): CRATE, ITEM ESP & UI TOGGLES
 --------------------------------------------------------------------------------
@@ -1173,16 +963,17 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4 (SECTION 1): COMBAT TAB (KILLER CAMLOCK), MOVEMENT & STEALTH MODS
+-- PART 4 (SECTION 1): COMBAT TAB (KILLER CAMLOCK GUI), MOVEMENT & STEALTH MODS
 --------------------------------------------------------------------------------
 
-local CAMERA_OFFSET = Vector3.new(0, 4.5, 10) 
-local TURN_SMOOTHNESS = 0.35
-local MAX_SURVIVOR_DISTANCE = 75
+local CoreGui = game:GetService("CoreGui")
 
-local isLocked = false
-local currentLockedSurvivor = nil
-local KillerCamlockToggle = nil
+--// CONFIGURATION
+local MAX_SURVIVOR_DISTANCE = 85
+local CAM_SMOOTHNESS = 0.22      -- Camera aim tracking speed
+local CHAR_SMOOTHNESS = 0.28     -- Character rotation speed
+local PREDICTION_FACTOR = 0.055  -- Velocity lead prediction
+local AIM_HEIGHT_OFFSET = 0.5    -- Torso / upper chest
 
 local SURVIVOR_WHITELIST = {
     ["guest1337"]     = "Guest 1337",
@@ -1198,12 +989,17 @@ local SURVIVOR_WHITELIST = {
     ["noob"]          = "Noob",
     ["taph"]          = "Taph",
     ["builderman"]    = "Builderman",
+    ["helperbot"]     = "Helperbot",
+    ["torchwood"]     = "Torchwood",
 }
 
 local KILLER_CLASSES = {
     ["slasher"]         = true,
     ["jason"]           = true,
+    ["coolkid"]         = true,
     ["c00lkidd"]        = true,
+    ["coolkidrework"]   = true,
+    ["1x4"]             = true,
     ["1x1x1x1"]         = true,
     ["noli"]            = true,
     ["swordsmaster"]    = true,
@@ -1212,21 +1008,104 @@ local KILLER_CLASSES = {
     ["johndoe"]         = true,
     ["azure"]           = true,
     ["shedletskyfunny"] = true,
+    ["doombringer"]     = true,
 }
 
---------------------------------------------------------------------------------
--- ROLE & TARGET VALIDATION HELPERS
---------------------------------------------------------------------------------
+--// STATE
+local isLocked = false
+local currentLockedSurvivor = nil
+
+--// CLEANUP PREVIOUS INSTANCES
+local GUI_NAME = "KillerCamlockUI"
+local oldGui = CoreGui:FindFirstChild(GUI_NAME) or (player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild(GUI_NAME))
+if oldGui then
+    oldGui:Destroy()
+end
+
+--// GUI CREATION
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = GUI_NAME
+screenGui.ResetOnSpawn = false
+screenGui.Enabled = false
+
+pcall(function() screenGui.Parent = CoreGui end)
+if not screenGui.Parent then screenGui.Parent = player:WaitForChild("PlayerGui") end
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 200, 0, 95)
+mainFrame.Position = UDim2.new(0.08, 0, 0.45, 0)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local header = Instance.new("TextLabel")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 32)
+header.Position = UDim2.new(0, 0, 0, 0)
+header.BackgroundColor3 = Color3.fromRGB(150, 15, 15)
+header.BorderSizePixel = 0
+header.Font = Enum.Font.GothamBold
+header.Text = "Killers Aimbot"
+header.TextColor3 = Color3.fromRGB(245, 245, 245)
+header.TextSize = 14
+header.Parent = mainFrame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 8)
+headerCorner.Parent = header
+
+local headerGradient = Instance.new("UIGradient")
+headerGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 5, 5)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 20, 20)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 5, 5)),
+})
+headerGradient.Parent = header
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(1, 0, 0, 52)
+toggleButton.Position = UDim2.new(0, 0, 0, 38)
+toggleButton.BackgroundColor3 = Color3.fromRGB(120, 10, 10)
+toggleButton.BorderSizePixel = 0
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Text = "Aimbot : Off"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextSize = 14
+toggleButton.AutoButtonColor = false
+toggleButton.Parent = mainFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 8)
+buttonCorner.Parent = toggleButton
+
+local buttonGradient = Instance.new("UIGradient")
+buttonGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 3, 3)),
+    ColorSequenceKeypoint.new(0.45, Color3.fromRGB(140, 15, 15)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 20, 20)),
+})
+buttonGradient.Parent = toggleButton
+
+--// HELPER FUNCTIONS
+local function getCharacterKey(targetChar)
+    if not targetChar then return "" end
+    local charType = targetChar:GetAttribute("Character")
+        or targetChar:GetAttribute("CharacterType")
+        or targetChar:GetAttribute("Role")
+        or targetChar.Name
+    local key = string.lower(tostring(charType))
+    if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
+    if key == "1x1x1x1" then key = "1x4" end
+    return key
+end
 
 local function isLocalPlayerKiller()
     local myChar = player.Character
     if not myChar then return false end
-    local charType = myChar:GetAttribute("Character") 
-        or myChar:GetAttribute("CharacterType") 
-        or myChar.Name
-    local key = string.lower(tostring(charType))
-    if key == "coolkid" then key = "c00lkidd" end
-    if key == "1x4" then key = "1x1x1x1" end
+    local key = getCharacterKey(myChar)
     return KILLER_CLASSES[key] == true
 end
 
@@ -1239,26 +1118,24 @@ local function isSurvivorAliveAndValid(p)
     local tRoot = tChar:FindFirstChild("HumanoidRootPart")
     if not tHum or not tRoot or tHum.Health <= 0 then return false end
 
-    local charType = tChar:GetAttribute("Character") 
-        or tChar:GetAttribute("CharacterType") 
-        or tChar.Name
-    local key = string.lower(tostring(charType))
-    if key == "coolkid" then key = "c00lkidd" end
-    if key == "1x4" then key = "1x1x1x1" end
-
-    -- Enforce survivor whitelist
+    local key = getCharacterKey(tChar)
     if not SURVIVOR_WHITELIST[key] then return false end
-
-    -- Target cannot be another killer
     if KILLER_CLASSES[key] then return false end
 
     return true
 end
 
--- Sticky Lock: Retains current target until eliminated/disconnected; enforces distance and whitelist
 local function getLockedOrClosestSurvivor()
     if currentLockedSurvivor and isSurvivorAliveAndValid(currentLockedSurvivor) then
-        return currentLockedSurvivor.Character
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local tRoot = currentLockedSurvivor.Character:FindFirstChild("HumanoidRootPart")
+        if myRoot and tRoot then
+            local dist = (myRoot.Position - tRoot.Position).Magnitude
+            if dist <= MAX_SURVIVOR_DISTANCE then
+                return currentLockedSurvivor.Character
+            end
+        end
     end
 
     currentLockedSurvivor = nil
@@ -1290,6 +1167,77 @@ end
 Players.PlayerRemoving:Connect(function(leavingPlayer)
     if currentLockedSurvivor == leavingPlayer then
         currentLockedSurvivor = nil
+    end
+end)
+
+--// CAMLOCK LOGIC
+local function disableLock()
+    isLocked = false
+    currentLockedSurvivor = nil
+    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
+    toggleButton.Text = "Aimbot : Off"
+end
+
+local function enableLock()
+    isLocked = true
+    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
+    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value + 1, function()
+        if not isLocked then return end
+
+        if not isLocalPlayerKiller() then
+            toggleButton.Text = "Not a Killer"
+            currentLockedSurvivor = nil
+            return
+        end
+
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        if not myRoot or not myHum or myHum.Health <= 0 then return end
+
+        local targetChar = getLockedOrClosestSurvivor()
+        if not targetChar then
+            toggleButton.Text = "No players nearby"
+            return
+        end
+
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+        if not targetRoot or not targetHum or targetHum.Health <= 0 then
+            currentLockedSurvivor = nil
+            toggleButton.Text = "No players nearby"
+            return
+        end
+
+        toggleButton.Text = "Aimbot : On"
+
+        local myPos = myRoot.Position
+        local targetPos = targetRoot.Position
+
+        local targetVelocity = targetRoot.AssemblyLinearVelocity or targetRoot.Velocity or Vector3.zero
+        local aimTarget = targetPos + Vector3.new(0, AIM_HEIGHT_OFFSET, 0) + (targetVelocity * PREDICTION_FACTOR)
+
+        local currentCamPos = camera.CFrame.Position
+        local aimDir = (aimTarget - currentCamPos)
+
+        if aimDir.Magnitude > 0.1 then
+            local targetCamCF = CFrame.lookAt(currentCamPos, aimTarget)
+            camera.CFrame = camera.CFrame:Lerp(targetCamCF, CAM_SMOOTHNESS)
+
+            local flatDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
+            if flatDiff.Magnitude > 0.5 then
+                local charGoalCF = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+                myRoot.CFrame = myRoot.CFrame:Lerp(charGoalCF, CHAR_SMOOTHNESS)
+            end
+        end
+    end)
+end
+
+toggleButton.MouseButton1Click:Connect(function()
+    if isLocked then
+        disableLock()
+    else
+        enableLock()
     end
 end)
 
@@ -1345,78 +1293,28 @@ CombatTab:CreateSlider({
     end,
 })
 
---// KILLER STICKY CAMLOCK
-local function disableLock()
-    isLocked = false
-    currentLockedSurvivor = nil
-    RS:UnbindFromRenderStep("KillerCamlockLoop")
-end
-
-local function enableLock()
-    isLocked = true
-    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value + 1, function()
-        if not isLocked then return end
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-
-        local targetChar = getLockedOrClosestSurvivor()
-        if targetChar then
-            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-            if targetRoot then
-                local myPos = myRoot.Position
-                local targetPos = targetRoot.Position
-                local targetAimPos = targetPos + Vector3.new(0, 1.5, 0)
-                
-                -- Smoothly face character towards target
-                local charLookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-                myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.lookAt(myPos, charLookTarget), TURN_SMOOTHNESS)
-                
-                -- Smoothly position camera behind player focusing target
-                local flatDirection = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z).Unit
-                if flatDirection.Magnitude == 0 then flatDirection = Vector3.new(0, 0, 1) end
-                local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
-                camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
-            end
-        end
-    end)
-end
-
 CombatTab:CreateSection("Combat Utility")
 
-KillerCamlockToggle = CombatTab:CreateToggle({
+CombatTab:CreateToggle({
     Name = "Killer Camlock",
     CurrentValue = false,
     Callback = function(value)
         if value then
             if not isLocalPlayerKiller() then
                 task.spawn(function()
-                    if KillerCamlockToggle then
-                        KillerCamlockToggle:Set(false)
-                    end
+                    Rayfield:Notify({
+                        Title = "Camlock Error",
+                        Content = "You're not a killer!",
+                        Duration = 3,
+                        Image = 4483362458,
+                    })
                 end)
-                Rayfield:Notify({
-                    Title = "Camlock Error",
-                    Content = "You're not a killer!",
-                    Duration = 3,
-                    Image = 4483362458,
-                })
-                return
             end
-
-            local target = getLockedOrClosestSurvivor()
-            if not target then
-                Rayfield:Notify({
-                    Title = "Camlock",
-                    Content = "No whitelisted survivors nearby to lock onto!",
-                    Duration = 3,
-                    Image = 4483362458,
-                })
-            end
-
+            screenGui.Enabled = true
             enableLock()
         else
             disableLock()
+            screenGui.Enabled = false
         end
     end,
 })
@@ -1458,7 +1356,7 @@ RS.Heartbeat:Connect(function()
     end
 end)
 
---// INVISIBILITY (DISAPPEAR CORE WITH AGGRESSIVE OVERRIDE)
+--// INVISIBILITY
 UtilityTab:CreateSection("Stealth Mods")
 
 local invisOn = false
@@ -1496,14 +1394,8 @@ local function applyInvisState(state)
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
     if not state then
-        if invisNoclipConn then
-            invisNoclipConn:Disconnect()
-            invisNoclipConn = nil
-        end
-        if invisCamConn then
-            invisCamConn:Disconnect()
-            invisCamConn = nil
-        end
+        if invisNoclipConn then invisNoclipConn:Disconnect() invisNoclipConn = nil end
+        if invisCamConn then invisCamConn:Disconnect() invisCamConn = nil end
 
         if invisAnimTrack then
             pcall(function()
@@ -1514,9 +1406,7 @@ local function applyInvisState(state)
         end
 
         pcall(function()
-            if myHum then
-                workspace.CurrentCamera.CameraSubject = myHum
-            end
+            if myHum then workspace.CurrentCamera.CameraSubject = myHum end
         end)
     else
         local function noclipStep()
@@ -1587,14 +1477,12 @@ UtilityTab:CreateToggle({
     end,
 })
 
-player.CharacterAdded:Connect(function(newChar)
+player.CharacterAdded:Connect(function()
     task.wait(0.3)
-    if invisOn then
-        applyInvisState(true)
-    end
+    if invisOn then applyInvisState(true) end
 end)
 --------------------------------------------------------------------------------
--- PART 4 (SECTION 2): STAMINA, DISRUPTION & GENERATOR AUTOMATION
+-- PART 4 (SECTION 2): STAMINA, DISRUPTION & FIXED AUTO GENERATOR
 --------------------------------------------------------------------------------
 
 --// INFINITE STAMINA (GETGC MAINMODULE LOCK)
@@ -1788,11 +1676,10 @@ UtilityTab:CreateToggle({
     end,
 })
 
---// GENERATOR AUTOMATION & SMART TELEPORT
+--// MULTI-PUZZLE CONTINUOUS AUTO GENERATOR
 UtilityTab:CreateSection("Generator Automation")
 
 local AutoGenEnabled = false
-local AutoGenCooldown = 1.5 -- Default fixed cooldown
 local CurrentGenIndex = 1
 
 local function GetGameMap()
@@ -1883,32 +1770,43 @@ local function TeleportToNextGen()
     end
 end
 
-local function RunTimedAutoGen()
+-- Solves and pumps the puzzle continuously until complete
+local function solveActivePuzzles()
     local localChar = player.Character
     local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
     local searchScope = GetGameMap()
-
     if not localRoot or not searchScope then return end
 
     for _, object in ipairs(searchScope:GetDescendants()) do
         if object:IsA("Model") and object.Name:lower():find("generator") and not isGenFinished(object) then
-            local mainPart = object:FindFirstChild("Main") or object.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-            if mainPart and (mainPart.Position - localRoot.Position).Magnitude <= 7.5 then
-                local remotes = object:FindFirstChild("Remotes")
-                local remoteEvent = remotes and remotes:FindFirstChildOfClass("RemoteEvent")
+            local mainPart = object:FindFirstChild("Main") or object.PrimaryPart or object:FindFirstChildWhichIsA("BasePart", true)
+            if mainPart and (mainPart.Position - localRoot.Position).Magnitude <= 8.5 then
+                
+                -- 1. Trigger interaction prompt if not seated / working
+                local prompt = object:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt and prompt.Enabled and fireproximityprompt then
+                    pcall(fireproximityprompt, prompt)
+                end
 
-                if not remoteEvent then
-                    for _, desc in ipairs(object:GetDescendants()) do
-                        if desc:IsA("RemoteEvent") then
-                            remoteEvent = desc
-                            break
+                -- 2. Fire generator event remotes
+                local remotes = object:FindFirstChild("Remotes")
+                if remotes then
+                    for _, rem in ipairs(remotes:GetChildren()) do
+                        if rem:IsA("RemoteEvent") then
+                            pcall(function() rem:FireServer() end)
+                            pcall(function() rem:FireServer(true) end)
+                            pcall(function() rem:FireServer("Progress") end)
+                        elseif rem:IsA("RemoteFunction") then
+                            pcall(function() rem:InvokeServer() end)
                         end
                     end
                 end
 
-                if remoteEvent then
-                    remoteEvent:FireServer()
-                    task.wait(AutoGenCooldown)
+                -- 3. Fallback scan for any deep RemoteEvent inside the generator model
+                for _, desc in ipairs(object:GetDescendants()) do
+                    if desc:IsA("RemoteEvent") and desc.Parent ~= remotes then
+                        pcall(function() desc:FireServer() end)
+                    end
                 end
             end
         end
@@ -1932,9 +1830,9 @@ UtilityTab:CreateButton({
 
 task.spawn(function()
     while true do
-        task.wait(0.1)
+        task.wait(1.5)
         if AutoGenEnabled then
-            pcall(RunTimedAutoGen)
+            pcall(solveActivePuzzles)
         end
     end
 end)
@@ -2428,7 +2326,7 @@ AntiTab:CreateToggle({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 8: AIM TAB (EXACT ANIMATION ID DETECTION, NO REMOTES)
+-- PART 8: AIM TAB (EVENT-DRIVEN INSTANT AIMBOT, ZERO MISS)
 --------------------------------------------------------------------------------
 
 local slasherAimbotOn = false
@@ -2449,7 +2347,9 @@ local KILLER_CLASSES = {
     ["slasher"]         = true,
     ["jason"]           = true,
     ["c00lkidd"]        = true,
+    ["coolkid"]         = true,
     ["1x1x1x1"]         = true,
+    ["1x4"]             = true,
     ["noli"]            = true,
     ["swordsmaster"]    = true,
     ["guest666"]        = true,
@@ -2459,9 +2359,10 @@ local KILLER_CLASSES = {
     ["shedletskyfunny"] = true,
 }
 
---------------------------------------------------------------------------------
--- TARGET ACQUISITION HELPERS
---------------------------------------------------------------------------------
+local function extractNumericId(rawAnimId)
+    if not rawAnimId then return "" end
+    return tostring(rawAnimId):match("%d+") or ""
+end
 
 local function isPlayerAlive(plr)
     if not plr or not plr.Character then return false end
@@ -2481,7 +2382,6 @@ local function isPlayerKiller(plr)
     return KILLER_CLASSES[key] == true
 end
 
--- Find the closest living survivor
 local function getClosestSurvivor()
     local myChar = player.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -2505,7 +2405,6 @@ local function getClosestSurvivor()
     return closest
 end
 
--- Find the active killer in the match
 local function getActiveKiller()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and isPlayerAlive(p) and isPlayerKiller(p) then
@@ -2515,48 +2414,82 @@ local function getActiveKiller()
     return nil
 end
 
---------------------------------------------------------------------------------
--- AIM SNAP MECHANIC
---------------------------------------------------------------------------------
+-- Active Snap & Track Loop (Locks for 0.45s so the attack connects reliably)
+local activeSnapThread = nil
 
-local function snapAimToTarget(targetChar)
+local function lockOntoTargetForDuration(targetChar, duration)
     if not targetChar then return end
     local myChar = player.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
     local targetHead = targetChar:FindFirstChild("Head") or targetRoot
-
     if not myRoot or not targetRoot then return end
 
-    -- Turn character horizontal orientation toward target
-    local flatTargetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
-    myRoot.CFrame = CFrame.lookAt(myRoot.Position, flatTargetPos)
-
-    -- Aim camera toward target head/torso
-    if camera then
-        local camPos = camera.CFrame.Position
-        camera.CFrame = CFrame.lookAt(camPos, targetHead.Position)
+    if activeSnapThread then
+        task.cancel(activeSnapThread)
+        activeSnapThread = nil
     end
+
+    activeSnapThread = task.spawn(function()
+        local startTime = os.clock()
+        while os.clock() - startTime < (duration or 0.45) do
+            if not targetChar:IsDescendantOf(workspace) or not myChar:IsDescendantOf(workspace) then break end
+            local myPos = myRoot.Position
+            local targetPos = targetRoot.Position
+
+            -- Instant snap orientation
+            myRoot.CFrame = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+
+            -- Direct lock camera center mass
+            if camera then
+                camera.CFrame = CFrame.lookAt(camera.CFrame.Position, targetHead.Position)
+            end
+
+            RS.RenderStepped:Wait()
+        end
+        activeSnapThread = nil
+    end)
 end
 
--- Extracts raw numeric asset ID from strings like "rbxassetid://12345" or web URLs
-local function extractNumericId(rawAnimId)
-    if not rawAnimId then return "" end
-    return tostring(rawAnimId):match("%d+") or ""
+-- Event-driven animation hooking: Triggers instantly on frame 1 of the attack
+local function hookHumanoidAnimations(humanoid)
+    if not humanoid then return end
+
+    humanoid.AnimationPlayed:Connect(function(track)
+        local animObj = track.Animation
+        local rawId = animObj and animObj.AnimationId or ""
+        local numericId = extractNumericId(rawId)
+
+        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] then
+            local target = getClosestSurvivor()
+            if target then
+                lockOntoTargetForDuration(target, 0.45)
+            end
+        elseif shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] then
+            local target = getActiveKiller()
+            if target then
+                lockOntoTargetForDuration(target, 0.45)
+            end
+        end
+    end)
 end
 
---------------------------------------------------------------------------------
--- LOCAL ANIMATION LISTENER (ZERO REMOTES)
---------------------------------------------------------------------------------
+-- Hook current and respawned character
+if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+    hookHumanoidAnimations(player.Character:FindFirstChildOfClass("Humanoid"))
+end
 
-local lastTriggerTime = 0
-local TRIGGER_COOLDOWN = 0.4 -- Prevents continuous snapping throughout the same attack
+player.CharacterAdded:Connect(function(c)
+    local hum = c:WaitForChild("Humanoid", 5)
+    if hum then
+        hookHumanoidAnimations(hum)
+    end
+end)
 
+-- Background scan fallback in case an animation track starts silently
 RS.Heartbeat:Connect(function()
     if not slasherAimbotOn and not shedletskyAimbotOn then return end
-
-    local now = os.clock()
-    if now - lastTriggerTime < TRIGGER_COOLDOWN then return end
+    if activeSnapThread then return end -- already tracking
 
     local myChar = player.Character
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -2567,28 +2500,18 @@ RS.Heartbeat:Connect(function()
         local rawId = animObj and animObj.AnimationId or ""
         local numericId = extractNumericId(rawId)
 
-        -- Slasher Aimbot (Behead / Slash IDs)
-        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] then
-            if track.TimePosition < 0.4 then
-                lastTriggerTime = now
-                local target = getClosestSurvivor()
-                if target then
-                    snapAimToTarget(target)
-                end
-                break
+        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] and track.TimePosition < 0.3 then
+            local target = getClosestSurvivor()
+            if target then
+                lockOntoTargetForDuration(target, 0.4)
             end
-        end
-
-        -- Shedletsky Slash Aimbot
-        if shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] then
-            if track.TimePosition < 0.4 then
-                lastTriggerTime = now
-                local target = getActiveKiller()
-                if target then
-                    snapAimToTarget(target)
-                end
-                break
+            break
+        elseif shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] and track.TimePosition < 0.3 then
+            local target = getActiveKiller()
+            if target then
+                lockOntoTargetForDuration(target, 0.4)
             end
+            break
         end
     end
 end)
