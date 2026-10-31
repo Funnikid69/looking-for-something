@@ -452,7 +452,7 @@ AutoFarmTab:CreateDropdown({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 1): UNIFIED ROLE ESP & MINIONS (PERFORMANCE-OPTIMIZED)
+-- PART 3 (SECTION 1): UNIFIED ROLE ESP & DYNAMIC MINION ESP
 --------------------------------------------------------------------------------
 
 local espOn = false
@@ -500,8 +500,12 @@ local KILLER_CLASSES = {
     ["doombringer"]     = "Doombringer",
 }
 
+--------------------------------------------------------------------------------
+-- PLAYER ROLE ESP
+--------------------------------------------------------------------------------
+
 local function getRoleInfo(targetChar)
-    if not targetChar then return Color3.fromRGB(0, 150, 255), "Survivor", "Unknown" end
+    if not targetChar then return Color3.fromRGB(0, 160, 255), "Survivor", "Unknown" end
     local rawCharType = targetChar:GetAttribute("Character") 
         or targetChar:GetAttribute("CharacterType") 
         or targetChar:GetAttribute("Role")
@@ -587,10 +591,189 @@ local function applyESP(plr)
     plr.CharacterAdded:Connect(setupChar)
 end
 
--- Lightweight throttled update loop (5 Hz instead of every frame)
+--------------------------------------------------------------------------------
+-- C00LKIDD MINION ESP (ORANGE)
+--------------------------------------------------------------------------------
+
+local function isPizzaDeliveryMinion(model)
+    if not model or not model:IsA("Model") then return false end
+    local name = model.Name:lower()
+    return name == "pizzadeliveryrig" or name:find("pizzadelivery") or name:find("deliveryrig")
+end
+
+local function removeMinionESP(minion)
+    if activeMinionESP[minion] then
+        if activeMinionESP[minion].Highlight then activeMinionESP[minion].Highlight:Destroy() end
+        if activeMinionESP[minion].Billboard then activeMinionESP[minion].Billboard:Destroy() end
+        activeMinionESP[minion] = nil
+    end
+end
+
+local function applyMinionESP(minion)
+    if not minion or activeMinionESP[minion] or not minion:IsDescendantOf(workspace) then return end
+    local hum = minion:FindFirstChildOfClass("Humanoid")
+    local root = minion:FindFirstChild("HumanoidRootPart") or minion:FindFirstChildWhichIsA("BasePart")
+    local head = minion:FindFirstChild("Head") or root
+    if not root or not head then return end
+
+    local minionColor = Color3.fromRGB(255, 130, 0)
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Minion_Highlight"
+    highlight.FillColor = minionColor
+    highlight.FillTransparency = 0.4
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.1
+    highlight.Adornee = minion
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = minion
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Minion_Billboard"
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 150, 0, 26)
+    billboard.StudsOffset = Vector3.new(0, 2.8, 0)
+    billboard.Adornee = head
+    billboard.Parent = head
+
+    local label = Instance.new("TextLabel", billboard)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = minionColor
+    label.TextStrokeTransparency = 0.2
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 13
+    label.Text = hum and string.format("c00lkidd Minion | %d HP", math.floor(hum.Health)) or "c00lkidd Minion"
+
+    activeMinionESP[minion] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Label = label,
+        Humanoid = hum,
+        Model = minion
+    }
+end
+
+local function scanMinions()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if isPizzaDeliveryMinion(obj) and not activeMinionESP[obj] then
+            applyMinionESP(obj)
+        end
+    end
+end
+
+local function clearMinions()
+    for m, _ in pairs(activeMinionESP) do
+        removeMinionESP(m)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- 1X1X1X1 ZOMBIE ESP (DARK GREEN)
+--------------------------------------------------------------------------------
+
+local function is1x1x1x1Zombie(model)
+    if not model or not model:IsA("Model") then return false end
+    local name = model.Name:lower()
+    return name == "1x1x1x1zombie" or name:find("1x1x1x1zombie") or (name:find("1x1x1x1") and name:find("zombie"))
+end
+
+local function removeZombieESP(zombie)
+    if activeZombieESP[zombie] then
+        if activeZombieESP[zombie].Highlight then activeZombieESP[zombie].Highlight:Destroy() end
+        if activeZombieESP[zombie].Billboard then activeZombieESP[zombie].Billboard:Destroy() end
+        activeZombieESP[zombie] = nil
+    end
+end
+
+local function applyZombieESP(zombie)
+    if not zombie or activeZombieESP[zombie] or not zombie:IsDescendantOf(workspace) then return end
+    local hum = zombie:FindFirstChildOfClass("Humanoid")
+    local root = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChildWhichIsA("BasePart")
+    local head = zombie:FindFirstChild("Head") or root
+    if not root or not head then return end
+
+    local zombieColor = Color3.fromRGB(0, 190, 60)
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "Zombie_Highlight"
+    highlight.FillColor = zombieColor
+    highlight.FillTransparency = 0.4
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.1
+    highlight.Adornee = zombie
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = zombie
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Zombie_Billboard"
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 150, 0, 26)
+    billboard.StudsOffset = Vector3.new(0, 2.8, 0)
+    billboard.Adornee = head
+    billboard.Parent = head
+
+    local label = Instance.new("TextLabel", billboard)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = zombieColor
+    label.TextStrokeTransparency = 0.2
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 13
+    label.Text = hum and string.format("1x1x1x1 Zombie | %d HP", math.floor(hum.Health)) or "1x1x1x1 Zombie"
+
+    activeZombieESP[zombie] = {
+        Highlight = highlight,
+        Billboard = billboard,
+        Label = label,
+        Humanoid = hum,
+        Model = zombie
+    }
+end
+
+local function scanZombies()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if is1x1x1x1Zombie(obj) and not activeZombieESP[obj] then
+            applyZombieESP(obj)
+        end
+    end
+end
+
+local function clearZombies()
+    for z, _ in pairs(activeZombieESP) do
+        removeZombieESP(z)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- EVENT LISTENERS & BACKGROUND REFRESH (INSTANT SPAWN DETECTION)
+--------------------------------------------------------------------------------
+
+workspace.DescendantAdded:Connect(function(descendant)
+    if minionEspOn and isPizzaDeliveryMinion(descendant) then
+        task.wait(0.1)
+        applyMinionESP(descendant)
+    elseif zombieEspOn and is1x1x1x1Zombie(descendant) then
+        task.wait(0.1)
+        applyZombieESP(descendant)
+    end
+end)
+
+workspace.DescendantRemoving:Connect(function(descendant)
+    if activeMinionESP[descendant] then
+        removeMinionESP(descendant)
+    elseif activeZombieESP[descendant] then
+        removeZombieESP(descendant)
+    end
+end)
+
+-- Low-overhead periodic loop (1.0s interval) to catch state & health updates
 task.spawn(function()
     while true do
-        task.wait(0.2)
+        task.wait(1.0)
+
         if espOn then
             for plr, data in pairs(activeESP) do
                 if data.Character and data.Character:IsDescendantOf(workspace) and data.Humanoid and data.Humanoid.Health > 0 then
@@ -603,98 +786,34 @@ task.spawn(function()
                 end
             end
         end
+
+        if minionEspOn then
+            scanMinions()
+            for minion, data in pairs(activeMinionESP) do
+                if not minion:IsDescendantOf(workspace) or (data.Humanoid and data.Humanoid.Health <= 0) then
+                    removeMinionESP(minion)
+                elseif data.Humanoid and data.Label then
+                    data.Label.Text = string.format("c00lkidd Minion | %d HP", math.floor(data.Humanoid.Health))
+                end
+            end
+        end
+
+        if zombieEspOn then
+            scanZombies()
+            for zombie, data in pairs(activeZombieESP) do
+                if not zombie:IsDescendantOf(workspace) or (data.Humanoid and data.Humanoid.Health <= 0) then
+                    removeZombieESP(zombie)
+                elseif data.Humanoid and data.Label then
+                    data.Label.Text = string.format("1x1x1x1 Zombie | %d HP", math.floor(data.Humanoid.Health))
+                end
+            end
+        end
     end
 end)
 
---// C00LKIDD MINION ESP
-local function removeMinionESP(minion)
-    if activeMinionESP[minion] then
-        if activeMinionESP[minion].Highlight then activeMinionESP[minion].Highlight:Destroy() end
-        if activeMinionESP[minion].Billboard then activeMinionESP[minion].Billboard:Destroy() end
-        activeMinionESP[minion] = nil
-    end
-end
-
-local function applyMinionESP(minion)
-    if not minion or activeMinionESP[minion] or not minion:IsDescendantOf(workspace) then return end
-    local head = minion:WaitForChild("Head", 2) or minion:FindFirstChildWhichIsA("BasePart")
-    if not head then return end
-
-    local minionColor = Color3.fromRGB(255, 130, 0)
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = minionColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.Adornee = minion
-    highlight.Parent = minion
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 140, 0, 24)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.Adornee = head
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = minionColor
-    label.TextStrokeTransparency = 0.2
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = "c00lkidd Minion"
-
-    activeMinionESP[minion] = { Highlight = highlight, Billboard = billboard }
-end
-
---// 1X1X1X1 ZOMBIE ESP
-local function removeZombieESP(zombie)
-    if activeZombieESP[zombie] then
-        if activeZombieESP[zombie].Highlight then activeZombieESP[zombie].Highlight:Destroy() end
-        if activeZombieESP[zombie].Billboard then activeZombieESP[zombie].Billboard:Destroy() end
-        activeZombieESP[zombie] = nil
-    end
-end
-
-local function applyZombieESP(zombie)
-    if not zombie or activeZombieESP[zombie] or not zombie:IsDescendantOf(workspace) then return end
-    local head = zombie:WaitForChild("Head", 2) or zombie:FindFirstChildWhichIsA("BasePart")
-    if not head then return end
-
-    local zombieColor = Color3.fromRGB(0, 180, 55)
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = zombieColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.Adornee = zombie
-    highlight.Parent = zombie
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 140, 0, 24)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.Adornee = head
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = zombieColor
-    label.TextStrokeTransparency = 0.2
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = "1x1x1x1 Zombie"
-
-    activeZombieESP[zombie] = { Highlight = highlight, Billboard = billboard }
-end
-
-local function clearMinions()
-    for m, _ in pairs(activeMinionESP) do removeMinionESP(m) end
-end
-
-local function clearZombies()
-    for z, _ in pairs(activeZombieESP) do removeZombieESP(z) end
-end
+--------------------------------------------------------------------------------
+-- RAYFIELD UI TOGGLES
+--------------------------------------------------------------------------------
 
 ESPTab:CreateSection("Player Visuals")
 
@@ -721,11 +840,7 @@ ESPTab:CreateToggle({
     Callback = function(value)
         minionEspOn = value
         if value then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Model") and (obj.Name == "PizzaDeliveryRig" or obj.Name:find("PizzaDelivery")) then
-                    applyMinionESP(obj)
-                end
-            end
+            scanMinions()
         else
             clearMinions()
         end
@@ -738,11 +853,7 @@ ESPTab:CreateToggle({
     Callback = function(value)
         zombieEspOn = value
         if value then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Model") and (obj.Name == "1x1x1x1Zombie" or obj.Name:find("1x1x1x1Zombie")) then
-                    applyZombieESP(obj)
-                end
-            end
+            scanZombies()
         else
             clearZombies()
         end
