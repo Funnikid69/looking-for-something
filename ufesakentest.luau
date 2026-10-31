@@ -171,6 +171,7 @@ local SURVIVOR_WHITELIST = {
     ["noob"]          = "Noob",
     ["taph"]          = "Taph",
     ["builderman"]    = "Builderman",
+    ["torchwood"]     = "Torchwood",
 }
 
 local KILLER_CLASSES = {
