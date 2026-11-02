@@ -144,11 +144,6 @@ local CoolkidAbilities = {
         ["LastUsed"] = 0,
         ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("CoolkidAttackRemote")
     },
-    ["Corrupt"] = {
-        ["Cooldown"] = 12,
-        ["LastUsed"] = 0,
-        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
-    },
     ["Walkspeed"] = {
         ["Cooldown"] = 1,
         ["LastUsed"] = 0,
@@ -158,7 +153,7 @@ local CoolkidAbilities = {
 
 local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
 local NOLI_AUTO_ABILITIES = { "AltAbility2" }
-local COOLKID_AUTO_ABILITIES = { "Attack", "Corrupt", "Walkspeed" }
+local COOLKID_AUTO_ABILITIES = { "Attack", "Walkspeed" }
 
 local autoFarmLowHpOn = false
 local autoFarmAllOn = false
@@ -228,7 +223,6 @@ local noliNovaRemote   = charRemotes and charRemotes:FindFirstChild("Noli") and 
 
 local coolkidFolder = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd"))
 local coolkidWalkspeedRemote = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
-local coolkidCorruptRemote   = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
 local coolkidAttackRemote    = coolkidFolder and coolkidFolder:FindFirstChild("CoolkidAttackRemote")
 
 local function castCharacterAction(actionName, targetPosition)
@@ -315,30 +309,6 @@ local function castCharacterAction(actionName, targetPosition)
                     task.spawn(function()
                         pcall(function()
                             coolkidWalkspeedRemote:FireServer()
-                        end)
-                    end)
-                end
-            end
-            return
-        end
-
-        -- Corrupt (Aimed at player target position)
-        if actionName == "Corrupt" then
-            if not coolkidCorruptRemote then
-                coolkidCorruptRemote = ckFolder and ckFolder:FindFirstChild("Corrupt")
-            end
-
-            if coolkidCorruptRemote then
-                local data = CoolkidAbilities and CoolkidAbilities["Corrupt"]
-                local now = os.clock()
-
-                if (not data) or (now - data.LastUsed >= data.Cooldown) then
-                    if data then data.LastUsed = now end
-
-                    local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-                    task.spawn(function()
-                        pcall(function()
-                            coolkidCorruptRemote:FireServer(aimPos, true)
                         end)
                     end)
                 end
