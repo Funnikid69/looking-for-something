@@ -139,10 +139,10 @@ local NoliAbilities = {
 }
 
 local CoolkidAbilities = {
-    ["Attack"] = {
-        ["Cooldown"] = 0.5,
+    ["Corrupt"] = {
+        ["Cooldown"] = 12,
         ["LastUsed"] = 0,
-        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("CoolkidAttackRemote")
+        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
     },
     ["Walkspeed"] = {
         ["Cooldown"] = 1,
@@ -153,7 +153,7 @@ local CoolkidAbilities = {
 
 local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
 local NOLI_AUTO_ABILITIES = { "AltAbility2" }
-local COOLKID_AUTO_ABILITIES = { "Attack", "Walkspeed" }
+local COOLKID_AUTO_ABILITIES = { "Corrupt", "Walkspeed" }
 
 local autoFarmLowHpOn = false
 local autoFarmAllOn = false
@@ -188,11 +188,12 @@ local function canUseCharacter()
     return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ACTION & AUTO-FARM SYSTEM (IDLE SAFE SPACE TELEPORT)
+-- PART 2: ACTION & AUTO-FARM SYSTEM (IDLE SAFE SPACE TELEPORT & PROTECTION)
 --------------------------------------------------------------------------------
 
 local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
 local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
+local SAFE_SPACE_TARGET = Vector3.new(MAP_CENTER.X, 5005, MAP_CENTER.Z)
 
 local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
 if not safeSpacePart then
@@ -215,6 +216,12 @@ local function teleportToSafeSpace()
     end
 end
 
+-- Reusable Low Health Protection Variables
+local lowHealthProtectionOn = false
+local healthThreshold = 50
+local isCurrentlyProtected = false
+local LowHealthToggle
+
 -- Remote Cache References (CharacterRemotes)
 local charRemotes = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
 
@@ -223,7 +230,7 @@ local noliNovaRemote   = charRemotes and charRemotes:FindFirstChild("Noli") and 
 
 local coolkidFolder = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd"))
 local coolkidWalkspeedRemote = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
-local coolkidAttackRemote    = coolkidFolder and coolkidFolder:FindFirstChild("CoolkidAttackRemote")
+local coolkidCorruptRemote   = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
 
 local function castCharacterAction(actionName, targetPosition)
     if not canUseCharacter() then return end
@@ -316,26 +323,23 @@ local function castCharacterAction(actionName, targetPosition)
             return
         end
 
-        -- Attack (M1 Attack Remote)
-        if actionName == "Attack" then
-            if not coolkidAttackRemote then
-                coolkidAttackRemote = ckFolder and ckFolder:FindFirstChild("CoolkidAttackRemote")
+        -- Corrupt (Aimed at player target position)
+        if actionName == "Corrupt" then
+            if not coolkidCorruptRemote then
+                coolkidCorruptRemote = ckFolder and ckFolder:FindFirstChild("Corrupt")
             end
 
-            if coolkidAttackRemote then
-                local data = CoolkidAbilities and CoolkidAbilities["Attack"]
+            if coolkidCorruptRemote then
+                local data = CoolkidAbilities and CoolkidAbilities["Corrupt"]
                 local now = os.clock()
 
                 if (not data) or (now - data.LastUsed >= data.Cooldown) then
                     if data then data.LastUsed = now end
 
+                    local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
                     task.spawn(function()
                         pcall(function()
-                            if targetPosition then
-                                coolkidAttackRemote:FireServer(targetPosition)
-                            else
-                                coolkidAttackRemote:FireServer()
-                            end
+                            coolkidCorruptRemote:FireServer(aimPos, true)
                         end)
                     end)
                 end
@@ -438,6 +442,61 @@ local function positionAtTarget(targetPlayer)
 end
 
 --------------------------------------------------------------------------------
+-- REUSABLE LOW HEALTH PROTECTION LOOP (AUTO-RETURN TO BASEPLATE)
+--------------------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if lowHealthProtectionOn and char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+
+            if humanoid and hrp and humanoid.Health > 0 then
+                if humanoid.Health <= healthThreshold then
+                    -- Disable auto farm options immediately
+                    if autoFarmLowHpOn then
+                        autoFarmLowHpOn = false
+                        if LowHpToggle then LowHpToggle:Set(false) end
+                    end
+                    if autoFarmAllOn then
+                        autoFarmAllOn = false
+                        if AllPlayersToggle then AllPlayersToggle:Set(false) end
+                    end
+                    currentLockedTarget = nil
+                    isCurrentlyWaitingInSafeSpace = false
+
+                    -- Ensure safe space baseplate exists
+                    if not safeSpacePart or not safeSpacePart.Parent then
+                        safeSpacePart = Instance.new("Part", workspace)
+                        safeSpacePart.Name = "SafeSpaceBaseplate"
+                        safeSpacePart.Size = Vector3.new(200, 5, 200)
+                        safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+                        safeSpacePart.Anchored = true
+                        safeSpacePart.Material = Enum.Material.SmoothPlastic
+                        safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
+                    end
+
+                    local dist = (hrp.Position - SAFE_SPACE_TARGET).Magnitude
+
+                    -- Snap to baseplate if knocked away or not there
+                    if not isCurrentlyProtected or dist > 25 then
+                        hrp.CFrame = CFrame.new(SAFE_SPACE_TARGET)
+                        isCurrentlyProtected = true
+                    end
+                else
+                    -- Reset condition: when health regenerates above threshold, release lock
+                    if isCurrentlyProtected then
+                        isCurrentlyProtected = false
+                    end
+                end
+            end
+        else
+            isCurrentlyProtected = false
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
 -- POSITIONING & ATTACK LOOPS WITH IDLE SAFE SPACE TELEPORT
 --------------------------------------------------------------------------------
 
@@ -475,17 +534,6 @@ RS.Heartbeat:Connect(function()
     end
 
     if not autoFarmLowHpOn and not autoFarmAllOn then return end
-
-    if hum and hum.Health <= 30 then
-        if autoFarmLowHpOn and LowHpToggle then LowHpToggle:Set(false) end
-        if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:Set(false) end
-        autoFarmLowHpOn = false
-        autoFarmAllOn = false
-        currentLockedTarget = nil
-        isCurrentlyWaitingInSafeSpace = false
-        teleportToSafeSpace()
-        return
-    end
 
     local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
     local targetP = currentLockedTarget
@@ -550,7 +598,7 @@ LowHpToggle = AutoFarmTab:CreateToggle({
     Name = "Auto Farm Low Health Players",
     CurrentValue = false,
     Callback = function(value)
-        if value and hum and hum.Health <= 30 then
+        if value and hum and hum.Health <= healthThreshold and lowHealthProtectionOn then
             autoFarmLowHpOn = false
             task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
             teleportToSafeSpace()
@@ -567,7 +615,7 @@ AllPlayersToggle = AutoFarmTab:CreateToggle({
     Name = "Auto Farm All Players",
     CurrentValue = false,
     Callback = function(value)
-        if value and hum and hum.Health <= 30 then
+        if value and hum and hum.Health <= healthThreshold and lowHealthProtectionOn then
             autoFarmAllOn = false
             task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
             teleportToSafeSpace()
@@ -595,7 +643,28 @@ AutoFarmTab:CreateDropdown({
     end,
 })
 
-AutoFarmTab:CreateSection("Emergency Safety")
+AutoFarmTab:CreateSection("Safety & Protection")
+
+LowHealthToggle = AutoFarmTab:CreateToggle({
+    Name = "Low Health Auto-Teleport",
+    CurrentValue = false,
+    Callback = function(value)
+        lowHealthProtectionOn = value
+        if not value then
+            isCurrentlyProtected = false
+        end
+    end,
+})
+
+AutoFarmTab:CreateSlider({
+    Name = "Health Threshold",
+    Range = {10, 80},
+    Increment = 5,
+    CurrentValue = 50,
+    Callback = function(value)
+        healthThreshold = value
+    end,
+})
 
 AutoFarmTab:CreateButton({
     Name = "Teleport to Safe Space",
