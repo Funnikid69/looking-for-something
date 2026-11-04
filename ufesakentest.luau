@@ -1136,17 +1136,16 @@ ESPTab:CreateToggle({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 4 (SECTION 1): COMBAT TAB (KILLER CAMLOCK GUI), MOVEMENT & STEALTH MODS
+-- PART 4 (SECTION 1): KILLER CAMLOCK SYSTEM & DYNAMIC GUI
 --------------------------------------------------------------------------------
 
 local CoreGui = game:GetService("CoreGui")
 
 --// CONFIGURATION
 local MAX_SURVIVOR_DISTANCE = 85
-local CAM_SMOOTHNESS = 0.22      -- Camera tracking lerp
-local CHAR_SMOOTHNESS = 0.28     -- Character horizontal lerp
-local PREDICTION_FACTOR = 0.055  -- Velocity prediction lead
-local AIM_HEIGHT_OFFSET = 0.5    -- Torso / chest offset
+local CAM_SMOOTHNESS = 0.38        -- Responsive tracking
+local CHAR_SMOOTHNESS = 0.45       -- Snappy body alignment for slash hitboxes
+local AIM_HEIGHT_OFFSET = 0.2      -- Center-mass chest alignment
 
 local SURVIVOR_WHITELIST = {
     ["guest1337"]     = "Guest 1337",
@@ -1188,9 +1187,26 @@ local KILLER_CLASSES = {
 local isLocked = false
 local currentLockedSurvivor = nil
 
---// CLEANUP PREVIOUS INSTANCES
+--// SAFE GUI PARENTING (Supports Mobile & PC Executors)
+local function getGuiContainer()
+    if gethui then
+        return gethui()
+    end
+    local canUseCore, _ = pcall(function()
+        local test = Instance.new("Folder")
+        test.Parent = CoreGui
+        test:Destroy()
+    end)
+    if canUseCore then
+        return CoreGui
+    end
+    return player:WaitForChild("PlayerGui")
+end
+
+local guiContainer = getGuiContainer()
 local GUI_NAME = "KillerCamlockUI"
-local oldGui = CoreGui:FindFirstChild(GUI_NAME) or (player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild(GUI_NAME))
+
+local oldGui = guiContainer:FindFirstChild(GUI_NAME)
 if oldGui then
     oldGui:Destroy()
 end
@@ -1200,14 +1216,13 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = GUI_NAME
 screenGui.ResetOnSpawn = false
 screenGui.Enabled = false
-
-pcall(function() screenGui.Parent = CoreGui end)
-if not screenGui.Parent then screenGui.Parent = player:WaitForChild("PlayerGui") end
+screenGui.Parent = guiContainer
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 95)
-mainFrame.Position = UDim2.new(0.08, 0, 0.45, 0)
+mainFrame.Size = UDim2.new(0, 190, 0, 92)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.BackgroundTransparency = 1
 mainFrame.Active = true
 mainFrame.Draggable = true
@@ -1215,14 +1230,14 @@ mainFrame.Parent = screenGui
 
 local header = Instance.new("TextLabel")
 header.Name = "Header"
-header.Size = UDim2.new(1, 0, 0, 32)
+header.Size = UDim2.new(1, 0, 0, 30)
 header.Position = UDim2.new(0, 0, 0, 0)
 header.BackgroundColor3 = Color3.fromRGB(150, 15, 15)
 header.BorderSizePixel = 0
 header.Font = Enum.Font.GothamBold
 header.Text = "Killers Aimbot"
 header.TextColor3 = Color3.fromRGB(245, 245, 245)
-header.TextSize = 14
+header.TextSize = 13
 header.Parent = mainFrame
 
 local headerCorner = Instance.new("UICorner")
@@ -1240,7 +1255,7 @@ headerGradient.Parent = header
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(1, 0, 0, 52)
-toggleButton.Position = UDim2.new(0, 0, 0, 38)
+toggleButton.Position = UDim2.new(0, 0, 0, 36)
 toggleButton.BackgroundColor3 = Color3.fromRGB(120, 10, 10)
 toggleButton.BorderSizePixel = 0
 toggleButton.Font = Enum.Font.GothamBold
@@ -1262,14 +1277,41 @@ buttonGradient.Color = ColorSequence.new({
 })
 buttonGradient.Parent = toggleButton
 
+--// TARGET WHITE DOT
+local targetDotGui = Instance.new("BillboardGui")
+targetDotGui.Name = "CamlockTargetDot"
+targetDotGui.Size = UDim2.new(0, 9, 0, 9)
+targetDotGui.AlwaysOnTop = true
+targetDotGui.Active = false
+targetDotGui.ResetOnSpawn = false
+targetDotGui.Enabled = false
+targetDotGui.Parent = screenGui
+
+local dotFrame = Instance.new("Frame")
+dotFrame.Size = UDim2.new(1, 0, 1, 0)
+dotFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+dotFrame.BorderSizePixel = 0
+dotFrame.Parent = targetDotGui
+
+local dotCorner = Instance.new("UICorner")
+dotCorner.CornerRadius = UDim.new(1, 0)
+dotCorner.Parent = dotFrame
+
+local dotStroke = Instance.new("UIStroke")
+dotStroke.Thickness = 1.2
+dotStroke.Color = Color3.fromRGB(0, 0, 0)
+dotStroke.Transparency = 0.4
+dotStroke.Parent = dotFrame
+
 --// HELPER FUNCTIONS
-local function getCharacterKey(targetChar)
-    if not targetChar then return "" end
-    local charType = targetChar:GetAttribute("Character")
-        or targetChar:GetAttribute("CharacterType")
-        or targetChar:GetAttribute("Role")
-        or targetChar.Name
+local function getCharacterKey(char)
+    if not char then return "" end
+    local charType = char:GetAttribute("Character")
+        or char:GetAttribute("CharacterType")
+        or char:GetAttribute("Role")
+        or char.Name
     local key = string.lower(tostring(charType))
+
     if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
     if key == "1x1x1x1" then key = "1x4" end
     return key
@@ -1298,6 +1340,7 @@ local function isSurvivorAliveAndValid(p)
     return true
 end
 
+--// TARGET ACQUISITION
 local function getLockedOrClosestSurvivor()
     if currentLockedSurvivor and isSurvivorAliveAndValid(currentLockedSurvivor) then
         local myChar = player.Character
@@ -1340,37 +1383,49 @@ end
 Players.PlayerRemoving:Connect(function(leavingPlayer)
     if currentLockedSurvivor == leavingPlayer then
         currentLockedSurvivor = nil
+        targetDotGui.Enabled = false
+        targetDotGui.Adornee = nil
     end
 end)
 
---// CAMLOCK LOGIC
+--// CAMLOCK LOOP CONTROLS
 local function disableLock()
     isLocked = false
     currentLockedSurvivor = nil
-    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
+    targetDotGui.Enabled = false
+    targetDotGui.Adornee = nil
+    pcall(function()
+        RS:UnbindFromRenderStep("KillerCamlockLoop")
+    end)
     toggleButton.Text = "Aimbot : Off"
 end
 
 local function enableLock()
     isLocked = true
-    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
-    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value + 1, function()
+    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value, function()
         if not isLocked then return end
 
         if not isLocalPlayerKiller() then
             toggleButton.Text = "Not a Killer"
             currentLockedSurvivor = nil
+            targetDotGui.Enabled = false
+            targetDotGui.Adornee = nil
             return
         end
 
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
         local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-        if not myRoot or not myHum or myHum.Health <= 0 then return end
+        if not myRoot or not myHum or myHum.Health <= 0 then
+            targetDotGui.Enabled = false
+            return
+        end
 
         local targetChar = getLockedOrClosestSurvivor()
         if not targetChar then
-            toggleButton.Text = "No players nearby"
+            toggleButton.Text = "Aimbot : No target"
+            targetDotGui.Enabled = false
+            targetDotGui.Adornee = nil
             return
         end
 
@@ -1378,27 +1433,36 @@ local function enableLock()
         local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
         if not targetRoot or not targetHum or targetHum.Health <= 0 then
             currentLockedSurvivor = nil
-            toggleButton.Text = "No players nearby"
+            toggleButton.Text = "Aimbot : No target"
+            targetDotGui.Enabled = false
+            targetDotGui.Adornee = nil
             return
         end
 
-        toggleButton.Text = "Aimbot : On"
+        toggleButton.Text = "Aimbot : On - Locked"
+
+        local adorneePart = targetChar:FindFirstChild("UpperTorso")
+            or targetChar:FindFirstChild("Torso")
+            or targetRoot
+        targetDotGui.Adornee = adorneePart
+        targetDotGui.Enabled = true
+
+        local currentCamera = workspace.CurrentCamera
+        if not currentCamera then return end
 
         local myPos = myRoot.Position
         local targetPos = targetRoot.Position
+        local aimTarget = targetPos + Vector3.new(0, AIM_HEIGHT_OFFSET, 0)
 
-        local targetVelocity = targetRoot.AssemblyLinearVelocity or targetRoot.Velocity or Vector3.zero
-        local aimTarget = targetPos + Vector3.new(0, AIM_HEIGHT_OFFSET, 0) + (targetVelocity * PREDICTION_FACTOR)
+        local camPos = currentCamera.CFrame.Position
+        local toAim = (aimTarget - camPos)
 
-        local currentCamPos = camera.CFrame.Position
-        local aimDir = (aimTarget - currentCamPos)
-
-        if aimDir.Magnitude > 0.1 then
-            local targetCamCF = CFrame.lookAt(currentCamPos, aimTarget)
-            camera.CFrame = camera.CFrame:Lerp(targetCamCF, CAM_SMOOTHNESS)
+        if toAim.Magnitude > 0.2 then
+            local targetCamCF = CFrame.lookAt(camPos, aimTarget)
+            currentCamera.CFrame = currentCamera.CFrame:Lerp(targetCamCF, CAM_SMOOTHNESS)
 
             local flatDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
-            if flatDiff.Magnitude > 0.5 then
+            if flatDiff.Magnitude > 0.4 then
                 local charGoalCF = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
                 myRoot.CFrame = myRoot.CFrame:Lerp(charGoalCF, CHAR_SMOOTHNESS)
             end
@@ -1406,6 +1470,7 @@ local function enableLock()
     end)
 end
 
+--// TOGGLE INTERACTION
 toggleButton.MouseButton1Click:Connect(function()
     if isLocked then
         disableLock()
@@ -1413,6 +1478,38 @@ toggleButton.MouseButton1Click:Connect(function()
         enableLock()
     end
 end)
+
+--// RAYFIELD COMBAT TAB BINDING
+CombatTab:CreateSection("Combat Utility")
+
+CombatTab:CreateToggle({
+    Name = "Killer Camlock",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            if not isLocalPlayerKiller() then
+                task.spawn(function()
+                    Rayfield:Notify({
+                        Title = "Camlock Error",
+                        Content = "You're not a killer!",
+                        Duration = 3,
+                        Image = 4483362458,
+                    })
+                end)
+            end
+            screenGui.Enabled = true
+            enableLock()
+        else
+            disableLock()
+            screenGui.Enabled = false
+        end
+    end,
+})
+--------------------------------------------------------------------------------
+-- PART 4 (SECTION 2): COMBAT ATTACKS & KILLER ABILITY CONTROLLERS
+--------------------------------------------------------------------------------
+
+local StarterGui = game:GetService("StarterGui")
 
 --// HITBOX EXPANDER / LUNGE BOOST
 local lungeBoostOn = false
@@ -1466,31 +1563,207 @@ CombatTab:CreateSlider({
     end,
 })
 
-CombatTab:CreateSection("Combat Utility")
+--// C00LKIDD WALKSPEED / CONTROLLABLE DASH
+local coolkiddDashOn = false
+local coolkiddDashResponsiveness = 100
+local coolkiddDashConn = nil
+
+local function hookRootForDash(char)
+    if not char then return end
+    local root = char:WaitForChild("HumanoidRootPart", 5)
+    local hum = char:WaitForChild("Humanoid", 5)
+    if not root or not hum then return end
+
+    if coolkiddDashConn then
+        coolkiddDashConn:Disconnect()
+        coolkiddDashConn = nil
+    end
+
+    coolkiddDashConn = root.ChildAdded:Connect(function(child)
+        if not coolkiddDashOn then return end
+        if not child:IsA("LinearVelocity") then return end
+
+        local parentName = char.Parent and char.Parent.Name:lower() or ""
+        local charName = char.Name:gsub("0", "o"):lower()
+        local isCoolkidd = (charName:find("coolkid") or charName:find("lkid")) or (char:GetAttribute("Character") and tostring(char:GetAttribute("Character")):lower():find("coolkid"))
+
+        if isCoolkidd and parentName:find("killer") then
+            local originalVelocity = child.LineDirection
+            local originalVelocityMag = child.LineDirection.Magnitude
+            if originalVelocityMag == 0 then originalVelocityMag = 1 end
+
+            local speedMultipliers = char:FindFirstChild("SpeedMultipliers")
+            if speedMultipliers then
+                for _, v in ipairs(speedMultipliers:GetChildren()) do
+                    if v.Name == "HinderedMovement" and v.Value == 0 then
+                        v.Value = 0.005
+                    end
+                end
+            end
+
+            local function updateVelocity(start)
+                if not coolkiddDashOn or not child.Parent then return end
+                local curCam = workspace.CurrentCamera
+
+                if hum.MoveDirection ~= Vector3.zero then
+                    child.LineDirection = child.LineDirection:Lerp(hum.MoveDirection * originalVelocityMag, coolkiddDashResponsiveness / 1000)
+                elseif curCam then
+                    local cameraDirection = Vector3.new(curCam.CFrame.LookVector.X, 0, curCam.CFrame.LookVector.Z)
+                    if cameraDirection.Magnitude > 0 then
+                        child.LineDirection = child.LineDirection:Lerp(cameraDirection.Unit * originalVelocityMag, coolkiddDashResponsiveness / 1000)
+                        if child.LineVelocity > 0 or start then
+                            root.CFrame = root.CFrame:Lerp(CFrame.lookAt(root.Position, root.Position + cameraDirection), start and 1 or 0.05)
+                        end
+                    end
+                else
+                    child.LineDirection = originalVelocity
+                end
+            end
+
+            updateVelocity(true)
+            local c1 = hum:GetPropertyChangedSignal("MoveDirection"):Connect(function() updateVelocity(false) end)
+            local c2
+            if workspace.CurrentCamera then
+                c2 = workspace.CurrentCamera:GetPropertyChangedSignal("CFrame"):Connect(function() updateVelocity(false) end)
+            end
+
+            child.Destroying:Once(function()
+                if c1 then c1:Disconnect() c1 = nil end
+                if c2 then c2:Disconnect() c2 = nil end
+            end)
+        end
+    end)
+end
+
+player.CharacterAdded:Connect(hookRootForDash)
+if player.Character then
+    task.spawn(function()
+        hookRootForDash(player.Character)
+    end)
+end
+
+--// NOLI VOIDRUSH CONTROLLER
+local noliControlOn = false
+
+local function tableValueFind(tbl, predicate, visited)
+    visited = visited or {}
+    if visited[tbl] then return nil end
+    visited[tbl] = true
+
+    for k, v in pairs(tbl) do
+        if predicate(k, v) then
+            return v, k, tbl
+        end
+        if type(v) == "table" then
+            local resVal, resKey, resParent = tableValueFind(v, predicate, visited)
+            if resKey then
+                return resVal, resKey, resParent
+            end
+        end
+    end
+    return nil
+end
+
+local function locateNoliConfig()
+    if getgenv and getgenv().NoliConfig and type(getgenv().NoliConfig) == "table" then
+        return getgenv().NoliConfig
+    end
+
+    if getgc then
+        for _, obj in ipairs(getgc(true)) do
+            if type(obj) == "table" and rawget(obj, "InitialTurnDuration") ~= nil and rawget(obj, "TurnSpeed") ~= nil then
+                if getgenv then getgenv().NoliConfig = obj end
+                return obj
+            end
+        end
+    end
+
+    for _, desc in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+        if desc:IsA("ModuleScript") and desc.Name:lower():find("noli") then
+            local success, res = pcall(require, desc)
+            if success and type(res) == "table" and (res.InitialTurnDuration or res.TurnSpeed) then
+                if getgenv then getgenv().NoliConfig = res end
+                return res
+            end
+        end
+    end
+
+    return nil
+end
+
+local function applyNoliControl(state, starting)
+    if not state and starting then return end
+    local noliConfig = locateNoliConfig()
+
+    if noliConfig then
+        local entries = {
+            {Name = "InitialTurnDuration", Value = 0.005, Default = 1.5},
+            {Name = "TurnSpeed", Value = 10000, Default = 1},
+            {Name = "InitialTurnMult", Value = 1000, Default = 6.6},
+        }
+
+        for _, entry in ipairs(entries) do
+            local currentVal, key, parentTable = tableValueFind(noliConfig, function(i, v)
+                return type(i) == "string" and i:find(entry.Name) and not i:find(entry.Name .. "OG")
+            end)
+
+            if key and parentTable then
+                if state then
+                    if not parentTable[key .. "OG"] then
+                        parentTable[key .. "OG"] = parentTable[key]
+                    end
+                    parentTable[key] = entry.Value
+                else
+                    parentTable[key] = parentTable[key .. "OG"] or entry.Default
+                end
+            end
+        end
+
+        local myChar = player.Character
+        if myChar and myChar.Parent and myChar.Parent.Name == "Killers" and not workspace:GetAttribute("NotifCD") then
+            StarterGui:SetCore("SendNotification", {
+                Title = "Information",
+                Text = "Changes only apply the time you become the killer",
+                Duration = 5
+            })
+            workspace:SetAttribute("NotifCD", true)
+            task.delay(10, function()
+                workspace:SetAttribute("NotifCD", nil)
+            end)
+        end
+    elseif not noliConfig and not starting then
+        StarterGui:SetCore("SendNotification", {
+            Title = "Information",
+            Text = "Failed to find Noli's Config Module",
+            Duration = 7
+        })
+    end
+end
+
+CombatTab:CreateSection("Killer Ability Controllers")
 
 CombatTab:CreateToggle({
-    Name = "Killer Camlock",
+    Name = "c00lkidd Walkspeed Controller",
     CurrentValue = false,
     Callback = function(value)
-        if value then
-            if not isLocalPlayerKiller() then
-                task.spawn(function()
-                    Rayfield:Notify({
-                        Title = "Camlock Error",
-                        Content = "You're not a killer!",
-                        Duration = 3,
-                        Image = 4483362458,
-                    })
-                end)
-            end
-            screenGui.Enabled = true
-            enableLock()
-        else
-            disableLock()
-            screenGui.Enabled = false
+        coolkiddDashOn = value
+        if value and player.Character then
+            hookRootForDash(player.Character)
         end
     end,
 })
+
+CombatTab:CreateToggle({
+    Name = "Noli Voidrush Controller",
+    CurrentValue = false,
+    Callback = function(value)
+        noliControlOn = value
+        applyNoliControl(value, false)
+    end,
+})
+--------------------------------------------------------------------------------
+-- PART 4 (SECTION 3): MOVEMENT, STEALTH, STAMINA & AUTO GENERATOR
+--------------------------------------------------------------------------------
 
 --// TPWALK
 UtilityTab:CreateSection("Movement Mods")
@@ -1654,9 +1927,6 @@ player.CharacterAdded:Connect(function()
     task.wait(0.3)
     if invisOn then applyInvisState(true) end
 end)
---------------------------------------------------------------------------------
--- PART 4 (SECTION 2): STAMINA, DISRUPTION & SAFE AUTO GENERATOR (1.5S COOLDOWN)
---------------------------------------------------------------------------------
 
 --// INFINITE STAMINA (GETGC MAINMODULE LOCK)
 UtilityTab:CreateSection("Stamina Mods")
@@ -2156,10 +2426,11 @@ ItemsTab:CreateButton({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 7: ANTI TAB (ANTI-SLOWNESS, NOLI NPC, JOHN DOE COUNTERS)
+-- PART 7: ANTI TAB (DEBUFF IMMUNITIES & KILLER COUNTERMEASURES)
 --------------------------------------------------------------------------------
 
 local Lighting = game:GetService("Lighting")
+local PlayerGui = player:WaitForChild("PlayerGui")
 
 local function getInGameFolder()
     return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
@@ -2172,7 +2443,9 @@ local function getKillersFolder()
     return (ingame and ingame:FindFirstChild("Killers")) or workspace:FindFirstChild("Killers")
 end
 
---// 1. ANTI SLOWNESS
+--------------------------------------------------------------------------------
+-- 1. ANTI SLOWNESS
+--------------------------------------------------------------------------------
 local antiSlownessEnabled = false
 
 local function checkSlownessInstance(valueInst)
@@ -2220,7 +2493,101 @@ end
 player.CharacterAdded:Connect(hookSpeedMultipliers)
 if player.Character then hookSpeedMultipliers(player.Character) end
 
---// 2. DISABLE NOLI NPC
+--------------------------------------------------------------------------------
+-- 2. ANTI BLINDNESS
+--------------------------------------------------------------------------------
+local AntiBlindness = { running = false, conn = nil }
+
+local function startAntiBlindness()
+    if AntiBlindness.running then return end
+    AntiBlindness.running = true
+
+    for _, obj in ipairs(Lighting:GetChildren()) do
+        if obj:IsA("BlurEffect") then 
+            pcall(function() obj:Destroy() end) 
+        end
+    end
+
+    AntiBlindness.conn = Lighting.ChildAdded:Connect(function(obj)
+        if not AntiBlindness.running then return end
+        if obj:IsA("BlurEffect") then 
+            pcall(function() obj:Destroy() end) 
+        end
+    end)
+end
+
+local function stopAntiBlindness()
+    AntiBlindness.running = false
+    if AntiBlindness.conn then 
+        AntiBlindness.conn:Disconnect() 
+        AntiBlindness.conn = nil 
+    end
+end
+
+--------------------------------------------------------------------------------
+-- 3. ANTI SUBSPACED
+--------------------------------------------------------------------------------
+local AntiSubspaced = { running = false, connections = {} }
+
+local function startAntiSubspaced()
+    if AntiSubspaced.running then return end
+    AntiSubspaced.running = true
+
+    local LIGHTING_TARGETS = {
+        ["SubspaceVFXBlur"] = true,
+        ["SubspaceVFXColorCorrection"] = true,
+        ["HealthDesaturation"] = true,
+    }
+    local UI_TARGETS = {
+        ["Subspaced"] = true,
+    }
+
+    local function isLightTarget(obj)
+        return LIGHTING_TARGETS[obj.Name] and obj:IsDescendantOf(Lighting)
+    end
+
+    local function isUITarget(obj)
+        if not UI_TARGETS[obj.Name] then return false end
+        local m = PlayerGui:FindFirstChild("MainUI")
+        local tu = PlayerGui:FindFirstChild("TemporaryUI")
+        if m then
+            local sc = m:FindFirstChild("StatusContainer")
+            if sc and obj:IsDescendantOf(sc) then return true end
+        end
+        if tu and obj:IsDescendantOf(tu) then return true end
+        return false
+    end
+
+    local function process(obj)
+        if not obj or not obj.Parent then return end
+        if isLightTarget(obj) or isUITarget(obj) then
+            pcall(function() obj:Destroy() end)
+        end
+    end
+
+    local function watch(root)
+        if not root then return end
+        table.insert(AntiSubspaced.connections, root.DescendantAdded:Connect(process))
+        for _, o in ipairs(root:GetDescendants()) do 
+            process(o) 
+        end
+    end
+
+    watch(Lighting)
+    watch(PlayerGui)
+end
+
+local function stopAntiSubspaced()
+    AntiSubspaced.running = false
+    for _, c in ipairs(AntiSubspaced.connections) do 
+        pcall(function() c:Disconnect() end) 
+    end
+    AntiSubspaced.connections = {}
+end
+
+--------------------------------------------------------------------------------
+-- 4. DISABLE NOLI NPC
+--------------------------------------------------------------------------------
 local disableNoliNPC = false
 
 local function handleNoliNPC(state)
@@ -2259,7 +2626,9 @@ if killersFolder then
     end)
 end
 
---// 3. DISABLE JOHN DOE FOOTPRINTS
+--------------------------------------------------------------------------------
+-- 5. DISABLE JOHN DOE FOOTPRINTS
+--------------------------------------------------------------------------------
 local disableFootprints = false
 
 local function handleFootprints(state)
@@ -2281,7 +2650,9 @@ local function handleFootprints(state)
     end
 end
 
---// 4. SMALLER SPIKE COLLISIONS
+--------------------------------------------------------------------------------
+-- 6. SMALLER SPIKE COLLISIONS
+--------------------------------------------------------------------------------
 local smallerSpikesEnabled = false
 
 local function updateSpikes(state)
@@ -2296,7 +2667,11 @@ local function updateSpikes(state)
     end
 end
 
-AntiTab:CreateSection("Movement & Debuffs")
+--------------------------------------------------------------------------------
+-- RAYFIELD ANTI TAB UI
+--------------------------------------------------------------------------------
+
+AntiTab:CreateSection("Debuff & Visual Immunities")
 
 AntiTab:CreateToggle({
     Name = "Anti Slowness",
@@ -2304,6 +2679,30 @@ AntiTab:CreateToggle({
     Callback = function(value)
         antiSlownessEnabled = value
         if value then applyAntiSlowness() end
+    end,
+})
+
+AntiTab:CreateToggle({
+    Name = "Anti Blindness",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            startAntiBlindness()
+        else
+            stopAntiBlindness()
+        end
+    end,
+})
+
+AntiTab:CreateToggle({
+    Name = "Anti Subspaced",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            startAntiSubspaced()
+        else
+            stopAntiSubspaced()
+        end
     end,
 })
 
