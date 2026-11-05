@@ -55,6 +55,72 @@ player.CharacterAdded:Connect(function(c)
     hum = c:WaitForChild("Humanoid")
 end)
 
+--// HIGH RANK & STAFF WATCHLIST DETECTOR
+local STAFF_GROUP_ID = 34755006
+local notifiedStaff = {}
+
+-- Specific role keywords to flag
+local FLAGGED_ROLE_KEYWORDS = {
+    "lead contributor",
+    "contributor",
+    "head moderator",
+    "moderator",
+    "admin",
+    "developer",
+    "owner",
+}
+
+local function isStaffOrHighRank(roleTitle, rankNumber)
+    if rankNumber >= 200 then return true end
+    local cleanRole = string.lower(tostring(roleTitle or ""))
+    for _, keyword in ipairs(FLAGGED_ROLE_KEYWORDS) do
+        if cleanRole:find(keyword) then
+            return true
+        end
+    end
+    return false
+end
+
+local function checkPlayerRank(targetPlayer)
+    if not targetPlayer or targetPlayer == player or notifiedStaff[targetPlayer.UserId] then return end
+
+    task.spawn(function()
+        local successRank, rank = pcall(function()
+            return targetPlayer:GetRankInGroup(STAFF_GROUP_ID)
+        end)
+        local successRole, roleTitle = pcall(function()
+            return targetPlayer:GetRoleInGroup(STAFF_GROUP_ID)
+        end)
+
+        if not successRank or not rank or rank == 0 then return end
+
+        if isStaffOrHighRank(roleTitle, rank) then
+            notifiedStaff[targetPlayer.UserId] = true
+
+            Rayfield:Notify({
+                Title = "⚠️ CAUGHT IN 4K! ⚠️",
+                Content = string.format("A MODERATOR IS OR HAS JOINED DO YOU WANNA KEEP PLAYING OR GET IN TROUBLE\n(%s - %s)", targetPlayer.DisplayName, roleTitle or "High Rank"),
+                Duration = 9,
+                Image = 4483362458,
+            })
+        end
+    end)
+end
+
+-- Check all players already in the server when you join/execute
+for _, p in ipairs(Players:GetPlayers()) do
+    checkPlayerRank(p)
+end
+
+-- Check any new high ranks that connect mid-game
+Players.PlayerAdded:Connect(function(newPlayer)
+    checkPlayerRank(newPlayer)
+end)
+
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    notifiedStaff[leavingPlayer.UserId] = nil
+end)
+
 --// GLOBAL CRATE SPAWN NOTIFICATION LISTENER
 local function isCrateObject(obj)
     if not obj or not obj:IsDescendantOf(workspace) then return false end
@@ -1506,10 +1572,8 @@ CombatTab:CreateToggle({
     end,
 })
 --------------------------------------------------------------------------------
--- PART 4 (SECTION 2): COMBAT ATTACKS & KILLER ABILITY CONTROLLERS
+-- PART 4 (SECTION 2): COMBAT ATTACKS & KILLER ABILITY CONTROLLER
 --------------------------------------------------------------------------------
-
-local StarterGui = game:GetService("StarterGui")
 
 --// HITBOX EXPANDER / LUNGE BOOST
 local lungeBoostOn = false
@@ -1642,104 +1706,6 @@ if player.Character then
     end)
 end
 
---// NOLI VOIDRUSH CONTROLLER
-local noliControlOn = false
-
-local function tableValueFind(tbl, predicate, visited)
-    visited = visited or {}
-    if visited[tbl] then return nil end
-    visited[tbl] = true
-
-    for k, v in pairs(tbl) do
-        if predicate(k, v) then
-            return v, k, tbl
-        end
-        if type(v) == "table" then
-            local resVal, resKey, resParent = tableValueFind(v, predicate, visited)
-            if resKey then
-                return resVal, resKey, resParent
-            end
-        end
-    end
-    return nil
-end
-
-local function locateNoliConfig()
-    if getgenv and getgenv().NoliConfig and type(getgenv().NoliConfig) == "table" then
-        return getgenv().NoliConfig
-    end
-
-    if getgc then
-        for _, obj in ipairs(getgc(true)) do
-            if type(obj) == "table" and rawget(obj, "InitialTurnDuration") ~= nil and rawget(obj, "TurnSpeed") ~= nil then
-                if getgenv then getgenv().NoliConfig = obj end
-                return obj
-            end
-        end
-    end
-
-    for _, desc in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-        if desc:IsA("ModuleScript") and desc.Name:lower():find("noli") then
-            local success, res = pcall(require, desc)
-            if success and type(res) == "table" and (res.InitialTurnDuration or res.TurnSpeed) then
-                if getgenv then getgenv().NoliConfig = res end
-                return res
-            end
-        end
-    end
-
-    return nil
-end
-
-local function applyNoliControl(state, starting)
-    if not state and starting then return end
-    local noliConfig = locateNoliConfig()
-
-    if noliConfig then
-        local entries = {
-            {Name = "InitialTurnDuration", Value = 0.005, Default = 1.5},
-            {Name = "TurnSpeed", Value = 10000, Default = 1},
-            {Name = "InitialTurnMult", Value = 1000, Default = 6.6},
-        }
-
-        for _, entry in ipairs(entries) do
-            local currentVal, key, parentTable = tableValueFind(noliConfig, function(i, v)
-                return type(i) == "string" and i:find(entry.Name) and not i:find(entry.Name .. "OG")
-            end)
-
-            if key and parentTable then
-                if state then
-                    if not parentTable[key .. "OG"] then
-                        parentTable[key .. "OG"] = parentTable[key]
-                    end
-                    parentTable[key] = entry.Value
-                else
-                    parentTable[key] = parentTable[key .. "OG"] or entry.Default
-                end
-            end
-        end
-
-        local myChar = player.Character
-        if myChar and myChar.Parent and myChar.Parent.Name == "Killers" and not workspace:GetAttribute("NotifCD") then
-            StarterGui:SetCore("SendNotification", {
-                Title = "Information",
-                Text = "Changes only apply the time you become the killer",
-                Duration = 5
-            })
-            workspace:SetAttribute("NotifCD", true)
-            task.delay(10, function()
-                workspace:SetAttribute("NotifCD", nil)
-            end)
-        end
-    elseif not noliConfig and not starting then
-        StarterGui:SetCore("SendNotification", {
-            Title = "Information",
-            Text = "Failed to find Noli's Config Module",
-            Duration = 7
-        })
-    end
-end
-
 CombatTab:CreateSection("Killer Ability Controllers")
 
 CombatTab:CreateToggle({
@@ -1750,15 +1716,6 @@ CombatTab:CreateToggle({
         if value and player.Character then
             hookRootForDash(player.Character)
         end
-    end,
-})
-
-CombatTab:CreateToggle({
-    Name = "Noli Voidrush Controller",
-    CurrentValue = false,
-    Callback = function(value)
-        noliControlOn = value
-        applyNoliControl(value, false)
     end,
 })
 --------------------------------------------------------------------------------
@@ -2732,292 +2689,5 @@ AntiTab:CreateToggle({
     Callback = function(value)
         smallerSpikesEnabled = value
         updateSpikes(value)
-    end,
-})
---------------------------------------------------------------------------------
--- PART 8: AIM TAB (STABLE, ANTI-GLITCH DEATH PROTECTION)
---------------------------------------------------------------------------------
-
-local slasherAimbotOn = false
-local shedletskyAimbotOn = false
-
-local SLASHER_ANIM_IDS = {
-    ["114384283102737"] = true, -- Slasher Behead
-    ["98906674546879"]  = true, -- Slasher Slash
-    ["120537271555083"] = true, -- Slasher Behead (Alt)
-}
-
-local SHEDLETSKY_ANIM_IDS = {
-    ["106976963660502"] = true, -- Shedletsky Slash
-}
-
-local SURVIVOR_WHITELIST = {
-    ["guest1337"]     = true,
-    ["shedletsky"]    = true,
-    ["dusekkar"]      = true,
-    ["chance"]        = true,
-    ["twotime"]       = true,
-    ["007n7"]         = true,
-    ["elliot"]        = true,
-    ["veeronica"]     = true,
-    ["janedoe"]       = true,
-    ["messi"]         = true,
-    ["noob"]          = true,
-    ["taph"]          = true,
-    ["builderman"]    = true,
-    ["helperbot"]     = true,
-    ["torchwood"]     = true,
-}
-
-local KILLER_CLASSES = {
-    ["slasher"]         = true,
-    ["jason"]           = true,
-    ["c00lkidd"]        = true,
-    ["coolkid"]         = true,
-    ["coolkidrework"]   = true,
-    ["1x1x1x1"]         = true,
-    ["1x4"]             = true,
-    ["noli"]            = true,
-    ["swordsmaster"]    = true,
-    ["guest666"]        = true,
-    ["2011x"]           = true,
-    ["johndoe"]         = true,
-    ["azure"]           = true,
-    ["shedletskyfunny"] = true,
-    ["doombringer"]     = true,
-}
-
-local function extractNumericId(rawAnimId)
-    if not rawAnimId then return "" end
-    return tostring(rawAnimId):match("%d+") or ""
-end
-
--- Validates that a Vector3 does not contain NaN or infinite values
-local function isVectorFinite(v)
-    if not v then return false end
-    return (v.X == v.X) and (v.Y == v.Y) and (v.Z == v.Z)
-        and (math.abs(v.X) < 1e6) and (math.abs(v.Y) < 1e6) and (math.abs(v.Z) < 1e6)
-end
-
-local function isPlayerAlive(plr)
-    if not plr or not plr.Character then return false end
-    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-    local root = plr.Character:FindFirstChild("HumanoidRootPart")
-    return hum and root and hum.Health > 0 and plr.Character:IsDescendantOf(workspace)
-end
-
-local function isPlayerKiller(plr)
-    if not plr or not plr.Character then return false end
-    local charType = plr.Character:GetAttribute("Character") 
-        or plr.Character:GetAttribute("CharacterType") 
-        or plr.Character:GetAttribute("Role")
-        or plr.Character.Name
-    local key = string.lower(tostring(charType))
-    if key == "coolkid" then key = "c00lkidd" end
-    if key == "1x4" then key = "1x1x1x1" end
-    return KILLER_CLASSES[key] == true
-end
-
-local function isPlayerWhitelistedSurvivor(plr)
-    if not plr or not plr.Character then return false end
-    local charType = plr.Character:GetAttribute("Character") 
-        or plr.Character:GetAttribute("CharacterType") 
-        or plr.Character:GetAttribute("Role")
-        or plr.Character.Name
-    local key = string.lower(tostring(charType))
-    return SURVIVOR_WHITELIST[key] == true and not KILLER_CLASSES[key]
-end
-
-local function getClosestSurvivor()
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local closest = nil
-    local shortestDist = 85
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and isPlayerAlive(p) and isPlayerWhitelistedSurvivor(p) then
-            local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
-            if tRoot then
-                local dist = (myRoot.Position - tRoot.Position).Magnitude
-                if dist < shortestDist then
-                    shortestDist = dist
-                    closest = p.Character
-                end
-            end
-        end
-    end
-    return closest
-end
-
-local function getActiveKiller()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and isPlayerAlive(p) and isPlayerKiller(p) then
-            return p.Character
-        end
-    end
-    return nil
-end
-
--- Active Snap & Track Loop with instant death break & NaN guards
-local activeSnapThread = nil
-
-local function lockOntoTargetForDuration(targetChar, duration)
-    if not targetChar then return end
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if not myRoot or not myHum or myHum.Health <= 0 then return end
-
-    if activeSnapThread then
-        task.cancel(activeSnapThread)
-        activeSnapThread = nil
-    end
-
-    activeSnapThread = task.spawn(function()
-        local startTime = os.clock()
-        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-
-        while os.clock() - startTime < (duration or 0.38) do
-            -- Instant break if target or self died/despawned
-            if not targetChar or not targetChar:IsDescendantOf(workspace) then break end
-            if not myChar or not myChar:IsDescendantOf(workspace) then break end
-            if not targetHum or targetHum.Health <= 0 then break end
-            if not myHum or myHum.Health <= 0 then break end
-            if not targetRoot or not targetRoot:IsDescendantOf(workspace) then break end
-
-            local myPos = myRoot.Position
-            local targetPos = targetRoot.Position
-
-            -- Anti-glitch guard: prevent NaN calculations when ragdoll physics activate
-            if not isVectorFinite(myPos) or not isVectorFinite(targetPos) then
-                break
-            end
-
-            local flatDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
-            if flatDiff.Magnitude > 0.4 then
-                pcall(function()
-                    myRoot.CFrame = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
-                end)
-            end
-
-            local currentCamera = workspace.CurrentCamera
-            if currentCamera then
-                local camPos = currentCamera.CFrame.Position
-                local targetAim = targetPos + Vector3.new(0, 0.4, 0)
-                if isVectorFinite(camPos) and isVectorFinite(targetAim) then
-                    pcall(function()
-                        currentCamera.CFrame = CFrame.lookAt(camPos, targetAim)
-                    end)
-                end
-            end
-
-            RS.RenderStepped:Wait()
-        end
-        activeSnapThread = nil
-    end)
-end
-
--- Animation Event Hooks
-local function hookHumanoidAnimations(humanoid)
-    if not humanoid then return end
-
-    humanoid.AnimationPlayed:Connect(function(track)
-        local animObj = track.Animation
-        local rawId = animObj and animObj.AnimationId or ""
-        local numericId = extractNumericId(rawId)
-
-        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] then
-            local target = getClosestSurvivor()
-            if target then
-                lockOntoTargetForDuration(target, 0.38)
-            end
-        elseif shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] then
-            local target = getActiveKiller()
-            if target then
-                lockOntoTargetForDuration(target, 0.38)
-            end
-        end
-    end)
-end
-
-if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-    hookHumanoidAnimations(player.Character:FindFirstChildOfClass("Humanoid"))
-end
-
-player.CharacterAdded:Connect(function(c)
-    local hum = c:WaitForChild("Humanoid", 5)
-    if hum then
-        hookHumanoidAnimations(hum)
-    end
-end)
-
--- Background scan fallback
-RS.Heartbeat:Connect(function()
-    if not slasherAimbotOn and not shedletskyAimbotOn then return end
-    if activeSnapThread then return end
-
-    local myChar = player.Character
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if not myHum or myHum.Health <= 0 then return end
-
-    for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
-        local animObj = track.Animation
-        local rawId = animObj and animObj.AnimationId or ""
-        local numericId = extractNumericId(rawId)
-
-        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] and track.TimePosition < 0.25 then
-            local target = getClosestSurvivor()
-            if target then
-                lockOntoTargetForDuration(target, 0.35)
-            end
-            break
-        elseif shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] and track.TimePosition < 0.25 then
-            local target = getActiveKiller()
-            if target then
-                lockOntoTargetForDuration(target, 0.35)
-            end
-            break
-        end
-    end
-end)
-
---------------------------------------------------------------------------------
--- RAYFIELD AIM TAB INTERFACE
---------------------------------------------------------------------------------
-
-AimTab:CreateSection("Killer Combat")
-
-AimTab:CreateToggle({
-    Name = "Slasher Aimbot",
-    CurrentValue = false,
-    Callback = function(value)
-        slasherAimbotOn = value
-        if value and shedletskyAimbotOn then
-            shedletskyAimbotOn = false
-        end
-        if not value and activeSnapThread then
-            task.cancel(activeSnapThread)
-            activeSnapThread = nil
-        end
-    end,
-})
-
-AimTab:CreateSection("Survivor Combat")
-
-AimTab:CreateToggle({
-    Name = "Shedletsky Slash Aimbot",
-    CurrentValue = false,
-    Callback = function(value)
-        shedletskyAimbotOn = value
-        if value and slasherAimbotOn then
-            slasherAimbotOn = false
-        end
-        if not value and activeSnapThread then
-            task.cancel(activeSnapThread)
-            activeSnapThread = nil
-        end
     end,
 })
