@@ -188,7 +188,7 @@ local function canUseCharacter()
     return true
 end
 --------------------------------------------------------------------------------
--- PART 2: ACTION & AUTO-FARM SYSTEM (IDLE SAFE SPACE TELEPORT & PROTECTION)
+-- PART 2A: SAFE SPACE, ABILITIES & UNDERGROUND GUI SETUP
 --------------------------------------------------------------------------------
 
 local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
@@ -300,7 +300,6 @@ local function castCharacterAction(actionName, targetPosition)
         local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
         local ckFolder = remotesFolder and (remotesFolder:FindFirstChild("Coolkid") or remotesFolder:FindFirstChild("c00lkidd"))
 
-        -- Walkspeed
         if actionName == "Walkspeed" then
             if not coolkidWalkspeedRemote then
                 coolkidWalkspeedRemote = ckFolder and ckFolder:FindFirstChild("Walkspeed")
@@ -323,7 +322,6 @@ local function castCharacterAction(actionName, targetPosition)
             return
         end
 
-        -- Corrupt (Aimed at player target position)
         if actionName == "Corrupt" then
             if not coolkidCorruptRemote then
                 coolkidCorruptRemote = ckFolder and ckFolder:FindFirstChild("Corrupt")
@@ -350,9 +348,337 @@ local function castCharacterAction(actionName, targetPosition)
 end
 
 --------------------------------------------------------------------------------
--- STRICT TARGET VALIDATION & SELECTION
+-- UNDERGROUND AUTO FARM SYSTEM (RECOMMENDED)
+--------------------------------------------------------------------------------
+local ugActive = false
+local ugTargetIndex = 0
+local ugTargetPlayer = nil
+local ugOriginalCameraSubject = nil
+
+local ugSmoothedOffset = 0
+local ugActualDepth = 6.5
+
+local BASE_DEPTH = 6.5
+local AIR_DEPTH = 1.0 
+local BASE_FORWARD = 4
+local MAX_EXTRA_STUDS = 6
+local WALK_SPEED = 12
+local RUN_SPEED = 28
+
+-- GUI Setup
+local ugGui = Instance.new("ScreenGui")
+ugGui.Name = "UndergroundGui"
+ugGui.ResetOnSpawn = false
+ugGui.DisplayOrder = 999
+ugGui.Enabled = false
+
+pcall(function()
+    ugGui.Parent = game:GetService("CoreGui")
+end)
+if not ugGui.Parent then
+    ugGui.Parent = player:WaitForChild("PlayerGui")
+end
+
+local ugContainer = Instance.new("Frame")
+ugContainer.Size = UDim2.new(0, 260, 0, 90)
+ugContainer.Position = UDim2.new(0.5, 0, 0.78, 0)
+ugContainer.AnchorPoint = Vector2.new(0.5, 1)
+ugContainer.BackgroundTransparency = 1
+ugContainer.Parent = ugGui
+
+local function applyModernStyle(obj)
+    obj.BackgroundColor3 = Color3.fromRGB(140, 25, 25)
+    obj.BorderSizePixel = 0
+    obj.Font = Enum.Font.GothamBold
+    obj.TextColor3 = Color3.new(1, 1, 1)
+    obj.TextScaled = true
+    
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, 4)
+    padding.PaddingBottom = UDim.new(0, 4)
+    padding.Parent = obj
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = obj
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(80, 15, 15)
+    stroke.Thickness = 2
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = obj
+end
+
+local ugHealthLabel = Instance.new("TextLabel")
+ugHealthLabel.Size = UDim2.new(1, 0, 0, 20)
+ugHealthLabel.Position = UDim2.new(0, 0, 0, 0)
+ugHealthLabel.BackgroundTransparency = 1
+ugHealthLabel.Font = Enum.Font.GothamBold
+ugHealthLabel.TextColor3 = Color3.fromRGB(180, 50, 50)
+ugHealthLabel.TextScaled = true
+ugHealthLabel.Text = "Health: [ - ]"
+ugHealthLabel.Visible = false
+ugHealthLabel.Parent = ugContainer
+
+local ugStatus = Instance.new("TextLabel")
+ugStatus.Size = UDim2.new(1, 0, 0, 30)
+ugStatus.Position = UDim2.new(0, 0, 0, 25)
+applyModernStyle(ugStatus)
+ugStatus.Text = "Inactive"
+ugStatus.Parent = ugContainer
+
+local ugActionFrame = Instance.new("Frame")
+ugActionFrame.Size = UDim2.new(1, 0, 0, 30)
+ugActionFrame.Position = UDim2.new(0, 0, 0, 60)
+ugActionFrame.BackgroundTransparency = 1
+ugActionFrame.Parent = ugContainer
+
+local ugButton = Instance.new("TextButton")
+ugButton.Size = UDim2.new(0.6, 0, 1, 0)
+ugButton.Position = UDim2.new(0.5, 0, 0, 0)
+ugButton.AnchorPoint = Vector2.new(0.5, 0)
+applyModernStyle(ugButton)
+ugButton.Text = "Enable"
+ugButton.Parent = ugActionFrame
+
+local ugLeftBtn = Instance.new("TextButton")
+ugLeftBtn.Size = UDim2.new(0.15, 0, 1, 0)
+ugLeftBtn.Position = UDim2.new(0, 0, 0, 0)
+applyModernStyle(ugLeftBtn)
+ugLeftBtn.Text = "<"
+ugLeftBtn.Visible = false
+ugLeftBtn.Parent = ugActionFrame
+
+local ugRightBtn = Instance.new("TextButton")
+ugRightBtn.Size = UDim2.new(0.15, 0, 1, 0)
+ugRightBtn.Position = UDim2.new(1, 0, 0, 0)
+ugRightBtn.AnchorPoint = Vector2.new(1, 0)
+applyModernStyle(ugRightBtn)
+ugRightBtn.Text = ">"
+ugRightBtn.Visible = false
+ugRightBtn.Parent = ugActionFrame
+--------------------------------------------------------------------------------
+-- PART 2B: UNDERGROUND LOOPS, TARGETING & AUTOFARM TAB UI
 --------------------------------------------------------------------------------
 
+local function getSafeSpawn()
+    local spawnCFrame = CFrame.new(0, 5, 0)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("SpawnLocation") then
+            spawnCFrame = obj.CFrame + Vector3.new(0, 5, 0)
+            break
+        end
+    end
+    return spawnCFrame
+end
+
+local function returnToSurface()
+    local character = player.Character
+    if not character then return end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not rootPart or not humanoid or humanoid.Health <= 0 then return end
+    
+    local spawnCFrame = getSafeSpawn()
+    if ugOriginalCameraSubject then
+        camera.CameraSubject = ugOriginalCameraSubject
+        camera.CameraType = Enum.CameraType.Custom
+    end
+    
+    rootPart.Anchored = true
+    rootPart.AssemblyLinearVelocity = Vector3.zero
+    rootPart.AssemblyAngularVelocity = Vector3.zero
+    
+    local frames = 0
+    local returnLoop
+    returnLoop = RS.RenderStepped:Connect(function()
+        frames += 1
+        rootPart.CFrame = spawnCFrame
+        rootPart.AssemblyLinearVelocity = Vector3.zero
+        rootPart.AssemblyAngularVelocity = Vector3.zero
+        
+        local myHum = character:FindFirstChildOfClass("Humanoid")
+        if myHum then
+            camera.CameraSubject = myHum
+            camera.CameraType = Enum.CameraType.Custom
+        end
+        
+        if frames >= 10 then 
+            rootPart.Anchored = false 
+        end
+    end)
+    task.delay(0.5, function() returnLoop:Disconnect() end)
+end
+
+local function getUndergroundTargets()
+    local t = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            local human = p.Character:FindFirstChildOfClass("Humanoid")
+            if root and human and human.Health > 0 then
+                table.insert(t, p)
+            end
+        end
+    end
+    return t
+end
+
+local function updateUgStatus()
+    local list = getUndergroundTargets()
+    if #list == 0 then
+        ugTargetPlayer = nil
+        ugStatus.Text = "No Targets"
+        ugHealthLabel.Text = "Health: [ - ]"
+        return
+    end
+    if ugTargetIndex < 1 then ugTargetIndex = #list end
+    if ugTargetIndex > #list then ugTargetIndex = 1 end
+    ugTargetPlayer = list[ugTargetIndex]
+    ugStatus.Text = "[ " .. ugTargetIndex .. " / " .. #list .. " ] " .. ugTargetPlayer.Name
+end
+
+local function ugGoNext()
+    local list = getUndergroundTargets()
+    if #list == 0 then 
+        ugTargetPlayer = nil 
+        ugStatus.Text = "No Targets" 
+        ugHealthLabel.Text = "Health: [ - ]"
+        return 
+    end
+    ugTargetIndex += 1
+    if ugTargetIndex > #list then ugTargetIndex = 1 end
+    ugSmoothedOffset = 0
+    updateUgStatus()
+end
+
+local function ugGoPrev()
+    local list = getUndergroundTargets()
+    if #list == 0 then 
+        ugTargetPlayer = nil 
+        ugStatus.Text = "No Targets" 
+        ugHealthLabel.Text = "Health: [ - ]"
+        return 
+    end
+    ugTargetIndex -= 1
+    if ugTargetIndex < 1 then ugTargetIndex = #list end
+    ugSmoothedOffset = 0
+    updateUgStatus()
+end
+
+local function deactivateUnderground()
+    ugActive = false
+    ugButton.Text = "Enable"
+    ugLeftBtn.Visible = false
+    ugRightBtn.Visible = false
+    ugHealthLabel.Visible = false
+    ugStatus.Text = "Inactive"
+    
+    if ugOriginalCameraSubject then 
+        camera.CameraSubject = ugOriginalCameraSubject 
+    end
+    
+    returnToSurface()
+end
+
+local function activateUnderground()
+    ugActive = true
+    ugButton.Text = "Disable"
+    local c = player.Character
+    if c and c:FindFirstChildOfClass("Humanoid") then
+        ugOriginalCameraSubject = c.Humanoid
+    end
+    ugLeftBtn.Visible = true
+    ugRightBtn.Visible = true
+    ugHealthLabel.Visible = true
+    ugTargetIndex = 1
+    updateUgStatus()
+end
+
+ugButton.MouseButton1Click:Connect(function()
+    if not ugActive then
+        activateUnderground()
+    else
+        deactivateUnderground()
+    end
+end)
+
+ugButton.MouseButton2Click:Connect(function()
+    if ugActive then deactivateUnderground() end
+end)
+
+ugRightBtn.MouseButton1Click:Connect(function() if ugActive then ugGoNext() end end)
+ugLeftBtn.MouseButton1Click:Connect(function() if ugActive then ugGoPrev() end end)
+
+RS.RenderStepped:Connect(function()
+    if not ugActive or not ugTargetPlayer then return end
+    
+    local myChar = player.Character
+    if not myChar then return end
+    
+    local targetChar = ugTargetPlayer.Character
+    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+    local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    
+    if not targetRoot or not targetHum or targetHum.Health <= 0 then
+        ugGoNext()
+        return
+    end
+    
+    ugHealthLabel.Text = "Health: [ " .. math.floor(targetHum.Health) .. " ]"
+    
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        local velocity = targetRoot.AssemblyLinearVelocity
+        local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+        local speed = horizontalVelocity.Magnitude
+        local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
+        
+        local movingOffset = 0
+        if speed > WALK_SPEED then
+            movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
+        elseif speed > 0.5 then
+            movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
+        end
+        
+        local lerpSpeed = movingOffset > ugSmoothedOffset and 0.15 or 0.05
+        ugSmoothedOffset = ugSmoothedOffset + (movingOffset - ugSmoothedOffset) * lerpSpeed
+        
+        local targetDepth = BASE_DEPTH
+        if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
+            targetDepth = AIR_DEPTH 
+        end
+        
+        ugActualDepth = ugActualDepth + (targetDepth - ugActualDepth) * 0.2
+        
+        local pos = targetRoot.Position + (moveDirection * (BASE_FORWARD + ugSmoothedOffset)) - Vector3.new(0, ugActualDepth, 0)
+        local lookTarget = Vector3.new(pos.X, targetRoot.Position.Y, pos.Z)
+        
+        myRoot:PivotTo(CFrame.lookAt(pos, lookTarget))
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+        
+        camera.CameraSubject = targetHum
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(p) 
+    if p == ugTargetPlayer then ugGoNext() end 
+end)
+
+local function hookDeath(character)
+    local humObj = character:WaitForChild("Humanoid")
+    humObj.Died:Connect(function() 
+        if ugActive then deactivateUnderground() end 
+    end)
+end
+
+if player.Character then hookDeath(player.Character) end
+player.CharacterAdded:Connect(hookDeath)
+
+--------------------------------------------------------------------------------
+-- STRICT TARGET VALIDATION & SELECTION
+--------------------------------------------------------------------------------
 local function isTargetAliveAndValid(p, maxHpConstraint)
     if not p or not p.Parent or not p.Character or p == player then return false end
     local tHum = p.Character:FindFirstChild("Humanoid")
@@ -453,7 +779,6 @@ task.spawn(function()
 
             if humanoid and hrp and humanoid.Health > 0 then
                 if humanoid.Health <= healthThreshold then
-                    -- Disable auto farm options immediately
                     if autoFarmLowHpOn then
                         autoFarmLowHpOn = false
                         if LowHpToggle then LowHpToggle:Set(false) end
@@ -462,10 +787,12 @@ task.spawn(function()
                         autoFarmAllOn = false
                         if AllPlayersToggle then AllPlayersToggle:Set(false) end
                     end
+                    if ugActive then
+                        deactivateUnderground()
+                    end
                     currentLockedTarget = nil
                     isCurrentlyWaitingInSafeSpace = false
 
-                    -- Ensure safe space baseplate exists
                     if not safeSpacePart or not safeSpacePart.Parent then
                         safeSpacePart = Instance.new("Part", workspace)
                         safeSpacePart.Name = "SafeSpaceBaseplate"
@@ -478,13 +805,11 @@ task.spawn(function()
 
                     local dist = (hrp.Position - SAFE_SPACE_TARGET).Magnitude
 
-                    -- Snap to baseplate if knocked away or not there
                     if not isCurrentlyProtected or dist > 25 then
                         hrp.CFrame = CFrame.new(SAFE_SPACE_TARGET)
                         isCurrentlyProtected = true
                     end
                 else
-                    -- Reset condition: when health regenerates above threshold, release lock
                     if isCurrentlyProtected then
                         isCurrentlyProtected = false
                     end
@@ -499,7 +824,6 @@ end)
 --------------------------------------------------------------------------------
 -- POSITIONING & ATTACK LOOPS WITH IDLE SAFE SPACE TELEPORT
 --------------------------------------------------------------------------------
-
 local isCurrentlyWaitingInSafeSpace = false
 
 RS.Stepped:Connect(function()
@@ -538,7 +862,6 @@ RS.Heartbeat:Connect(function()
     local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
     local targetP = currentLockedTarget
 
-    -- Executes ability remotes when auto-farming an alive, valid player
     if targetP and isTargetAliveAndValid(targetP, maxHpConstraint) then
         local autoList = (cType and cType:lower():find("shedletsky") and SHEDLETSKY_AUTO_ABILITIES) 
             or (cType == "Noli" and NOLI_AUTO_ABILITIES) 
@@ -562,6 +885,22 @@ end)
 --------------------------------------------------------------------------------
 -- AUTO FARM TAB ELEMENTS (RAYFIELD)
 --------------------------------------------------------------------------------
+
+AutoFarmTab:CreateSection("RECOMMENDED TO USE")
+
+AutoFarmTab:CreateToggle({
+    Name = "Underground Auto Farm",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            ugGui.Enabled = true
+            activateUnderground()
+        else
+            deactivateUnderground()
+            ugGui.Enabled = false
+        end
+    end,
+})
 
 AutoFarmTab:CreateSection("Targeting Options")
 
@@ -850,7 +1189,7 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT TAB & UTILITY TAB (INFINITE STAMINA INTEGRATED)
+-- PART 4: COMBAT TAB & UTILITY TAB (UPGRADED KILLER CAMLOCK)
 --------------------------------------------------------------------------------
 
 local CoreGui = game:GetService("CoreGui")
@@ -910,13 +1249,14 @@ CombatTab:CreateSlider({
 })
 
 --------------------------------------------------------------------------------
--- KILLER CAMLOCK SYSTEM (ALL-PLAYER TARGETING & DYNAMIC GUI)
+-- UPGRADED KILLER CAMLOCK SYSTEM (ALL-PLAYER TARGETING & TARGET DOT)
 --------------------------------------------------------------------------------
 CombatTab:CreateSection("Killer Camlock")
 
-local CAMERA_OFFSET = Vector3.new(0, 4.5, 10)
-local TURN_SMOOTHNESS = 0.35
-local MAX_TARGET_DISTANCE = 75
+local MAX_SURVIVOR_DISTANCE = 85
+local CAM_SMOOTHNESS = 0.38
+local CHAR_SMOOTHNESS = 0.45
+local AIM_HEIGHT_OFFSET = 0.2
 
 local KILLER_CLASSES = {
     ["slasher"]         = true,
@@ -932,28 +1272,47 @@ local KILLER_CLASSES = {
     ["2011x"]           = true,
     ["johndoe"]         = true,
     ["azure"]           = true,
+    ["doombringer"]     = true,
 }
 
 local isLocked = false
-local currentLockedTarget = nil
+local currentLockedSurvivor = nil
 
--- GUI Instance References
+-- Safe GUI Container
+local function getGuiContainer()
+    if gethui then
+        return gethui()
+    end
+    local canUseCore, _ = pcall(function()
+        local test = Instance.new("Folder")
+        test.Parent = CoreGui
+        test:Destroy()
+    end)
+    if canUseCore then
+        return CoreGui
+    end
+    return player:WaitForChild("PlayerGui")
+end
+
+local guiContainer = getGuiContainer()
 local GUI_NAME = "KillerCamlockUI"
-local oldGui = CoreGui:FindFirstChild(GUI_NAME) or (player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild(GUI_NAME))
-if oldGui then oldGui:Destroy() end
+
+local oldGui = guiContainer:FindFirstChild(GUI_NAME)
+if oldGui then
+    oldGui:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = GUI_NAME
 screenGui.ResetOnSpawn = false
 screenGui.Enabled = false
-
-pcall(function() screenGui.Parent = CoreGui end)
-if not screenGui.Parent then screenGui.Parent = player:WaitForChild("PlayerGui") end
+screenGui.Parent = guiContainer
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 95)
-mainFrame.Position = UDim2.new(0.08, 0, 0.45, 0)
+mainFrame.Size = UDim2.new(0, 190, 0, 92)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.BackgroundTransparency = 1
 mainFrame.Active = true
 mainFrame.Draggable = true
@@ -961,14 +1320,14 @@ mainFrame.Parent = screenGui
 
 local header = Instance.new("TextLabel")
 header.Name = "Header"
-header.Size = UDim2.new(1, 0, 0, 32)
+header.Size = UDim2.new(1, 0, 0, 30)
 header.Position = UDim2.new(0, 0, 0, 0)
 header.BackgroundColor3 = Color3.fromRGB(150, 15, 15)
 header.BorderSizePixel = 0
 header.Font = Enum.Font.GothamBold
 header.Text = "Killers Aimbot"
 header.TextColor3 = Color3.fromRGB(245, 245, 245)
-header.TextSize = 14
+header.TextSize = 13
 header.Parent = mainFrame
 
 local headerCorner = Instance.new("UICorner")
@@ -986,7 +1345,7 @@ headerGradient.Parent = header
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(1, 0, 0, 52)
-toggleButton.Position = UDim2.new(0, 0, 0, 38)
+toggleButton.Position = UDim2.new(0, 0, 0, 36)
 toggleButton.BackgroundColor3 = Color3.fromRGB(120, 10, 10)
 toggleButton.BorderSizePixel = 0
 toggleButton.Font = Enum.Font.GothamBold
@@ -1008,12 +1367,38 @@ buttonGradient.Color = ColorSequence.new({
 })
 buttonGradient.Parent = toggleButton
 
-local function getCharacterKey(characterModel)
-    if not characterModel then return "" end
-    local charType = characterModel:GetAttribute("Character")
-        or characterModel:GetAttribute("CharacterType")
-        or characterModel:GetAttribute("Role")
-        or characterModel.Name
+-- Billboard Target Dot
+local targetDotGui = Instance.new("BillboardGui")
+targetDotGui.Name = "CamlockTargetDot"
+targetDotGui.Size = UDim2.new(0, 9, 0, 9)
+targetDotGui.AlwaysOnTop = true
+targetDotGui.Active = false
+targetDotGui.ResetOnSpawn = false
+targetDotGui.Enabled = false
+targetDotGui.Parent = screenGui
+
+local dotFrame = Instance.new("Frame")
+dotFrame.Size = UDim2.new(1, 0, 1, 0)
+dotFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+dotFrame.BorderSizePixel = 0
+dotFrame.Parent = targetDotGui
+
+local dotCorner = Instance.new("UICorner")
+dotCorner.CornerRadius = UDim.new(1, 0)
+dotCorner.Parent = dotFrame
+
+local dotStroke = Instance.new("UIStroke")
+dotStroke.Thickness = 1.2
+dotStroke.Color = Color3.fromRGB(0, 0, 0)
+dotStroke.Transparency = 0.4
+dotStroke.Parent = dotFrame
+
+local function getCharacterKey(charObj)
+    if not charObj then return "" end
+    local charType = charObj:GetAttribute("Character")
+        or charObj:GetAttribute("CharacterType")
+        or charObj:GetAttribute("Role")
+        or charObj.Name
     local key = string.lower(tostring(charType))
 
     if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
@@ -1028,6 +1413,7 @@ local function isLocalPlayerKiller()
     return KILLER_CLASSES[key] == true
 end
 
+-- Validates every player (whitelist completely removed)
 local function isTargetAliveAndValid(p)
     if not p or not p.Parent or not p.Character or p == player then return false end
     local tChar = p.Character
@@ -1040,28 +1426,27 @@ local function isTargetAliveAndValid(p)
     return true
 end
 
-local function getLockedOrClosestTarget()
-    if currentLockedTarget then
-        if isTargetAliveAndValid(currentLockedTarget) then
-            local myChar = player.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local tRoot = currentLockedTarget.Character:FindFirstChild("HumanoidRootPart")
-            if myRoot and tRoot then
-                local dist = (myRoot.Position - tRoot.Position).Magnitude
-                if dist <= MAX_TARGET_DISTANCE then
-                    return currentLockedTarget.Character
-                end
+local function getLockedOrClosestSurvivor()
+    if currentLockedSurvivor and isTargetAliveAndValid(currentLockedSurvivor) then
+        local myChar = player.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local tRoot = currentLockedSurvivor.Character:FindFirstChild("HumanoidRootPart")
+        if myRoot and tRoot then
+            local dist = (myRoot.Position - tRoot.Position).Magnitude
+            if dist <= MAX_SURVIVOR_DISTANCE then
+                return currentLockedSurvivor.Character
             end
         end
-        currentLockedTarget = nil
     end
+
+    currentLockedSurvivor = nil
 
     local myChar = player.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myRoot then return nil end
 
     local closest = nil
-    local shortestDist = MAX_TARGET_DISTANCE
+    local shortestDist = MAX_SURVIVOR_DISTANCE
 
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player and isTargetAliveAndValid(p) then
@@ -1076,76 +1461,96 @@ local function getLockedOrClosestTarget()
         end
     end
 
-    currentLockedTarget = closest
+    currentLockedSurvivor = closest
     return closest and closest.Character or nil
 end
 
 Players.PlayerRemoving:Connect(function(leavingPlayer)
-    if currentLockedTarget == leavingPlayer then
-        currentLockedTarget = nil
+    if currentLockedSurvivor == leavingPlayer then
+        currentLockedSurvivor = nil
+        targetDotGui.Enabled = false
+        targetDotGui.Adornee = nil
     end
 end)
 
 local function disableLock()
     isLocked = false
-    currentLockedTarget = nil
-    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
+    currentLockedSurvivor = nil
+    targetDotGui.Enabled = false
+    targetDotGui.Adornee = nil
+    pcall(function()
+        RS:UnbindFromRenderStep("KillerCamlockLoop")
+    end)
     toggleButton.Text = "Aimbot : Off"
 end
 
 local function enableLock()
     isLocked = true
-    pcall(function() RS:UnbindFromRenderStep("KillerCamlockLoop") end)
-    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value + 1, function()
+    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value, function()
         if not isLocked then return end
 
         if not isLocalPlayerKiller() then
             toggleButton.Text = "Not a Killer"
-            currentLockedTarget = nil
+            currentLockedSurvivor = nil
+            targetDotGui.Enabled = false
+            targetDotGui.Adornee = nil
             return
         end
 
         local myChar = player.Character
         local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
         local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-
         if not myRoot or not myHum or myHum.Health <= 0 then
+            targetDotGui.Enabled = false
             return
         end
 
-        local targetChar = getLockedOrClosestTarget()
-
+        local targetChar = getLockedOrClosestSurvivor()
         if not targetChar then
-            toggleButton.Text = "No players nearby"
+            toggleButton.Text = "Aimbot : No target"
+            targetDotGui.Enabled = false
+            targetDotGui.Adornee = nil
             return
         end
 
         local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
         local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-
         if not targetRoot or not targetHum or targetHum.Health <= 0 then
-            currentLockedTarget = nil
-            toggleButton.Text = "No players nearby"
+            currentLockedSurvivor = nil
+            toggleButton.Text = "Aimbot : No target"
+            targetDotGui.Enabled = false
+            targetDotGui.Adornee = nil
             return
         end
 
-        toggleButton.Text = "Aimbot : On"
+        toggleButton.Text = "Aimbot : On - Locked"
+
+        local adorneePart = targetChar:FindFirstChild("UpperTorso")
+            or targetChar:FindFirstChild("Torso")
+            or targetRoot
+        targetDotGui.Adornee = adorneePart
+        targetDotGui.Enabled = true
+
+        local currentCamera = workspace.CurrentCamera
+        if not currentCamera then return end
 
         local myPos = myRoot.Position
         local targetPos = targetRoot.Position
-        local targetAimPos = targetPos + Vector3.new(0, 1.5, 0)
+        local aimTarget = targetPos + Vector3.new(0, AIM_HEIGHT_OFFSET, 0)
 
-        local horizontalDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
-        if horizontalDiff.Magnitude < 0.1 then
-            return
+        local camPos = currentCamera.CFrame.Position
+        local toAim = (aimTarget - camPos)
+
+        if toAim.Magnitude > 0.2 then
+            local targetCamCF = CFrame.lookAt(camPos, aimTarget)
+            currentCamera.CFrame = currentCamera.CFrame:Lerp(targetCamCF, CAM_SMOOTHNESS)
+
+            local flatDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
+            if flatDiff.Magnitude > 0.4 then
+                local charGoalCF = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+                myRoot.CFrame = myRoot.CFrame:Lerp(charGoalCF, CHAR_SMOOTHNESS)
+            end
         end
-
-        local charLookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
-        myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.lookAt(myPos, charLookTarget), TURN_SMOOTHNESS)
-
-        local flatDirection = horizontalDiff.Unit
-        local finalCamPos = myPos - (flatDirection * CAMERA_OFFSET.Z) + Vector3.new(0, CAMERA_OFFSET.Y, 0)
-        camera.CFrame = CFrame.lookAt(finalCamPos, targetAimPos)
     end)
 end
 
