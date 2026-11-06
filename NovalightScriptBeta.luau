@@ -348,7 +348,7 @@ local function castCharacterAction(actionName, targetPosition)
 end
 
 --------------------------------------------------------------------------------
--- UNDERGROUND AUTO FARM SYSTEM (RECOMMENDED)
+-- UNDERGROUND AUTO FARM SYSTEM (EXACT ORIGINAL LOGIC)
 --------------------------------------------------------------------------------
 local ugActive = false
 local ugTargetIndex = 0
@@ -364,14 +364,9 @@ local BASE_FORWARD = 4
 local MAX_EXTRA_STUDS = 6
 local WALK_SPEED = 12
 local RUN_SPEED = 28
-local LUNGE_RANGE = 4.5
 
--- Persistent connection pointers (prevents RenderStepped stacking and lag)
+-- Connection handle to eliminate toggle stacking lag
 local ugRenderConn = nil
-local ugReturnLoopConn = nil
-local ugPlayerRemovingConn = nil
-local ugCharDiedConn = nil
-local cachedSpawnCFrame = nil
 
 -- GUI Setup
 local ugGui = Instance.new("ScreenGui")
@@ -470,12 +465,10 @@ ugRightBtn.Parent = ugActionFrame
 --------------------------------------------------------------------------------
 
 local function getSafeSpawn()
-    if cachedSpawnCFrame then return cachedSpawnCFrame end
     local spawnCFrame = CFrame.new(0, 5, 0)
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("SpawnLocation") then
             spawnCFrame = obj.CFrame + Vector3.new(0, 5, 0)
-            cachedSpawnCFrame = spawnCFrame
             break
         end
     end
@@ -483,11 +476,6 @@ local function getSafeSpawn()
 end
 
 local function returnToSurface()
-    if ugReturnLoopConn then
-        ugReturnLoopConn:Disconnect()
-        ugReturnLoopConn = nil
-    end
-
     local character = player.Character
     if not character then return end
     local rootPart = character:FindFirstChild("HumanoidRootPart")
@@ -505,7 +493,8 @@ local function returnToSurface()
     rootPart.AssemblyAngularVelocity = Vector3.zero
     
     local frames = 0
-    ugReturnLoopConn = RS.RenderStepped:Connect(function()
+    local returnLoop
+    returnLoop = RS.RenderStepped:Connect(function()
         frames = frames + 1
         rootPart.CFrame = spawnCFrame
         rootPart.AssemblyLinearVelocity = Vector3.zero
@@ -519,17 +508,11 @@ local function returnToSurface()
         
         if frames >= 10 then 
             rootPart.Anchored = false 
-            if ugReturnLoopConn then
-                ugReturnLoopConn:Disconnect()
-                ugReturnLoopConn = nil
-            end
+            returnLoop:Disconnect()
         end
     end)
-    task.delay(0.5, function()
-        if ugReturnLoopConn then
-            ugReturnLoopConn:Disconnect()
-            ugReturnLoopConn = nil
-        end
+    task.delay(0.5, function() 
+        if returnLoop then returnLoop:Disconnect() end 
     end)
 end
 
@@ -539,7 +522,7 @@ local function getUndergroundTargets()
         if p ~= player and p.Character then
             local root = p.Character:FindFirstChild("HumanoidRootPart")
             local human = p.Character:FindFirstChildOfClass("Humanoid")
-            if root and human and human.Health > 0 and p.Character:IsDescendantOf(workspace) then
+            if root and human and human.Health > 0 then
                 table.insert(t, p)
             end
         end
@@ -566,7 +549,7 @@ local function ugGoNext()
     if #list == 0 then 
         ugTargetPlayer = nil 
         ugStatus.Text = "No Targets" 
-        healthLabel.Text = "Health: [ - ]"
+        ugHealthLabel.Text = "Health: [ - ]"
         return 
     end
     ugTargetIndex = ugTargetIndex + 1
@@ -580,7 +563,7 @@ local function ugGoPrev()
     if #list == 0 then 
         ugTargetPlayer = nil 
         ugStatus.Text = "No Targets" 
-        healthLabel.Text = "Health: [ - ]"
+        ugHealthLabel.Text = "Health: [ - ]"
         return 
     end
     ugTargetIndex = ugTargetIndex - 1
@@ -597,7 +580,7 @@ local function deactivateUnderground()
     ugHealthLabel.Visible = false
     ugStatus.Text = "Inactive"
     
-    -- Disconnect render loop to completely stop frame lag
+    -- Disconnect active RenderStepped to stop memory and frame lag
     if ugRenderConn then
         ugRenderConn:Disconnect()
         ugRenderConn = nil
@@ -628,84 +611,57 @@ local function activateUnderground()
         ugRenderConn = nil
     end
 
-    -- Dynamic RenderStepped connection: only exists and runs when active
+    -- Connects RenderStepped strictly when enabled
     ugRenderConn = RS.RenderStepped:Connect(function()
         if not ugActive or not ugTargetPlayer then return end
         
         local myChar = player.Character
         if not myChar then return end
         
-        local myHum = myChar:FindFirstChildOfClass("Humanoid")
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if not myHum or not myRoot or myHum.Health <= 0 then return end
-
         local targetChar = ugTargetPlayer.Character
         local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
         local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
         
-        if not targetRoot or not targetHum or targetHum.Health <= 0 or not targetChar:IsDescendantOf(workspace) then
+        if not targetRoot or not targetHum or targetHum.Health <= 0 then
             ugGoNext()
             return
         end
         
         ugHealthLabel.Text = "Health: [ " .. math.floor(targetHum.Health) .. " ]"
         
-        -- Attack animation check for active lunge compensation
-        local isAttacking = false
-        for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
-            local animObj = track.Animation
-            local name = animObj and animObj.Name:lower() or ""
-            local looksLikeAttack = name:find("attack")
-                or name:find("slash")
-                or name:find("swing")
-                or (track.Length > 0.2 and track.Length <= 1.8)
-
-            if looksLikeAttack and track.Length > 0 and (track.TimePosition / track.Length) < 0.85 then
-                isAttacking = true
-                break
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            local velocity = targetRoot.AssemblyLinearVelocity
+            local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+            local speed = horizontalVelocity.Magnitude
+            local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
+            
+            local movingOffset = 0
+            if speed > WALK_SPEED then
+                movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
+            elseif speed > 0.5 then
+                movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
             end
+            
+            local lerpSpeed = movingOffset > ugSmoothedOffset and 0.15 or 0.05
+            ugSmoothedOffset = ugSmoothedOffset + (movingOffset - ugSmoothedOffset) * lerpSpeed
+            
+            local targetDepth = BASE_DEPTH
+            if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
+                targetDepth = AIR_DEPTH 
+            end
+            
+            ugActualDepth = ugActualDepth + (targetDepth - ugActualDepth) * 0.2
+            
+            local pos = targetRoot.Position + (moveDirection * (BASE_FORWARD + ugSmoothedOffset)) - Vector3.new(0, ugActualDepth, 0)
+            local lookTarget = Vector3.new(pos.X, targetRoot.Position.Y, pos.Z)
+            
+            myRoot:PivotTo(CFrame.lookAt(pos, lookTarget))
+            myRoot.AssemblyLinearVelocity = Vector3.zero
+            myRoot.AssemblyAngularVelocity = Vector3.zero
+            
+            camera.CameraSubject = targetHum
         end
-
-        local velocity = targetRoot.AssemblyLinearVelocity
-        local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
-        local speed = horizontalVelocity.Magnitude
-        local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
-        
-        local movingOffset = 0
-        if speed > WALK_SPEED then
-            movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
-        elseif speed > 0.5 then
-            movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
-        end
-        
-        local lerpSpeed = movingOffset > ugSmoothedOffset and 0.15 or 0.05
-        ugSmoothedOffset = ugSmoothedOffset + (movingOffset - ugSmoothedOffset) * lerpSpeed
-        
-        local targetDepth = BASE_DEPTH
-        if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
-            targetDepth = AIR_DEPTH 
-        end
-        
-        if isAttacking then
-            targetDepth = math.max(AIR_DEPTH, targetDepth - 2.5)
-        end
-
-        ugActualDepth = ugActualDepth + (targetDepth - ugActualDepth) * 0.2
-        
-        local basePos = targetRoot.Position + (moveDirection * (BASE_FORWARD + ugSmoothedOffset)) - Vector3.new(0, ugActualDepth, 0)
-        local lookTarget = Vector3.new(basePos.X, targetRoot.Position.Y, basePos.Z)
-        
-        local finalCFrame = CFrame.lookAt(basePos, lookTarget)
-        if isAttacking then
-            local toTarget = (targetRoot.Position - basePos).Unit
-            finalCFrame = CFrame.lookAt(basePos + (toTarget * LUNGE_RANGE), lookTarget)
-        end
-
-        myRoot:PivotTo(finalCFrame)
-        myRoot.AssemblyLinearVelocity = Vector3.zero
-        myRoot.AssemblyAngularVelocity = Vector3.zero
-        
-        camera.CameraSubject = targetHum
     end)
 end
 
@@ -724,15 +680,13 @@ end)
 ugRightBtn.MouseButton1Click:Connect(function() if ugActive then ugGoNext() end end)
 ugLeftBtn.MouseButton1Click:Connect(function() if ugActive then ugGoPrev() end end)
 
-if ugPlayerRemovingConn then ugPlayerRemovingConn:Disconnect() end
-ugPlayerRemovingConn = Players.PlayerRemoving:Connect(function(p) 
+Players.PlayerRemoving:Connect(function(p) 
     if p == ugTargetPlayer then ugGoNext() end 
 end)
 
 local function hookDeath(character)
-    if ugCharDiedConn then ugCharDiedConn:Disconnect() end
     local humObj = character:WaitForChild("Humanoid")
-    ugCharDiedConn = humObj.Died:Connect(function() 
+    humObj.Died:Connect(function() 
         if ugActive then deactivateUnderground() end 
     end)
 end
@@ -741,7 +695,7 @@ if player.Character then hookDeath(player.Character) end
 player.CharacterAdded:Connect(hookDeath)
 
 --------------------------------------------------------------------------------
--- STRICT TARGET VALIDATION & SELECTION
+-- STRICT TARGET VALIDATION & SELECTION (ORIGINAL AUTO FARM)
 --------------------------------------------------------------------------------
 local function isTargetAliveAndValid(p, maxHpConstraint)
     if not p or not p.Parent or not p.Character or p == player then return false end
@@ -947,25 +901,10 @@ RS.Heartbeat:Connect(function()
 end)
 
 --------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (RAYFIELD)
+-- AUTO FARM TAB ELEMENTS (RAYFIELD: ORIGINAL FARM FIRST, UNDERGROUND SECOND)
 --------------------------------------------------------------------------------
 
-AutoFarmTab:CreateSection("RECOMMENDED TO USE")
-
-AutoFarmTab:CreateToggle({
-    Name = "Underground Auto Farm",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            ugGui.Enabled = true
-            activateUnderground()
-        else
-            deactivateUnderground()
-            ugGui.Enabled = false
-        end
-    end,
-})
-
+-- SECTION 1: ORIGINAL AUTO FARM (SURFACE)
 AutoFarmTab:CreateSection("Targeting Options")
 
 AutoFarmTab:CreateToggle({
@@ -1035,7 +974,7 @@ AutoFarmTab:CreateDropdown({
     Name = "Low HP Target Threshold",
     Options = {"10 HP", "20 HP", "30 HP", "50 HP"},
     CurrentOption = "20 HP",
-  Callback = function(option)
+    Callback = function(option)
         local selected = typeof(option) == "table" and option[1] or option
         local val = tonumber(string.match(selected, "%d+"))
         if val then 
@@ -1073,6 +1012,23 @@ AutoFarmTab:CreateButton({
     Name = "Teleport to Safe Space",
     Callback = function()
         teleportToSafeSpace()
+    end,
+})
+
+-- SECTION 2: UNDERGROUND AUTO FARM
+AutoFarmTab:CreateSection("RECOMMENDED TO USE")
+
+AutoFarmTab:CreateToggle({
+    Name = "Underground Auto Farm",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            ugGui.Enabled = true
+            activateUnderground()
+        else
+            deactivateUnderground()
+            ugGui.Enabled = false
+        end
     end,
 })
 --------------------------------------------------------------------------------
@@ -1712,7 +1668,6 @@ local sonicHealthThreshold = 30
 local sonicProtectionPlatform = nil
 local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
 local isSonicProtected = false
-
 --------------------------------------------------------------------------------
 -- 2011X DIRECT REMOTE FIRING (UNRESTRICTED DUAL CAST)
 --------------------------------------------------------------------------------
