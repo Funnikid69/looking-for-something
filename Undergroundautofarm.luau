@@ -13,7 +13,7 @@ local BASE_FORWARD = 4
 local MAX_EXTRA_STUDS = 6
 local WALK_SPEED = 12
 local RUN_SPEED = 28
-local LUNGE_RANGE = 4.5 -- CFrame lunge thrust toward target during attacks
+local LUNGE_RANGE = 4.5 -- CFrame lunge thrust distance during attack animations
 
 --// STATE
 local active = false
@@ -48,7 +48,7 @@ local GUI_NAME = "UndergroundGui"
 local oldGui = guiContainer:FindFirstChild(GUI_NAME)
 if oldGui then oldGui:Destroy() end
 
---// MODERN GUI BUILD
+--// MODERN RED THEME GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = GUI_NAME
 gui.ResetOnSpawn = false
@@ -136,7 +136,7 @@ rightBtn.Text = ">"
 rightBtn.Visible = false
 rightBtn.Parent = actionFrame
 
---// POSITIONING & TARGETING LOGIC
+--// POSITIONING & TARGET LOGIC
 local function getSafeSpawn()
     local spawnCFrame = CFrame.new(0, 5, 0)
     for _, obj in ipairs(workspace:GetDescendants()) do
@@ -307,11 +307,12 @@ local function activate()
         
         healthLabel.Text = "Health: [ " .. math.floor(targetHum.Health) .. " ]"
         
+        -- Prevent collision snagging while underground
         for _, part in ipairs(myChar:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
         end
 
-        -- Check if local player is executing an attack animation
+        -- Detect melee attack animations
         local isAttacking = false
         for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
             local animObj = track.Animation
@@ -327,6 +328,7 @@ local function activate()
             end
         end
 
+        -- Movement velocity tracking
         local velocity = targetRoot.AssemblyLinearVelocity
         local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
         local speed = horizontalVelocity.Magnitude
@@ -342,29 +344,29 @@ local function activate()
         local lerpSpeed = movingOffset > smoothedOffset and 0.15 or 0.05
         smoothedOffset = smoothedOffset + (movingOffset - smoothedOffset) * lerpSpeed
         
+        -- Ground vs Airborne depth matching
         local targetDepth = BASE_DEPTH
         if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
             targetDepth = AIR_DEPTH 
         end
         
-        -- Pull up closer toward target surface during attacks to guarantee hit registration
+        -- Pull up toward surface level during attacks to register hits
         if isAttacking then
             targetDepth = math.max(AIR_DEPTH, targetDepth - 2.5)
         end
 
         actualDepth = actualDepth + (targetDepth - actualDepth) * 0.2
         
-        local basePos = targetRoot.Position + (moveDirection * (BASE_FORWARD + smoothedOffset)) - Vector3.new(0, actualDepth, 0)
-        local lookTarget = Vector3.new(basePos.X, targetRoot.Position.Y, basePos.Z)
-
-        -- Apply direct CFrame lunge boost toward target on attack frames
-        local finalCFrame = CFrame.lookAt(basePos, lookTarget)
+        -- Base subterranean position
+        local forwardDist = BASE_FORWARD + smoothedOffset
         if isAttacking then
-            local toTarget = (targetRoot.Position - basePos).Unit
-            finalCFrame = CFrame.lookAt(basePos + (toTarget * LUNGE_RANGE), lookTarget)
+            forwardDist = forwardDist + LUNGE_RANGE -- Direct forward lunge boost
         end
-        
-        myRoot:PivotTo(finalCFrame)
+
+        local pos = targetRoot.Position + (moveDirection * forwardDist) - Vector3.new(0, actualDepth, 0)
+        local lookTarget = Vector3.new(pos.X, targetRoot.Position.Y, pos.Z)
+
+        myRoot:PivotTo(CFrame.lookAt(pos, lookTarget))
         myRoot.AssemblyLinearVelocity = Vector3.zero
         myRoot.AssemblyAngularVelocity = Vector3.zero
         
