@@ -1,10 +1,11 @@
 --------------------------------------------------------------------------------
--- PART 1: CORE SETUP & RAYFIELD INITIALIZATION
+-- GAME ID CHECKER
 --------------------------------------------------------------------------------
-
---// GAME ID CHECKER
 local ALLOWED_PLACE_IDS = {
-    [99585784721880] = true,
+    [100039707794702] = true,
+    [99585784721880]  = true,
+    [99055603649009]  = true,
+    [70444122688316]  = true,
 }
 
 if not ALLOWED_PLACE_IDS[game.PlaceId] then
@@ -12,7 +13,9 @@ if not ALLOWED_PLACE_IDS[game.PlaceId] then
     return
 end
 
---// RAYFIELD LIBRARY LOADER
+--------------------------------------------------------------------------------
+-- ORIGINAL RAYFIELD SETUP
+--------------------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local player = game.Players.LocalPlayer
@@ -21,32 +24,31 @@ local RS = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Lighting = game:GetService("Lighting")
 local camera = workspace.CurrentCamera
 
---// WINDOW SETUP (NOVASAKEN)
+--// ORIGINAL RAYFIELD WINDOW
 local Window = Rayfield:CreateWindow({
-    Name = "Novasaken",
-    LoadingTitle = "Novasaken",
+    Name = "Novalight Beta",
+    LoadingTitle = "Novalight Beta",
     LoadingSubtitle = "by Chwaa",
     ConfigurationSaving = {
         Enabled = false,
         FolderName = nil,
-        FileName = "Novasaken"
+        FileName = "NovalightBeta"
     }
 })
 
---// 8 MAIN TABS
+--// TABS (ORIGINAL SYNTAX)
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 local UtilityTab = Window:CreateTab("Movement & Misc", 4483362458)
 local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
-local ItemsTab = Window:CreateTab("Items", 4483362458)
-local AntiTab = Window:CreateTab("Anti", 4483362458)
-local AimTab = Window:CreateTab("Aim", 4483362458)
+local SonicEXEtab = Window:CreateTab("2011X", 4483362458)
 
---// CHARACTER & STATE TRACKING
+--------------------------------------------------------------------------------
+-- CHARACTER & STATE TRACKING
+--------------------------------------------------------------------------------
 local char = player.Character or player.CharacterAdded:Wait()
 local hum = char:WaitForChild("Humanoid")
 
@@ -55,237 +57,305 @@ player.CharacterAdded:Connect(function(c)
     hum = c:WaitForChild("Humanoid")
 end)
 
---// HIGH RANK & STAFF WATCHLIST DETECTOR
-local STAFF_GROUP_ID = 34755006
-local notifiedStaff = {}
+--------------------------------------------------------------------------------
+-- SAFE SPACE SETUP (CENTERED AT NEW MAP COORDS)
+--------------------------------------------------------------------------------
+local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
+local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
+local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
 
--- Specific role keywords to flag
-local FLAGGED_ROLE_KEYWORDS = {
-    "lead contributor",
-    "contributor",
-    "head moderator",
-    "moderator",
-    "admin",
-    "developer",
-    "owner",
+if not safeSpacePart then
+    safeSpacePart = Instance.new("Part")
+    safeSpacePart.Name = "SafeSpaceBaseplate"
+    safeSpacePart.Size = Vector3.new(200, 5, 200)
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+    safeSpacePart.Anchored = true
+    safeSpacePart.Material = Enum.Material.SmoothPlastic
+    safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
+    safeSpacePart.Parent = workspace
+else
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+end
+
+local function teleportToSafeSpace()
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        myRoot.CFrame = SAFE_SPACE_CFRAME * CFrame.new(0, 5, 0)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- ANTI-VOID SYSTEM (CENTERED AT NEW MAP COORDS)
+--------------------------------------------------------------------------------
+local ANTI_VOID_HEIGHT = -150
+local antiVoidPart = workspace:FindFirstChild("AntiVoidPlate")
+
+if not antiVoidPart then
+    antiVoidPart = Instance.new("Part")
+    antiVoidPart.Name = "AntiVoidPlate"
+    antiVoidPart.Size = Vector3.new(10000, 10, 10000)
+    antiVoidPart.CFrame = CFrame.new(MAP_CENTER.X, ANTI_VOID_HEIGHT, MAP_CENTER.Z)
+    antiVoidPart.Anchored = true
+    antiVoidPart.CanCollide = true
+    antiVoidPart.Transparency = 0.6
+    antiVoidPart.Material = Enum.Material.ForceField
+    antiVoidPart.Color = Color3.fromRGB(255, 0, 80)
+    antiVoidPart.Parent = workspace
+else
+    antiVoidPart.CFrame = CFrame.new(MAP_CENTER.X, ANTI_VOID_HEIGHT, MAP_CENTER.Z)
+end
+
+antiVoidPart.Touched:Connect(function(hit)
+    if char and hit:IsDescendantOf(char) then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = CFrame.new(MAP_CENTER.X, 50, MAP_CENTER.Z)
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- CHARACTER ABILITY CONFIGURATIONS (SHEDLETSKY, NOLI & C00LKIDD)
+--------------------------------------------------------------------------------
+local charRemotesFolder = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
+local shedFolder = charRemotesFolder and charRemotesFolder:FindFirstChild("Shedletsky")
+local noliFolder = charRemotesFolder and charRemotesFolder:FindFirstChild("Noli")
+local coolkidFolder = charRemotesFolder and (charRemotesFolder:FindFirstChild("Coolkid") or charRemotesFolder:FindFirstChild("c00lkidd"))
+
+local ShedletskyAbilities = {
+    ["Slash"] = {
+        ["Cooldown"] = 15,
+        ["LastUsed"] = 0,
+        ["Remote"] = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
+    }
 }
 
-local function isStaffOrHighRank(roleTitle, rankNumber)
-    if rankNumber >= 200 then return true end
-    local cleanRole = string.lower(tostring(roleTitle or ""))
-    for _, keyword in ipairs(FLAGGED_ROLE_KEYWORDS) do
-        if cleanRole:find(keyword) then
-            return true
-        end
-    end
-    return false
-end
+local NoliAbilities = {
+    ["AltAbility2"] = { -- Nova
+        ["Cooldown"] = 0,
+        ["LastUsed"] = 0,
+        ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
+    }
+}
 
-local function checkPlayerRank(targetPlayer)
-    if not targetPlayer or targetPlayer == player or notifiedStaff[targetPlayer.UserId] then return end
+local CoolkidAbilities = {
+    ["Corrupt"] = {
+        ["Cooldown"] = 12,
+        ["LastUsed"] = 0,
+        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
+    },
+    ["Walkspeed"] = {
+        ["Cooldown"] = 1,
+        ["LastUsed"] = 0,
+        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
+    }
+}
 
-    task.spawn(function()
-        local successRank, rank = pcall(function()
-            return targetPlayer:GetRankInGroup(STAFF_GROUP_ID)
-        end)
-        local successRole, roleTitle = pcall(function()
-            return targetPlayer:GetRoleInGroup(STAFF_GROUP_ID)
-        end)
+local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
+local NOLI_AUTO_ABILITIES = { "AltAbility2" }
+local COOLKID_AUTO_ABILITIES = { "Corrupt", "Walkspeed" }
 
-        if not successRank or not rank or rank == 0 then return end
-
-        if isStaffOrHighRank(roleTitle, rank) then
-            notifiedStaff[targetPlayer.UserId] = true
-
-            Rayfield:Notify({
-                Title = "⚠️ CAUGHT IN 4K! ⚠️",
-                Content = string.format("A MODERATOR IS OR HAS JOINED DO YOU WANNA KEEP PLAYING OR GET IN TROUBLE\n(%s - %s)", targetPlayer.DisplayName, roleTitle or "High Rank"),
-                Duration = 9,
-                Image = 4483362458,
-            })
-        end
-    end)
-end
-
--- Check all players already in the server when you join/execute
-for _, p in ipairs(Players:GetPlayers()) do
-    checkPlayerRank(p)
-end
-
--- Check any new high ranks that connect mid-game
-Players.PlayerAdded:Connect(function(newPlayer)
-    checkPlayerRank(newPlayer)
-end)
-
-Players.PlayerRemoving:Connect(function(leavingPlayer)
-    notifiedStaff[leavingPlayer.UserId] = nil
-end)
-
---// GLOBAL CRATE SPAWN NOTIFICATION LISTENER
-local function isCrateObject(obj)
-    if not obj or not obj:IsDescendantOf(workspace) then return false end
-    local name = obj.Name:lower()
-    if name:find("crate") or name:find("chest") or name:find("box") then
-        local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-        if prompt then return true end
-    end
-    return false
-end
-
-workspace.DescendantAdded:Connect(function(descendant)
-    if isCrateObject(descendant) then
-        Rayfield:Notify({
-            Title = "Crate Event",
-            Content = "A Crate Has Spawned!",
-            Duration = 4,
-            Image = 4483362458,
-        })
-    end
-end)
-
---// 5/5 GENERATOR COMPLETION LISTENER
-local allGensNotified = false
-
-local function isGenComplete(genModel)
-    if not genModel or not genModel.Parent or not genModel:IsDescendantOf(workspace) then 
-        return false 
-    end
-
-    if genModel:GetAttribute("Completed") == true 
-        or genModel:GetAttribute("Finished") == true 
-        or genModel:GetAttribute("Done") == true then
-        return true
-    end
-
-    local progressVal = genModel:FindFirstChild("Progress")
-    if progressVal and (progressVal:IsA("NumberValue") or progressVal:IsA("IntValue")) then
-        if progressVal.Value >= 100 then
-            return true
-        end
-    end
-
-    return false
-end
-
-local function getGeneratorSearchScope()
-    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame") and workspace.Map.Ingame:FindFirstChild("Map"))
-        or (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
-        or workspace:FindFirstChild("Map")
-        or workspace
-end
-
-task.spawn(function()
-    while true do
-        task.wait(1)
-        local scope = getGeneratorSearchScope()
-        local completedGens = 0
-        local countedModels = {}
-
-        for _, obj in ipairs(scope:GetDescendants()) do
-            if obj:IsA("Model") and obj.Name:lower():find("generator") and not countedModels[obj] then
-                if obj:FindFirstChild("Main") or obj:FindFirstChild("Progress") or obj:GetAttribute("Completed") ~= nil then
-                    countedModels[obj] = true
-                    if isGenComplete(obj) then
-                        completedGens = completedGens + 1
-                    end
-                end
-            end
-        end
-
-        if completedGens >= 5 then
-            if not allGensNotified then
-                allGensNotified = true
-                Rayfield:Notify({
-                    Title = "Generators Finished",
-                    Content = "All of the generators are finished! (5/5)",
-                    Duration = 4,
-                    Image = 4483362458,
-                })
-            end
-        else
-            allGensNotified = false
-        end
-    end
-end)
-
---// AUTO FARM SHARED VARIABLES
 local autoFarmLowHpOn = false
 local autoFarmAllOn = false
 local lockInFrontOn = false
 local stickToPersonOn = false
 local targetHealthThreshold = 20
 local hitDistanceOffset = 3
+local MAX_ABILITY_DISTANCE = 15
 
 local currentLockedTarget = nil
+
 local LowHpToggle
 local AllPlayersToggle
+
 --------------------------------------------------------------------------------
--- PART 2: AUTO-FARM SYSTEM (WHITELISTED SURVIVORS & KILLER VERIFICATION)
+-- CHARACTER STATE CHECKS
 --------------------------------------------------------------------------------
-
-local SURVIVOR_WHITELIST = {
-    ["guest1337"]     = "Guest 1337",
-    ["shedletsky"]    = "Shedletsky",
-    ["dusekkar"]      = "Dusekkar",
-    ["chance"]        = "Chance",
-    ["twotime"]       = "TwoTime",
-    ["007n7"]         = "007n7",
-    ["elliot"]        = "Elliot",
-    ["veeronica"]     = "Veeronica",
-    ["janedoe"]       = "Jane Doe",
-    ["messi"]         = "Messi",
-    ["noob"]          = "Noob",
-    ["taph"]          = "Taph",
-    ["builderman"]    = "Builderman",
-    ["torchwood"]     = "Torchwood",
-}
-
-local KILLER_CLASSES = {
-    ["slasher"]         = true,
-    ["jason"]           = true,
-    ["c00lkidd"]        = true,
-    ["1x1x1x1"]         = true,
-    ["noli"]            = true,
-    ["swordsmaster"]    = true,
-    ["guest666"]        = true,
-    ["2011x"]           = true,
-    ["johndoe"]         = true,
-    ["azure"]           = true,
-    ["shedletskyfunny"] = true,
-}
-
-local function isLocalPlayerKiller()
-    local myChar = player.Character
-    if not myChar then return false end
-    local charType = myChar:GetAttribute("Character") 
-        or myChar:GetAttribute("CharacterType") 
-        or myChar.Name
-    local key = string.lower(tostring(charType))
-    if key == "coolkid" then key = "c00lkidd" end
-    if key == "1x4" then key = "1x1x1x1" end
-    return KILLER_CLASSES[key] == true
+local function getCurrentCharacterType()
+    if not char then return nil end
+    return char:GetAttribute("Character")
 end
 
-local function isTargetWhitelistedSurvivor(targetChar)
-    if not targetChar then return false end
-    local charType = targetChar:GetAttribute("Character") 
-        or targetChar:GetAttribute("CharacterType") 
-        or targetChar.Name
-    local key = string.lower(tostring(charType))
-    return SURVIVOR_WHITELIST[key] ~= nil
+local function canUseCharacter()
+    if not char or not hum or hum.Health <= 0 then return false end
+    local cType = getCurrentCharacterType()
+
+    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" or cType == "coolkidrework" or cType == "2011X" then
+        return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
+    elseif cType == "Shedletsky" then
+        return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
+    end
+    return true
+end
+--------------------------------------------------------------------------------
+-- PART 2: ACTION & AUTO-FARM SYSTEM (RAW UNDERGROUND LOADER & SAFE SPACE)
+--------------------------------------------------------------------------------
+
+local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
+local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
+local SAFE_SPACE_TARGET = Vector3.new(MAP_CENTER.X, 5005, MAP_CENTER.Z)
+
+local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
+if not safeSpacePart then
+    safeSpacePart = Instance.new("Part")
+    safeSpacePart.Name = "SafeSpaceBaseplate"
+    safeSpacePart.Size = Vector3.new(200, 5, 200)
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+    safeSpacePart.Anchored = true
+    safeSpacePart.Material = Enum.Material.SmoothPlastic
+    safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
+    safeSpacePart.Parent = workspace
+else
+    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
 end
 
-local function isTargetAliveAndValid(p, maxHpConstraint)
-    if not p or not p.Parent or not p.Character or p == player then return false end
-    local tChar = p.Character
-    local tHum = tChar:FindFirstChild("Humanoid")
-    local tRoot = tChar:FindFirstChild("HumanoidRootPart")
-    
-    if not tHum or not tRoot or tHum.Health <= 0 or not tChar:IsDescendantOf(workspace) then
-        return false
+local function teleportToSafeSpace()
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        myRoot.CFrame = SAFE_SPACE_CFRAME * CFrame.new(0, 5, 0)
+    end
+end
+
+-- Reusable Low Health Protection Variables
+local lowHealthProtectionOn = false
+local healthThreshold = 50
+local isCurrentlyProtected = false
+local LowHealthToggle
+
+-- Remote Cache References (CharacterRemotes)
+local charRemotes = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
+
+local shedletskyRemote = charRemotes and charRemotes:FindFirstChild("Shedletsky") and charRemotes.Shedletsky:FindFirstChild("ShedletskyAttackRemote")
+local noliNovaRemote   = charRemotes and charRemotes:FindFirstChild("Noli") and charRemotes.Noli:FindFirstChild("NoliNova")
+
+local coolkidFolder = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd"))
+local coolkidWalkspeedRemote = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
+local coolkidCorruptRemote   = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
+
+local function castCharacterAction(actionName, targetPosition)
+    if not canUseCharacter() then return end
+    local cType = getCurrentCharacterType()
+
+    -- 1. Shedletsky Slash
+    if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
+        if not shedletskyRemote then
+            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+            local shedFolder = remotesFolder and remotesFolder:FindFirstChild("Shedletsky")
+            shedletskyRemote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
+        end
+
+        if shedletskyRemote then
+            local data = ShedletskyAbilities and ShedletskyAbilities["Slash"]
+            local now = os.clock()
+            
+            if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                if data then data.LastUsed = now end
+
+                if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
+                    local myRoot = char.HumanoidRootPart
+                    myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
+                end
+
+                task.spawn(function()
+                    pcall(function()
+                        if shedletskyRemote:IsA("RemoteFunction") then
+                            shedletskyRemote:InvokeServer()
+                        elseif shedletskyRemote:IsA("RemoteEvent") then
+                            shedletskyRemote:FireServer()
+                        end
+                    end)
+                end)
+            end
+        end
+        return
     end
 
-    if not isTargetWhitelistedSurvivor(tChar) then
+    -- 2. Noli Nova
+    if cType and cType == "Noli" and actionName == "AltAbility2" then
+        if not noliNovaRemote then
+            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+            local nFolder = remotesFolder and remotesFolder:FindFirstChild("Noli")
+            noliNovaRemote = nFolder and nFolder:FindFirstChild("NoliNova")
+        end
+
+        if noliNovaRemote then
+            local data = NoliAbilities and NoliAbilities["AltAbility2"]
+            local now = os.clock()
+
+            if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                if data then data.LastUsed = now end
+
+                task.spawn(function()
+                    pcall(function()
+                        noliNovaRemote:FireServer()
+                    end)
+                end)
+            end
+        end
+        return
+    end
+
+    -- 3. c00lkidd Abilities
+    if cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) then
+        local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+        local ckFolder = remotesFolder and (remotesFolder:FindFirstChild("Coolkid") or remotesFolder:FindFirstChild("c00lkidd"))
+
+        if actionName == "Walkspeed" then
+            if not coolkidWalkspeedRemote then
+                coolkidWalkspeedRemote = ckFolder and ckFolder:FindFirstChild("Walkspeed")
+            end
+
+            if coolkidWalkspeedRemote then
+                local data = CoolkidAbilities and CoolkidAbilities["Walkspeed"]
+                local now = os.clock()
+
+                if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                    if data then data.LastUsed = now end
+
+                    task.spawn(function()
+                        pcall(function()
+                            coolkidWalkspeedRemote:FireServer()
+                        end)
+                    end)
+                end
+            end
+            return
+        end
+
+        if actionName == "Corrupt" then
+            if not coolkidCorruptRemote then
+                coolkidCorruptRemote = ckFolder and ckFolder:FindFirstChild("Corrupt")
+            end
+
+            if coolkidCorruptRemote then
+                local data = CoolkidAbilities and CoolkidAbilities["Corrupt"]
+                local now = os.clock()
+
+                if (not data) or (now - data.LastUsed >= data.Cooldown) then
+                    if data then data.LastUsed = now end
+
+                    local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
+                    task.spawn(function()
+                        pcall(function()
+                            coolkidCorruptRemote:FireServer(aimPos, true)
+                        end)
+                    end)
+                end
+            end
+            return
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
+-- STRICT TARGET VALIDATION & SELECTION
+--------------------------------------------------------------------------------
+local function isTargetAliveAndValid(p, maxHpConstraint)
+    if not p or not p.Parent or not p.Character or p == player then return false end
+    local tHum = p.Character:FindFirstChild("Humanoid")
+    local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+    
+    if not tHum or not tRoot or tHum.Health <= 0 or not p.Character:IsDescendantOf(workspace) then
         return false
     end
 
@@ -368,45 +438,141 @@ local function positionAtTarget(targetPlayer)
     end
 end
 
-RS.Stepped:Connect(function()
-    if not autoFarmLowHpOn and not autoFarmAllOn then return end
-    if not char or not hum or hum.Health <= 0 then return end
-    if not isLocalPlayerKiller() then
-        autoFarmLowHpOn = false
-        autoFarmAllOn = false
-        currentLockedTarget = nil
-        return
-    end
+--------------------------------------------------------------------------------
+-- REUSABLE LOW HEALTH PROTECTION LOOP
+--------------------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if lowHealthProtectionOn and char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
 
-    local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
+            if humanoid and hrp and humanoid.Health > 0 then
+                if humanoid.Health <= healthThreshold then
+                    if autoFarmLowHpOn then
+                        autoFarmLowHpOn = false
+                        if LowHpToggle then LowHpToggle:Set(false) end
+                    end
+                    if autoFarmAllOn then
+                        autoFarmAllOn = false
+                        if AllPlayersToggle then AllPlayersToggle:Set(false) end
+                    end
+                    currentLockedTarget = nil
+                    isCurrentlyWaitingInSafeSpace = false
+
+                    if not safeSpacePart or not safeSpacePart.Parent then
+                        safeSpacePart = Instance.new("Part", workspace)
+                        safeSpacePart.Name = "SafeSpaceBaseplate"
+                        safeSpacePart.Size = Vector3.new(200, 5, 200)
+                        safeSpacePart.CFrame = SAFE_SPACE_CFRAME
+                        safeSpacePart.Anchored = true
+                        safeSpacePart.Material = Enum.Material.SmoothPlastic
+                        safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
+                    end
+
+                    local dist = (hrp.Position - SAFE_SPACE_TARGET).Magnitude
+
+                    if not isCurrentlyProtected or dist > 25 then
+                        hrp.CFrame = CFrame.new(SAFE_SPACE_TARGET)
+                        isCurrentlyProtected = true
+                    end
+                else
+                    if isCurrentlyProtected then
+                        isCurrentlyProtected = false
+                    end
+                end
+            end
+        else
+            isCurrentlyProtected = false
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- POSITIONING & ATTACK LOOPS WITH IDLE SAFE SPACE TELEPORT
+--------------------------------------------------------------------------------
+local isCurrentlyWaitingInSafeSpace = false
+
+RS.Stepped:Connect(function()
+    if not autoFarmLowHpOn and not autoFarmAllOn then 
+        isCurrentlyWaitingInSafeSpace = false
+        return 
+    end
+    if not char or not hum or hum.Health <= 0 then return end
+
     local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
+    local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
 
     if activeTarget and isTargetAliveAndValid(activeTarget, maxHpConstraint) then
+        isCurrentlyWaitingInSafeSpace = false
         positionAtTarget(activeTarget)
+    else
+        currentLockedTarget = nil
+        
+        if autoFarmLowHpOn and not isCurrentlyWaitingInSafeSpace then
+            isCurrentlyWaitingInSafeSpace = true
+            teleportToSafeSpace()
+        end
+    end
+end)
+
+RS.Heartbeat:Connect(function()
+    local cType = getCurrentCharacterType()
+    if cType and cType:lower():find("shedletsky") then
+        char:SetAttribute("CanRun", true)
+        char:SetAttribute("Slowed", false)
+        if hum and hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+    end
+
+    if not autoFarmLowHpOn and not autoFarmAllOn then return end
+
+    local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
+    local targetP = currentLockedTarget
+
+    if targetP and isTargetAliveAndValid(targetP, maxHpConstraint) then
+        local autoList = (cType and cType:lower():find("shedletsky") and SHEDLETSKY_AUTO_ABILITIES) 
+            or (cType == "Noli" and NOLI_AUTO_ABILITIES) 
+            or (cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) and COOLKID_AUTO_ABILITIES)
+            or {}
+
+        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+        if myRoot then
+            local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
+            if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
+                for _, abilityName in ipairs(autoList) do
+                    castCharacterAction(abilityName, tRoot.Position)
+                end
+            end
+        end
     else
         currentLockedTarget = nil
     end
 end)
 
-RS.Heartbeat:Connect(function()
-    if not autoFarmLowHpOn and not autoFarmAllOn then return end
+--------------------------------------------------------------------------------
+-- AUTO FARM TAB ELEMENTS (RAYFIELD)
+--------------------------------------------------------------------------------
 
-    if hum and hum.Health <= 30 then
-        if autoFarmLowHpOn and LowHpToggle then LowHpToggle:Set(false) end
-        if autoFarmAllOn and AllPlayersToggle then AllPlayersToggle:Set(false) end
-        autoFarmLowHpOn = false
-        autoFarmAllOn = false
-        currentLockedTarget = nil
-        return
-    end
+AutoFarmTab:CreateSection("RECOMMENDED TO USE")
 
-    local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
-    local targetP = currentLockedTarget
-
-    if not (targetP and isTargetAliveAndValid(targetP, maxHpConstraint)) then
-        currentLockedTarget = nil
-    end
-end)
+AutoFarmTab:CreateToggle({
+    Name = "Underground Auto Farm",
+    CurrentValue = false,
+    Callback = function(value)
+        if value then
+            pcall(function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/Funnikid69/looking-for-something/refs/heads/main/Undergroundautofarm.luau"))()
+            end)
+        else
+            local guiContainer = (gethui and gethui()) or game:GetService("CoreGui")
+            local ugGui = guiContainer:FindFirstChild("UndergroundGui") or player:FindFirstChild("PlayerGui"):FindFirstChild("UndergroundGui")
+            if ugGui then
+                ugGui:Destroy()
+            end
+        end
+    end,
+})
 
 AutoFarmTab:CreateSection("Targeting Options")
 
@@ -443,32 +609,16 @@ LowHpToggle = AutoFarmTab:CreateToggle({
     Name = "Auto Farm Low Health Players",
     CurrentValue = false,
     Callback = function(value)
-        if value then
-            if not isLocalPlayerKiller() then
-                task.spawn(function()
-                    if LowHpToggle then LowHpToggle:Set(false) end
-                end)
-                Rayfield:Notify({
-                    Title = "Auto Farm Error",
-                    Content = "Your Currently a Survivor And not a killer!",
-                    Duration = 3,
-                    Image = 4483362458,
-                })
-                return
-            end
-
-            if hum and hum.Health <= 30 then
-                autoFarmLowHpOn = false
-                task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
-                return
-            end
-
-            autoFarmLowHpOn = true
-            if AllPlayersToggle then AllPlayersToggle:Set(false) end
-        else
+        if value and hum and hum.Health <= healthThreshold and lowHealthProtectionOn then
             autoFarmLowHpOn = false
-            currentLockedTarget = nil
+            task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
+            teleportToSafeSpace()
+            return
         end
+        autoFarmLowHpOn = value
+        isCurrentlyWaitingInSafeSpace = false
+        if value and AllPlayersToggle then AllPlayersToggle:Set(false) end
+        if not value then currentLockedTarget = nil end
     end,
 })
 
@@ -476,32 +626,16 @@ AllPlayersToggle = AutoFarmTab:CreateToggle({
     Name = "Auto Farm All Players",
     CurrentValue = false,
     Callback = function(value)
-        if value then
-            if not isLocalPlayerKiller() then
-                task.spawn(function()
-                    if AllPlayersToggle then AllPlayersToggle:Set(false) end
-                end)
-                Rayfield:Notify({
-                    Title = "Auto Farm Error",
-                    Content = "Your Currently a Survivor And not a killer!",
-                    Duration = 3,
-                    Image = 4483362458,
-                })
-                return
-            end
-
-            if hum and hum.Health <= 30 then
-                autoFarmAllOn = false
-                task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
-                return
-            end
-
-            autoFarmAllOn = true
-            if LowHpToggle then LowHpToggle:Set(false) end
-        else
+        if value and hum and hum.Health <= healthThreshold and lowHealthProtectionOn then
             autoFarmAllOn = false
-            currentLockedTarget = nil
+            task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
+            teleportToSafeSpace()
+            return
         end
+        autoFarmAllOn = value
+        isCurrentlyWaitingInSafeSpace = false
+        if value and LowHpToggle then LowHpToggle:Set(false) end
+        if not value then currentLockedTarget = nil end
     end,
 })
 
@@ -515,86 +649,118 @@ AutoFarmTab:CreateDropdown({
         if val then 
             targetHealthThreshold = val 
             currentLockedTarget = nil
+            isCurrentlyWaitingInSafeSpace = false
         end
     end,
 })
+
+AutoFarmTab:CreateSection("Safety & Protection")
+
+LowHealthToggle = AutoFarmTab:CreateToggle({
+    Name = "Low Health Auto-Teleport",
+    CurrentValue = false,
+    Callback = function(value)
+        lowHealthProtectionOn = value
+        if not value then
+            isCurrentlyProtected = false
+        end
+    end,
+})
+
+AutoFarmTab:CreateSlider({
+    Name = "Health Threshold",
+    Range = {10, 80},
+    Increment = 5,
+    CurrentValue = 50,
+    Callback = function(value)
+        healthThreshold = value
+    end,
+})
+
+AutoFarmTab:CreateButton({
+    Name = "Teleport to Safe Space",
+    Callback = function()
+        teleportToSafeSpace()
+    end,
+})
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 1): UNIFIED ROLE ESP & DYNAMIC MINION ESP
+-- PART 3: ROLE-BASED DYNAMIC ESP (SURVIVORS & KILLERS)
 --------------------------------------------------------------------------------
 
 local espOn = false
-local minionEspOn = false
-local zombieEspOn = false
-
 local activeESP = {}
-local activeMinionESP = {}
-local activeZombieESP = {}
 
+-- Character Role Sets
 local SURVIVOR_CLASSES = {
-    ["guest1337"]     = "Guest 1337",
-    ["shedletsky"]    = "Shedletsky",
-    ["dusekkar"]      = "Dusekkar",
-    ["martialartist"] = "Martial Artist",
-    ["chance"]        = "Chance",
-    ["twotime"]       = "TwoTime",
-    ["007n7"]         = "007n7",
-    ["elliot"]        = "Elliot",
-    ["veeronica"]     = "Veeronica",
-    ["janedoe"]       = "Jane Doe",
-    ["messi"]         = "Messi",
-    ["noob"]          = "Noob",
-    ["taph"]          = "Taph",
-    ["builderman"]    = "Builderman",
-    ["helperbot"]     = "Helperbot",
-    ["torchwood"]     = "Torchwood",
+    ["guest1337"]     = true,
+    ["shedletsky"]    = true,
+    ["dusekkar"]      = true,
+    ["martialartist"] = true,
+    ["chance"]        = true,
+    ["twotime"]       = true,
+    ["007n7"]         = true,
+    ["elliot"]        = true,
+    ["veeronica"]     = true,
+    ["janedoe"]       = true,
+    ["messi"]         = true,
+    ["noob"]          = true,
+    ["taph"]          = true,
+    ["builderman"]    = true,
+    ["torchwood"]     = true
 }
 
 local KILLER_CLASSES = {
-    ["slasher"]         = "Slasher",
-    ["jason"]           = "Jason",
-    ["coolkid"]         = "c00lkidd",
-    ["c00lkidd"]        = "c00lkidd",
-    ["coolkidrework"]   = "c00lkidd",
-    ["1x4"]             = "1x1x1x1",
-    ["1x1x1x1"]         = "1x1x1x1",
-    ["noli"]            = "Noli",
-    ["swordsmaster"]    = "Swordsmaster",
-    ["guest666"]        = "Guest 666",
-    ["2011x"]           = "2011x",
-    ["johndoe"]         = "John Doe",
-    ["azure"]           = "Azure",
-    ["shedletskyfunny"] = "Shedletsky",
-    ["doombringer"]     = "Doombringer",
+    ["slasher"]       = true,
+    ["jason"]         = true,
+    ["coolkid"]       = true,
+    ["c00lkidd"]      = true,
+    ["coolkidrework"] = true,
+    ["1x4"]           = true,
+    ["1x1x1x1"]       = true,
+    ["noli"]          = true,
+    ["swordsmaster"]  = true,
+    ["guest666"]      = true,
+    ["2011x"]         = true,
+    ["johndoe"]       = true,
+    ["azure"]         = true,
+    ["doombringer"]   = true
 }
 
---------------------------------------------------------------------------------
--- PLAYER ROLE ESP
---------------------------------------------------------------------------------
-
-local function getRoleInfo(targetChar)
-    if not targetChar then return Color3.fromRGB(0, 160, 255), "Survivor", "Unknown" end
-    local rawCharType = targetChar:GetAttribute("Character") 
-        or targetChar:GetAttribute("CharacterType") 
-        or targetChar:GetAttribute("Role")
-        or targetChar.Name
-    local charKey = string.lower(tostring(rawCharType))
-
-    if charKey == "c00lkidd" or charKey == "coolkidd" then charKey = "coolkid" end
-    if charKey == "1x1x1x1" then charKey = "1x4" end
-
-    if KILLER_CLASSES[charKey] then
-        return Color3.fromRGB(255, 45, 45), "Killer", KILLER_CLASSES[charKey]
-    elseif SURVIVOR_CLASSES[charKey] then
-        return Color3.fromRGB(0, 160, 255), "Survivor", SURVIVOR_CLASSES[charKey]
+-- Determine Role Color, Role Name, and Character Name
+local function getCharacterInfo(targetChar)
+    if not targetChar then 
+        return Color3.fromRGB(0, 150, 255), "Survivor", "Unknown" 
     end
 
-    return Color3.fromRGB(0, 160, 255), "Survivor", targetChar.Name
+    local rawCharType = targetChar:GetAttribute("Character") or targetChar:GetAttribute("CharacterType")
+    
+    if not rawCharType then
+        for _, child in ipairs(targetChar:GetChildren()) do
+            if child:IsA("StringValue") and (SURVIVOR_CLASSES[string.lower(child.Value)] or KILLER_CLASSES[string.lower(child.Value)]) then
+                rawCharType = child.Value
+                break
+            end
+        end
+    end
+
+    rawCharType = rawCharType or targetChar.Name
+    local charType = string.lower(tostring(rawCharType))
+    local charDisplay = tostring(rawCharType)
+
+    if KILLER_CLASSES[charType] then
+        return Color3.fromRGB(255, 35, 35), "Killer", charDisplay
+    elseif SURVIVOR_CLASSES[charType] then
+        return Color3.fromRGB(0, 150, 255), "Survivor", charDisplay
+    end
+
+    return Color3.fromRGB(0, 150, 255), "Survivor", charDisplay
 end
 
 local function removeESP(plr)
     if activeESP[plr] then
         if activeESP[plr].Highlight then activeESP[plr].Highlight:Destroy() end
         if activeESP[plr].Billboard then activeESP[plr].Billboard:Destroy() end
+        if activeESP[plr].Connection then activeESP[plr].Connection:Disconnect() end
         activeESP[plr] = nil
     end
 end
@@ -605,52 +771,59 @@ local function applyESP(plr)
 
     local function setupChar(targetChar)
         if not targetChar then return end
-        local root = targetChar:WaitForChild("HumanoidRootPart", 4)
-        local hum = targetChar:WaitForChild("Humanoid", 4)
-        local head = targetChar:WaitForChild("Head", 4) or root
-        if not root or not hum or not head then return end
+        
+        local root = targetChar:WaitForChild("HumanoidRootPart", 5)
+        local targetHum = targetChar:WaitForChild("Humanoid", 5)
+        local head = targetChar:WaitForChild("Head", 5) or root
+        
+        if not root or not targetHum then return end
 
-        local roleColor, roleName, className = getRoleInfo(targetChar)
+        local roleColor, roleName, charName = getCharacterInfo(targetChar)
 
         local highlight = Instance.new("Highlight")
         highlight.Name = "ESP_Highlight"
         highlight.FillColor = roleColor
         highlight.FillTransparency = 0.5
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.OutlineTransparency = 0.1
+        highlight.OutlineTransparency = 0
         highlight.Adornee = targetChar
-        highlight.Enabled = espOn
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlight.Parent = targetChar
 
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "ESP_Billboard"
         billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 180, 0, 30)
+        billboard.Size = UDim2.new(0, 250, 0, 30)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.Adornee = head
-        billboard.Enabled = espOn
-        billboard.Parent = head
+        billboard.Parent = targetChar
 
         local label = Instance.new("TextLabel", billboard)
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
         label.TextColor3 = roleColor
-        label.TextStrokeTransparency = 0.2
-        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.TextStrokeTransparency = 0
         label.Font = Enum.Font.SourceSansBold
-        label.TextSize = 13
-        label.Text = string.format("%s [%s - %s] | %d HP", plr.DisplayName, className, roleName, math.floor(hum.Health))
+        label.TextSize = 14
+
+        local conn = RS.RenderStepped:Connect(function()
+            if not espOn or not targetChar:IsDescendantOf(workspace) or targetHum.Health <= 0 then
+                highlight.Enabled = false
+                billboard.Enabled = false
+            else
+                local updatedColor, updatedRole, updatedCharName = getCharacterInfo(targetChar)
+                highlight.FillColor = updatedColor
+                label.TextColor3 = updatedColor
+
+                highlight.Enabled = true
+                billboard.Enabled = true
+                label.Text = string.format("%s [%s - %s] | %d HP", plr.Name, updatedCharName, updatedRole, math.floor(targetHum.Health))
+            end
+        end)
 
         activeESP[plr] = {
             Highlight = highlight,
             Billboard = billboard,
-            Label = label,
-            Humanoid = hum,
-            Character = targetChar,
-            RoleColor = roleColor,
-            RoleName = roleName,
-            ClassName = className
+            Connection = conn
         }
     end
 
@@ -659,270 +832,23 @@ local function applyESP(plr)
 end
 
 --------------------------------------------------------------------------------
--- C00LKIDD MINION ESP (ORANGE)
+-- ESP TAB ELEMENTS (ORIGINAL RAYFIELD)
 --------------------------------------------------------------------------------
-
-local function isPizzaDeliveryMinion(model)
-    if not model or not model:IsA("Model") then return false end
-    local name = model.Name:lower()
-    return name == "pizzadeliveryrig" or name:find("pizzadelivery") or name:find("deliveryrig")
-end
-
-local function removeMinionESP(minion)
-    if activeMinionESP[minion] then
-        if activeMinionESP[minion].Highlight then activeMinionESP[minion].Highlight:Destroy() end
-        if activeMinionESP[minion].Billboard then activeMinionESP[minion].Billboard:Destroy() end
-        activeMinionESP[minion] = nil
-    end
-end
-
-local function applyMinionESP(minion)
-    if not minion or activeMinionESP[minion] or not minion:IsDescendantOf(workspace) then return end
-    local hum = minion:FindFirstChildOfClass("Humanoid")
-    local root = minion:FindFirstChild("HumanoidRootPart") or minion:FindFirstChildWhichIsA("BasePart")
-    local head = minion:FindFirstChild("Head") or root
-    if not root or not head then return end
-
-    local minionColor = Color3.fromRGB(255, 130, 0)
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Minion_Highlight"
-    highlight.FillColor = minionColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0.1
-    highlight.Adornee = minion
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = minion
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Minion_Billboard"
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 150, 0, 26)
-    billboard.StudsOffset = Vector3.new(0, 2.8, 0)
-    billboard.Adornee = head
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = minionColor
-    label.TextStrokeTransparency = 0.2
-    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = hum and string.format("c00lkidd Minion | %d HP", math.floor(hum.Health)) or "c00lkidd Minion"
-
-    activeMinionESP[minion] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Label = label,
-        Humanoid = hum,
-        Model = minion
-    }
-end
-
-local function scanMinions()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if isPizzaDeliveryMinion(obj) and not activeMinionESP[obj] then
-            applyMinionESP(obj)
-        end
-    end
-end
-
-local function clearMinions()
-    for m, _ in pairs(activeMinionESP) do
-        removeMinionESP(m)
-    end
-end
-
---------------------------------------------------------------------------------
--- 1X1X1X1 ZOMBIE ESP (DARK GREEN)
---------------------------------------------------------------------------------
-
-local function is1x1x1x1Zombie(model)
-    if not model or not model:IsA("Model") then return false end
-    local name = model.Name:lower()
-    return name == "1x1x1x1zombie" or name:find("1x1x1x1zombie") or (name:find("1x1x1x1") and name:find("zombie"))
-end
-
-local function removeZombieESP(zombie)
-    if activeZombieESP[zombie] then
-        if activeZombieESP[zombie].Highlight then activeZombieESP[zombie].Highlight:Destroy() end
-        if activeZombieESP[zombie].Billboard then activeZombieESP[zombie].Billboard:Destroy() end
-        activeZombieESP[zombie] = nil
-    end
-end
-
-local function applyZombieESP(zombie)
-    if not zombie or activeZombieESP[zombie] or not zombie:IsDescendantOf(workspace) then return end
-    local hum = zombie:FindFirstChildOfClass("Humanoid")
-    local root = zombie:FindFirstChild("HumanoidRootPart") or zombie:FindFirstChildWhichIsA("BasePart")
-    local head = zombie:FindFirstChild("Head") or root
-    if not root or not head then return end
-
-    local zombieColor = Color3.fromRGB(0, 190, 60)
-
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Zombie_Highlight"
-    highlight.FillColor = zombieColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0.1
-    highlight.Adornee = zombie
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = zombie
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Zombie_Billboard"
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 150, 0, 26)
-    billboard.StudsOffset = Vector3.new(0, 2.8, 0)
-    billboard.Adornee = head
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = zombieColor
-    label.TextStrokeTransparency = 0.2
-    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = hum and string.format("1x1x1x1 Zombie | %d HP", math.floor(hum.Health)) or "1x1x1x1 Zombie"
-
-    activeZombieESP[zombie] = {
-        Highlight = highlight,
-        Billboard = billboard,
-        Label = label,
-        Humanoid = hum,
-        Model = zombie
-    }
-end
-
-local function scanZombies()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if is1x1x1x1Zombie(obj) and not activeZombieESP[obj] then
-            applyZombieESP(obj)
-        end
-    end
-end
-
-local function clearZombies()
-    for z, _ in pairs(activeZombieESP) do
-        removeZombieESP(z)
-    end
-end
-
---------------------------------------------------------------------------------
--- EVENT LISTENERS & BACKGROUND REFRESH (INSTANT SPAWN DETECTION)
---------------------------------------------------------------------------------
-
-workspace.DescendantAdded:Connect(function(descendant)
-    if minionEspOn and isPizzaDeliveryMinion(descendant) then
-        task.wait(0.1)
-        applyMinionESP(descendant)
-    elseif zombieEspOn and is1x1x1x1Zombie(descendant) then
-        task.wait(0.1)
-        applyZombieESP(descendant)
-    end
-end)
-
-workspace.DescendantRemoving:Connect(function(descendant)
-    if activeMinionESP[descendant] then
-        removeMinionESP(descendant)
-    elseif activeZombieESP[descendant] then
-        removeZombieESP(descendant)
-    end
-end)
-
--- Low-overhead periodic loop (1.0s interval) to catch state & health updates
-task.spawn(function()
-    while true do
-        task.wait(1.0)
-
-        if espOn then
-            for plr, data in pairs(activeESP) do
-                if data.Character and data.Character:IsDescendantOf(workspace) and data.Humanoid and data.Humanoid.Health > 0 then
-                    data.Highlight.Enabled = true
-                    data.Billboard.Enabled = true
-                    data.Label.Text = string.format("%s [%s - %s] | %d HP", plr.DisplayName, data.ClassName, data.RoleName, math.floor(data.Humanoid.Health))
-                else
-                    data.Highlight.Enabled = false
-                    data.Billboard.Enabled = false
-                end
-            end
-        end
-
-        if minionEspOn then
-            scanMinions()
-            for minion, data in pairs(activeMinionESP) do
-                if not minion:IsDescendantOf(workspace) or (data.Humanoid and data.Humanoid.Health <= 0) then
-                    removeMinionESP(minion)
-                elseif data.Humanoid and data.Label then
-                    data.Label.Text = string.format("c00lkidd Minion | %d HP", math.floor(data.Humanoid.Health))
-                end
-            end
-        end
-
-        if zombieEspOn then
-            scanZombies()
-            for zombie, data in pairs(activeZombieESP) do
-                if not zombie:IsDescendantOf(workspace) or (data.Humanoid and data.Humanoid.Health <= 0) then
-                    removeZombieESP(zombie)
-                elseif data.Humanoid and data.Label then
-                    data.Label.Text = string.format("1x1x1x1 Zombie | %d HP", math.floor(data.Humanoid.Health))
-                end
-            end
-        end
-    end
-end)
-
---------------------------------------------------------------------------------
--- RAYFIELD UI TOGGLES
---------------------------------------------------------------------------------
-
-ESPTab:CreateSection("Player Visuals")
+ESPTab:CreateSection("ESP Visuals")
 
 ESPTab:CreateToggle({
     Name = "Role ESP (Blue Survivor / Red Killer)",
     CurrentValue = false,
     Callback = function(value)
         espOn = value
-        for _, p in ipairs(Players:GetPlayers()) do
-            if value then
+        if espOn then
+            for _, p in ipairs(Players:GetPlayers()) do
                 applyESP(p)
-            else
+            end
+        else
+            for p, _ in pairs(activeESP) do
                 removeESP(p)
             end
-        end
-    end,
-})
-
-ESPTab:CreateSection("Minion Visuals")
-
-ESPTab:CreateToggle({
-    Name = "c00lkidd Minion ESP",
-    CurrentValue = false,
-    Callback = function(value)
-        minionEspOn = value
-        if value then
-            scanMinions()
-        else
-            clearMinions()
-        end
-    end,
-})
-
-ESPTab:CreateToggle({
-    Name = "1x1x1x1 Zombie ESP",
-    CurrentValue = false,
-    Callback = function(value)
-        zombieEspOn = value
-        if value then
-            scanZombies()
-        else
-            clearZombies()
         end
     end,
 })
@@ -935,647 +861,14 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 3 (SECTION 2): OBJECTIVES & ITEMS ESP (SCOPED & ZERO LAG)
---------------------------------------------------------------------------------
-
-local generatorEspOn = false
-local crateEspOn = false
-local itemEspOn = false
-
-local activeGenESP = {}
-local activeCrateESP = {}
-local activeItemESP = {}
-
-local function getMapScope()
-    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
-        or workspace:FindFirstChild("Map")
-        or workspace
-end
-
-local function isGenComplete(genModel)
-    if not genModel or not genModel.Parent then return true end
-    if genModel:GetAttribute("Completed") == true 
-        or genModel:GetAttribute("Finished") == true 
-        or genModel:GetAttribute("Done") == true then
-        return true
-    end
-    local progress = genModel:FindFirstChild("Progress")
-    if progress and (progress:IsA("NumberValue") or progress:IsA("IntValue")) then
-        if progress.Value >= 100 then return true end
-    end
-    return false
-end
-
---// GENERATOR ESP
-local function removeGenESP(gen)
-    if activeGenESP[gen] then
-        if activeGenESP[gen].Highlight then activeGenESP[gen].Highlight:Destroy() end
-        if activeGenESP[gen].Billboard then activeGenESP[gen].Billboard:Destroy() end
-        activeGenESP[gen] = nil
-    end
-end
-
-local function applyGenESP(genModel)
-    if not genModel or activeGenESP[genModel] or not genModel:IsDescendantOf(workspace) then return end
-    local mainPart = genModel:FindFirstChild("Main") or genModel.PrimaryPart or genModel:FindFirstChildWhichIsA("BasePart", true)
-    if not mainPart then return end
-
-    local highlight = Instance.new("Highlight")
-    highlight.FillTransparency = 0.5
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.Adornee = genModel
-    highlight.Parent = genModel
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 140, 0, 24)
-    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
-    billboard.Adornee = mainPart
-    billboard.Parent = mainPart
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextStrokeTransparency = 0.2
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-
-    activeGenESP[genModel] = { Highlight = highlight, Billboard = billboard, Label = label, Main = mainPart, Model = genModel }
-end
-
-local function clearGenESP()
-    for g, _ in pairs(activeGenESP) do removeGenESP(g) end
-end
-
---// CRATE ESP
-local function removeCrateESP(crate)
-    if activeCrateESP[crate] then
-        if activeCrateESP[crate].Highlight then activeCrateESP[crate].Highlight:Destroy() end
-        if activeCrateESP[crate].Billboard then activeCrateESP[crate].Billboard:Destroy() end
-        activeCrateESP[crate] = nil
-    end
-end
-
-local function applyCrateESP(crate)
-    if not crate or activeCrateESP[crate] or not crate:IsDescendantOf(workspace) then return end
-    local targetPart = crate:IsA("BasePart") and crate or (crate:FindFirstChildWhichIsA("BasePart", true))
-    if not targetPart then return end
-
-    local purple = Color3.fromRGB(180, 40, 255)
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = purple
-    highlight.FillTransparency = 0.45
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.Adornee = crate
-    highlight.Parent = crate
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 120, 0, 22)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.Adornee = targetPart
-    billboard.Parent = targetPart
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = purple
-    label.TextStrokeTransparency = 0.2
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = "Crate"
-
-    activeCrateESP[crate] = { Highlight = highlight, Billboard = billboard }
-end
-
-local function clearCrateESP()
-    for c, _ in pairs(activeCrateESP) do removeCrateESP(c) end
-end
-
---// ITEM ESP
-local function resolveValidItem(prompt)
-    if not prompt or not prompt.Enabled then return nil end
-    local parent = prompt.Parent
-    if not parent or not parent:IsDescendantOf(workspace) then return nil end
-
-    local name = parent.Name:lower()
-    local act = prompt.ActionText:lower()
-    local obj = prompt.ObjectText:lower()
-
-    if name:find("generator") or act:find("repair") or obj:find("generator") then return nil end
-    if name:find("crate") or obj:find("crate") or act:find("crate") then return nil end
-
-    local model = prompt:FindFirstAncestorOfClass("Model")
-    if model and (Players:GetPlayerFromCharacter(model) or model:FindFirstChildOfClass("Humanoid")) then
-        return nil
-    end
-
-    return parent:IsA("BasePart") and parent or (model and model ~= workspace and model)
-end
-
-local function removeItemESP(item)
-    if activeItemESP[item] then
-        if activeItemESP[item].Highlight then activeItemESP[item].Highlight:Destroy() end
-        if activeItemESP[item].Billboard then activeItemESP[item].Billboard:Destroy() end
-        activeItemESP[item] = nil
-    end
-end
-
-local function applyItemESP(itemObj)
-    if not itemObj or activeItemESP[itemObj] or not itemObj:IsDescendantOf(workspace) then return end
-    local targetPart = itemObj:IsA("BasePart") and itemObj or itemObj:FindFirstChildWhichIsA("BasePart", true)
-    if not targetPart then return end
-
-    local prompt = itemObj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    local itemName = (prompt and prompt.ActionText ~= "" and prompt.ActionText) or itemObj.Name
-    local green = Color3.fromRGB(0, 255, 120)
-
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = green
-    highlight.FillTransparency = 0.45
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.Adornee = itemObj
-    highlight.Parent = itemObj
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 130, 0, 22)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
-    billboard.Adornee = targetPart
-    billboard.Parent = targetPart
-
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = green
-    label.TextStrokeTransparency = 0.2
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 13
-    label.Text = itemName
-
-    activeItemESP[itemObj] = { Highlight = highlight, Billboard = billboard }
-end
-
-local function clearItemESP()
-    for i, _ in pairs(activeItemESP) do removeItemESP(i) end
-end
-
--- Scan only every 1.5s inside map folder to eliminate lag
-task.spawn(function()
-    while true do
-        task.wait(1.5)
-        local scope = getMapScope()
-
-        if generatorEspOn then
-            for _, obj in ipairs(scope:GetDescendants()) do
-                if obj:IsA("Model") and obj.Name:lower():find("generator") and obj:FindFirstChild("Main") then
-                    if not activeGenESP[obj] then applyGenESP(obj) end
-                end
-            end
-            for gen, data in pairs(activeGenESP) do
-                if isGenComplete(data.Model) then
-                    data.Highlight.FillColor = Color3.fromRGB(255, 255, 255)
-                    data.Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    data.Label.Text = "Generator [DONE]"
-                else
-                    local p = data.Model:FindFirstChild("Progress")
-                    local pct = p and p.Value or 0
-                    data.Highlight.FillColor = Color3.fromRGB(255, 220, 0)
-                    data.Label.TextColor3 = Color3.fromRGB(255, 220, 0)
-                    data.Label.Text = string.format("Generator [%d%%]", math.floor(pct))
-                end
-            end
-        end
-
-        if crateEspOn then
-            for _, obj in ipairs(scope:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") and obj.Enabled then
-                    local p = obj.Parent
-                    local name = p and p.Name:lower() or ""
-                    if name:find("crate") or name:find("chest") or name:find("box") then
-                        local model = p:IsA("Model") and p or p.Parent
-                        if not activeCrateESP[model] then applyCrateESP(model) end
-                    end
-                end
-            end
-        end
-
-        if itemEspOn then
-            for _, prompt in ipairs(scope:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") then
-                    local target = resolveValidItem(prompt)
-                    if target and not activeItemESP[target] then
-                        applyItemESP(target)
-                    end
-                end
-            end
-        end
-    end
-end)
-
-ESPTab:CreateSection("Objective & Item Visuals")
-
-ESPTab:CreateToggle({
-    Name = "Generator ESP (Yellow / White)",
-    CurrentValue = false,
-    Callback = function(value)
-        generatorEspOn = value
-        if not value then clearGenESP() end
-    end,
-})
-
-ESPTab:CreateToggle({
-    Name = "Crate ESP (Purple)",
-    CurrentValue = false,
-    Callback = function(value)
-        crateEspOn = value
-        if not value then clearCrateESP() end
-    end,
-})
-
-ESPTab:CreateToggle({
-    Name = "Item ESP (Green)",
-    CurrentValue = false,
-    Callback = function(value)
-        itemEspOn = value
-        if not value then clearItemESP() end
-    end,
-})
---------------------------------------------------------------------------------
--- PART 4 (SECTION 1): KILLER CAMLOCK SYSTEM & DYNAMIC GUI
+-- PART 4: COMBAT TAB & UTILITY TAB (RAW KILLER CAMLOCK LOADER)
 --------------------------------------------------------------------------------
 
 local CoreGui = game:GetService("CoreGui")
 
---// CONFIGURATION
-local MAX_SURVIVOR_DISTANCE = 85
-local CAM_SMOOTHNESS = 0.38        -- Responsive tracking
-local CHAR_SMOOTHNESS = 0.45       -- Snappy body alignment for slash hitboxes
-local AIM_HEIGHT_OFFSET = 0.2      -- Center-mass chest alignment
-
-local SURVIVOR_WHITELIST = {
-    ["guest1337"]     = "Guest 1337",
-    ["shedletsky"]    = "Shedletsky",
-    ["dusekkar"]      = "Dusekkar",
-    ["chance"]        = "Chance",
-    ["twotime"]       = "TwoTime",
-    ["007n7"]         = "007n7",
-    ["elliot"]        = "Elliot",
-    ["veeronica"]     = "Veeronica",
-    ["janedoe"]       = "Jane Doe",
-    ["messi"]         = "Messi",
-    ["noob"]          = "Noob",
-    ["taph"]          = "Taph",
-    ["builderman"]    = "Builderman",
-    ["helperbot"]     = "Helperbot",
-    ["torchwood"]     = "Torchwood",
-}
-
-local KILLER_CLASSES = {
-    ["slasher"]         = true,
-    ["jason"]           = true,
-    ["coolkid"]         = true,
-    ["c00lkidd"]        = true,
-    ["coolkidrework"]   = true,
-    ["1x4"]             = true,
-    ["1x1x1x1"]         = true,
-    ["noli"]            = true,
-    ["swordsmaster"]    = true,
-    ["guest666"]        = true,
-    ["2011x"]           = true,
-    ["johndoe"]         = true,
-    ["azure"]           = true,
-    ["shedletskyfunny"] = true,
-    ["doombringer"]     = true,
-}
-
---// STATE
-local isLocked = false
-local currentLockedSurvivor = nil
-
---// SAFE GUI PARENTING (Supports Mobile & PC Executors)
-local function getGuiContainer()
-    if gethui then
-        return gethui()
-    end
-    local canUseCore, _ = pcall(function()
-        local test = Instance.new("Folder")
-        test.Parent = CoreGui
-        test:Destroy()
-    end)
-    if canUseCore then
-        return CoreGui
-    end
-    return player:WaitForChild("PlayerGui")
-end
-
-local guiContainer = getGuiContainer()
-local GUI_NAME = "KillerCamlockUI"
-
-local oldGui = guiContainer:FindFirstChild(GUI_NAME)
-if oldGui then
-    oldGui:Destroy()
-end
-
---// GUI CREATION
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = GUI_NAME
-screenGui.ResetOnSpawn = false
-screenGui.Enabled = false
-screenGui.Parent = guiContainer
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 190, 0, 92)
-mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-mainFrame.BackgroundTransparency = 1
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = screenGui
-
-local header = Instance.new("TextLabel")
-header.Name = "Header"
-header.Size = UDim2.new(1, 0, 0, 30)
-header.Position = UDim2.new(0, 0, 0, 0)
-header.BackgroundColor3 = Color3.fromRGB(150, 15, 15)
-header.BorderSizePixel = 0
-header.Font = Enum.Font.GothamBold
-header.Text = "Killers Aimbot"
-header.TextColor3 = Color3.fromRGB(245, 245, 245)
-header.TextSize = 13
-header.Parent = mainFrame
-
-local headerCorner = Instance.new("UICorner")
-headerCorner.CornerRadius = UDim.new(0, 8)
-headerCorner.Parent = header
-
-local headerGradient = Instance.new("UIGradient")
-headerGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 5, 5)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 20, 20)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 5, 5)),
-})
-headerGradient.Parent = header
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Name = "ToggleButton"
-toggleButton.Size = UDim2.new(1, 0, 0, 52)
-toggleButton.Position = UDim2.new(0, 0, 0, 36)
-toggleButton.BackgroundColor3 = Color3.fromRGB(120, 10, 10)
-toggleButton.BorderSizePixel = 0
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.Text = "Aimbot : Off"
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.TextSize = 14
-toggleButton.AutoButtonColor = false
-toggleButton.Parent = mainFrame
-
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 8)
-buttonCorner.Parent = toggleButton
-
-local buttonGradient = Instance.new("UIGradient")
-buttonGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 3, 3)),
-    ColorSequenceKeypoint.new(0.45, Color3.fromRGB(140, 15, 15)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 20, 20)),
-})
-buttonGradient.Parent = toggleButton
-
---// TARGET WHITE DOT
-local targetDotGui = Instance.new("BillboardGui")
-targetDotGui.Name = "CamlockTargetDot"
-targetDotGui.Size = UDim2.new(0, 9, 0, 9)
-targetDotGui.AlwaysOnTop = true
-targetDotGui.Active = false
-targetDotGui.ResetOnSpawn = false
-targetDotGui.Enabled = false
-targetDotGui.Parent = screenGui
-
-local dotFrame = Instance.new("Frame")
-dotFrame.Size = UDim2.new(1, 0, 1, 0)
-dotFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-dotFrame.BorderSizePixel = 0
-dotFrame.Parent = targetDotGui
-
-local dotCorner = Instance.new("UICorner")
-dotCorner.CornerRadius = UDim.new(1, 0)
-dotCorner.Parent = dotFrame
-
-local dotStroke = Instance.new("UIStroke")
-dotStroke.Thickness = 1.2
-dotStroke.Color = Color3.fromRGB(0, 0, 0)
-dotStroke.Transparency = 0.4
-dotStroke.Parent = dotFrame
-
---// HELPER FUNCTIONS
-local function getCharacterKey(char)
-    if not char then return "" end
-    local charType = char:GetAttribute("Character")
-        or char:GetAttribute("CharacterType")
-        or char:GetAttribute("Role")
-        or char.Name
-    local key = string.lower(tostring(charType))
-
-    if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
-    if key == "1x1x1x1" then key = "1x4" end
-    return key
-end
-
-local function isLocalPlayerKiller()
-    local myChar = player.Character
-    if not myChar then return false end
-    local key = getCharacterKey(myChar)
-    return KILLER_CLASSES[key] == true
-end
-
-local function isSurvivorAliveAndValid(p)
-    if not p or not p.Parent or not p.Character or p == player then return false end
-    local tChar = p.Character
-    if not tChar:IsDescendantOf(workspace) then return false end
-
-    local tHum = tChar:FindFirstChildOfClass("Humanoid")
-    local tRoot = tChar:FindFirstChild("HumanoidRootPart")
-    if not tHum or not tRoot or tHum.Health <= 0 then return false end
-
-    local key = getCharacterKey(tChar)
-    if not SURVIVOR_WHITELIST[key] then return false end
-    if KILLER_CLASSES[key] then return false end
-
-    return true
-end
-
---// TARGET ACQUISITION
-local function getLockedOrClosestSurvivor()
-    if currentLockedSurvivor and isSurvivorAliveAndValid(currentLockedSurvivor) then
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local tRoot = currentLockedSurvivor.Character:FindFirstChild("HumanoidRootPart")
-        if myRoot and tRoot then
-            local dist = (myRoot.Position - tRoot.Position).Magnitude
-            if dist <= MAX_SURVIVOR_DISTANCE then
-                return currentLockedSurvivor.Character
-            end
-        end
-    end
-
-    currentLockedSurvivor = nil
-
-    local myChar = player.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local closest = nil
-    local shortestDist = MAX_SURVIVOR_DISTANCE
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and isSurvivorAliveAndValid(p) then
-            local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
-            if tRoot then
-                local dist = (myRoot.Position - tRoot.Position).Magnitude
-                if dist <= shortestDist then
-                    shortestDist = dist
-                    closest = p
-                end
-            end
-        end
-    end
-
-    currentLockedSurvivor = closest
-    return closest and closest.Character or nil
-end
-
-Players.PlayerRemoving:Connect(function(leavingPlayer)
-    if currentLockedSurvivor == leavingPlayer then
-        currentLockedSurvivor = nil
-        targetDotGui.Enabled = false
-        targetDotGui.Adornee = nil
-    end
-end)
-
---// CAMLOCK LOOP CONTROLS
-local function disableLock()
-    isLocked = false
-    currentLockedSurvivor = nil
-    targetDotGui.Enabled = false
-    targetDotGui.Adornee = nil
-    pcall(function()
-        RS:UnbindFromRenderStep("KillerCamlockLoop")
-    end)
-    toggleButton.Text = "Aimbot : Off"
-end
-
-local function enableLock()
-    isLocked = true
-    RS:BindToRenderStep("KillerCamlockLoop", Enum.RenderPriority.Camera.Value, function()
-        if not isLocked then return end
-
-        if not isLocalPlayerKiller() then
-            toggleButton.Text = "Not a Killer"
-            currentLockedSurvivor = nil
-            targetDotGui.Enabled = false
-            targetDotGui.Adornee = nil
-            return
-        end
-
-        local myChar = player.Character
-        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-        if not myRoot or not myHum or myHum.Health <= 0 then
-            targetDotGui.Enabled = false
-            return
-        end
-
-        local targetChar = getLockedOrClosestSurvivor()
-        if not targetChar then
-            toggleButton.Text = "Aimbot : No target"
-            targetDotGui.Enabled = false
-            targetDotGui.Adornee = nil
-            return
-        end
-
-        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-        if not targetRoot or not targetHum or targetHum.Health <= 0 then
-            currentLockedSurvivor = nil
-            toggleButton.Text = "Aimbot : No target"
-            targetDotGui.Enabled = false
-            targetDotGui.Adornee = nil
-            return
-        end
-
-        toggleButton.Text = "Aimbot : On - Locked"
-
-        local adorneePart = targetChar:FindFirstChild("UpperTorso")
-            or targetChar:FindFirstChild("Torso")
-            or targetRoot
-        targetDotGui.Adornee = adorneePart
-        targetDotGui.Enabled = true
-
-        local currentCamera = workspace.CurrentCamera
-        if not currentCamera then return end
-
-        local myPos = myRoot.Position
-        local targetPos = targetRoot.Position
-        local aimTarget = targetPos + Vector3.new(0, AIM_HEIGHT_OFFSET, 0)
-
-        local camPos = currentCamera.CFrame.Position
-        local toAim = (aimTarget - camPos)
-
-        if toAim.Magnitude > 0.2 then
-            local targetCamCF = CFrame.lookAt(camPos, aimTarget)
-            currentCamera.CFrame = currentCamera.CFrame:Lerp(targetCamCF, CAM_SMOOTHNESS)
-
-            local flatDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
-            if flatDiff.Magnitude > 0.4 then
-                local charGoalCF = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
-                myRoot.CFrame = myRoot.CFrame:Lerp(charGoalCF, CHAR_SMOOTHNESS)
-            end
-        end
-    end)
-end
-
---// TOGGLE INTERACTION
-toggleButton.MouseButton1Click:Connect(function()
-    if isLocked then
-        disableLock()
-    else
-        enableLock()
-    end
-end)
-
---// RAYFIELD COMBAT TAB BINDING
-CombatTab:CreateSection("Combat Utility")
-
-CombatTab:CreateToggle({
-    Name = "Killer Camlock",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            if not isLocalPlayerKiller() then
-                task.spawn(function()
-                    Rayfield:Notify({
-                        Title = "Camlock Error",
-                        Content = "You're not a killer!",
-                        Duration = 3,
-                        Image = 4483362458,
-                    })
-                end)
-            end
-            screenGui.Enabled = true
-            enableLock()
-        else
-            disableLock()
-            screenGui.Enabled = false
-        end
-    end,
-})
 --------------------------------------------------------------------------------
--- PART 4 (SECTION 2): COMBAT ATTACKS & KILLER ABILITY CONTROLLER
+-- HITBOX EXPANDER / LUNGE BOOST SYSTEM
 --------------------------------------------------------------------------------
-
---// HITBOX EXPANDER / LUNGE BOOST
 local lungeBoostOn = false
 local lungeRange = 9.6
 
@@ -1619,7 +912,7 @@ CombatTab:CreateToggle({
 
 CombatTab:CreateSlider({
     Name = "Lunge Range",
-    Range = {1, 200},
+    Range = {1, 250},
     Increment = 0.5,
     CurrentValue = 9.6,
     Callback = function(value)
@@ -1627,104 +920,143 @@ CombatTab:CreateSlider({
     end,
 })
 
---// C00LKIDD WALKSPEED / CONTROLLABLE DASH
-local coolkiddDashOn = false
-local coolkiddDashResponsiveness = 100
-local coolkiddDashConn = nil
-
-local function hookRootForDash(char)
-    if not char then return end
-    local root = char:WaitForChild("HumanoidRootPart", 5)
-    local hum = char:WaitForChild("Humanoid", 5)
-    if not root or not hum then return end
-
-    if coolkiddDashConn then
-        coolkiddDashConn:Disconnect()
-        coolkiddDashConn = nil
-    end
-
-    coolkiddDashConn = root.ChildAdded:Connect(function(child)
-        if not coolkiddDashOn then return end
-        if not child:IsA("LinearVelocity") then return end
-
-        local parentName = char.Parent and char.Parent.Name:lower() or ""
-        local charName = char.Name:gsub("0", "o"):lower()
-        local isCoolkidd = (charName:find("coolkid") or charName:find("lkid")) or (char:GetAttribute("Character") and tostring(char:GetAttribute("Character")):lower():find("coolkid"))
-
-        if isCoolkidd and parentName:find("killer") then
-            local originalVelocity = child.LineDirection
-            local originalVelocityMag = child.LineDirection.Magnitude
-            if originalVelocityMag == 0 then originalVelocityMag = 1 end
-
-            local speedMultipliers = char:FindFirstChild("SpeedMultipliers")
-            if speedMultipliers then
-                for _, v in ipairs(speedMultipliers:GetChildren()) do
-                    if v.Name == "HinderedMovement" and v.Value == 0 then
-                        v.Value = 0.005
-                    end
-                end
-            end
-
-            local function updateVelocity(start)
-                if not coolkiddDashOn or not child.Parent then return end
-                local curCam = workspace.CurrentCamera
-
-                if hum.MoveDirection ~= Vector3.zero then
-                    child.LineDirection = child.LineDirection:Lerp(hum.MoveDirection * originalVelocityMag, coolkiddDashResponsiveness / 1000)
-                elseif curCam then
-                    local cameraDirection = Vector3.new(curCam.CFrame.LookVector.X, 0, curCam.CFrame.LookVector.Z)
-                    if cameraDirection.Magnitude > 0 then
-                        child.LineDirection = child.LineDirection:Lerp(cameraDirection.Unit * originalVelocityMag, coolkiddDashResponsiveness / 1000)
-                        if child.LineVelocity > 0 or start then
-                            root.CFrame = root.CFrame:Lerp(CFrame.lookAt(root.Position, root.Position + cameraDirection), start and 1 or 0.05)
-                        end
-                    end
-                else
-                    child.LineDirection = originalVelocity
-                end
-            end
-
-            updateVelocity(true)
-            local c1 = hum:GetPropertyChangedSignal("MoveDirection"):Connect(function() updateVelocity(false) end)
-            local c2
-            if workspace.CurrentCamera then
-                c2 = workspace.CurrentCamera:GetPropertyChangedSignal("CFrame"):Connect(function() updateVelocity(false) end)
-            end
-
-            child.Destroying:Once(function()
-                if c1 then c1:Disconnect() c1 = nil end
-                if c2 then c2:Disconnect() c2 = nil end
-            end)
-        end
-    end)
-end
-
-player.CharacterAdded:Connect(hookRootForDash)
-if player.Character then
-    task.spawn(function()
-        hookRootForDash(player.Character)
-    end)
-end
-
-CombatTab:CreateSection("Killer Ability Controllers")
+--------------------------------------------------------------------------------
+-- KILLER CAMLOCK LOADER
+--------------------------------------------------------------------------------
+CombatTab:CreateSection("Killer Camlock")
 
 CombatTab:CreateToggle({
-    Name = "c00lkidd Walkspeed Controller",
+    Name = "Killer Camlock",
     CurrentValue = false,
     Callback = function(value)
-        coolkiddDashOn = value
-        if value and player.Character then
-            hookRootForDash(player.Character)
+        if value then
+            pcall(function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/Funnikid69/looking-for-something/refs/heads/main/camlock.luau"))()
+            end)
+        else
+            local guiContainer = (gethui and gethui()) or game:GetService("CoreGui")
+            local camGui = guiContainer:FindFirstChild("KillerCamlockUI") or player:FindFirstChild("PlayerGui"):FindFirstChild("KillerCamlockUI")
+            if camGui then
+                camGui:Destroy()
+            end
+            pcall(function()
+                RS:UnbindFromRenderStep("KillerCamlockLoop")
+                RS:UnbindFromRenderStep("StandaloneKillerCamlockLoop")
+            end)
         end
     end,
 })
---------------------------------------------------------------------------------
--- PART 4 (SECTION 3): MOVEMENT, STEALTH, STAMINA & AUTO GENERATOR
---------------------------------------------------------------------------------
 
---// TPWALK
+--------------------------------------------------------------------------------
+-- UTILITY TAB (MOVEMENT & MISC)
+--------------------------------------------------------------------------------
 UtilityTab:CreateSection("Movement Mods")
 
+-- Infinite Stamina Engine
+local infiniteStaminaOn = false
+local staminaConnections = {}
+local staminaCharAddedConn = nil
+
+local function disconnectStamina()
+    for _, conn in ipairs(staminaConnections) do
+        if conn and conn.Disconnect then
+            conn:Disconnect()
+        end
+    end
+    table.clear(staminaConnections)
+end
+
+local function updateStaminaVisuals()
+    local character = player.Character
+    if not character then return end
+
+    character:SetAttribute("StaminaDisabled", true)
+
+    local playerGui = player:FindFirstChildOfClass("PlayerGui")
+    local coreHud = playerGui and playerGui:FindFirstChild("CoreHud")
+    local playerInfo = coreHud and coreHud:FindFirstChild("PlayerInfo")
+    local bars = playerInfo and playerInfo:FindFirstChild("Bars")
+    local stamina = bars and bars:FindFirstChild("Stamina")
+
+    if not stamina then return end
+
+    local amount = stamina:FindFirstChild("Amount")
+    if amount and amount:IsA("TextLabel") then
+        amount.Text = "100/100"
+    end
+
+    local bar = stamina:FindFirstChild("Bar")
+    local clipping = bar and bar:FindFirstChild("Clipping")
+
+    if clipping then
+        clipping.Size = UDim2.fromScale(1, 1)
+
+        local top = clipping:FindFirstChild("Top")
+        if top then
+            top.Size = UDim2.fromScale(1, 1)
+        end
+    end
+end
+
+local function bindStaminaCharacter(character)
+    disconnectStamina()
+    if not infiniteStaminaOn or not character then return end
+
+    character:SetAttribute("StaminaDisabled", true)
+
+    table.insert(staminaConnections, character.AttributeChanged:Connect(function(attribute)
+        if infiniteStaminaOn and attribute == "StaminaDisabled" and character:GetAttribute("StaminaDisabled") ~= true then
+            character:SetAttribute("StaminaDisabled", true)
+        end
+    end))
+
+    task.spawn(function()
+        while infiniteStaminaOn and character.Parent and player.Character == character do
+            updateStaminaVisuals()
+            task.wait(0.1)
+        end
+    end)
+end
+
+local function enableInfiniteStamina()
+    if player.Character then
+        bindStaminaCharacter(player.Character)
+    end
+    if not staminaCharAddedConn then
+        staminaCharAddedConn = player.CharacterAdded:Connect(function(newChar)
+            if infiniteStaminaOn then
+                bindStaminaCharacter(newChar)
+            end
+        end)
+    end
+end
+
+local function disableInfiniteStamina()
+    disconnectStamina()
+    if staminaCharAddedConn then
+        staminaCharAddedConn:Disconnect()
+        staminaCharAddedConn = nil
+    end
+    local character = player.Character
+    if character then
+        character:SetAttribute("StaminaDisabled", nil)
+    end
+end
+
+UtilityTab:CreateToggle({
+    Name = "Infinite Stamina",
+    CurrentValue = false,
+    Callback = function(value)
+        infiniteStaminaOn = value
+        if value then
+            enableInfiniteStamina()
+        else
+            disableInfiniteStamina()
+        end
+    end,
+})
+
+-- TpWalk
 local tpwalkOn = false
 local speed = 1
 
@@ -1759,935 +1091,512 @@ RS.Heartbeat:Connect(function()
     end
 end)
 
---// INVISIBILITY
-UtilityTab:CreateSection("Stealth Mods")
-
-local invisOn = false
-local invisNoclipConn = nil
-local invisCamConn = nil
-local invisAnimTrack = nil
-local invisAnimObj = Instance.new("Animation")
-invisAnimObj.AnimationId = "rbxassetid://105781160624925"
-
-local function playInvisAnim(h)
-    if not h then return end
-    pcall(function()
-        invisAnimTrack = h:LoadAnimation(invisAnimObj)
-        invisAnimTrack.Priority = Enum.AnimationPriority.Action4
-
-        local t = 0
-        while invisAnimTrack.Length <= 0 and t < 1 do
-            t = t + task.wait(0.05)
-        end
-
-        invisAnimTrack:Play()
-        t = 0
-        while not invisAnimTrack.IsPlaying and t < 1 do
-            t = t + task.wait(0.05)
-        end
-
-        invisAnimTrack:AdjustSpeed(0)
-        invisAnimTrack.TimePosition = 0
-    end)
-end
-
-local function applyInvisState(state)
-    local myChar = player.Character
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
-    if not state then
-        if invisNoclipConn then invisNoclipConn:Disconnect() invisNoclipConn = nil end
-        if invisCamConn then invisCamConn:Disconnect() invisCamConn = nil end
-
-        if invisAnimTrack then
-            pcall(function()
-                invisAnimTrack:Stop(0)
-                invisAnimTrack:Destroy()
-            end)
-            invisAnimTrack = nil
-        end
-
-        pcall(function()
-            if myHum then workspace.CurrentCamera.CameraSubject = myHum end
-        end)
-    else
-        local function noclipStep()
-            local c = player.Character
-            if not c then return end
-            for _, v in ipairs(c:GetDescendants()) do
-                if v:IsA("BasePart") and v.CanCollide and v.Name ~= "HumanoidRootPart" then
-                    v.CanCollide = false
-                end
-            end
-            local hrp = c:FindFirstChild("HumanoidRootPart")
-            if hrp then hrp.CanCollide = true end
-        end
-
-        if invisNoclipConn then invisNoclipConn:Disconnect() end
-        invisNoclipConn = RS.Stepped:Connect(noclipStep)
-
-        if myRoot then
-            workspace.CurrentCamera.CameraSubject = myRoot
-            if invisCamConn then invisCamConn:Disconnect() end
-            invisCamConn = workspace.CurrentCamera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-                if invisOn and myRoot then
-                    workspace.CurrentCamera.CameraSubject = myRoot
-                end
-            end)
-        end
-
-        if myHum then
-            for _, trk in ipairs(myHum:GetPlayingAnimationTracks()) do
-                pcall(function()
-                    trk.Priority = Enum.AnimationPriority.Core
-                    trk:AdjustSpeed(0)
-                    trk:Stop(0)
-                end)
-            end
-            playInvisAnim(myHum)
-        end
-    end
-end
-
-RS.Heartbeat:Connect(function()
-    if not invisOn then return end
-    local myChar = player.Character
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if not myHum then return end
-
-    if not invisAnimTrack or not invisAnimTrack.IsPlaying then
-        playInvisAnim(myHum)
-    end
-
-    for _, trk in ipairs(myHum:GetPlayingAnimationTracks()) do
-        if trk ~= invisAnimTrack then
-            pcall(function()
-                trk.Priority = Enum.AnimationPriority.Core
-                trk:AdjustSpeed(0)
-                trk:Stop(0)
-            end)
-        end
-    end
-end)
-
-UtilityTab:CreateToggle({
-    Name = "Invisibility",
-    CurrentValue = false,
-    Callback = function(value)
-        invisOn = value
-        applyInvisState(value)
-    end,
-})
-
-player.CharacterAdded:Connect(function()
-    task.wait(0.3)
-    if invisOn then applyInvisState(true) end
-end)
-
---// INFINITE STAMINA (GETGC MAINMODULE LOCK)
-UtilityTab:CreateSection("Stamina Mods")
-
-local infStaminaOn = false
-local MainModule = nil
-
-local function locateMainModule()
-    if getgenv and getgenv().MainModule and type(getgenv().MainModule) == "table" then
-        MainModule = getgenv().MainModule
-        return MainModule
-    end
-
-    if getgc then
-        for _, obj in ipairs(getgc(true)) do
-            if type(obj) == "table" and rawget(obj, "Stamina") ~= nil and rawget(obj, "MaxStamina") ~= nil then
-                MainModule = obj
-                if getgenv then getgenv().MainModule = obj end
-                return MainModule
-            end
-        end
-    end
-
-    if getloadedmodules then
-        for _, mod in ipairs(getloadedmodules()) do
-            if mod:IsA("ModuleScript") then
-                local success, res = pcall(require, mod)
-                if success and type(res) == "table" and res.MaxStamina and res.Stamina ~= nil then
-                    MainModule = res
-                    if getgenv then getgenv().MainModule = res end
-                    return MainModule
-                end
-            end
-        end
-    end
-
-    return MainModule
-end
-
-locateMainModule()
-
-local function updateStaminaHUD(state)
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-
-    local tempUI = playerGui:FindFirstChild("TemporaryUI")
-    if not tempUI then return end
-
-    local playerInfo = tempUI:FindFirstChild("PlayerInfo")
-    local bars = playerInfo and playerInfo:FindFirstChild("Bars")
-    local staminaBar = bars and bars:FindFirstChild("Stamina")
-    local originalAmount = staminaBar and staminaBar:FindFirstChild("Amount")
-
-    if originalAmount then
-        local infAmount = staminaBar:FindFirstChild("InfiniteAmount")
-        if not infAmount then
-            infAmount = originalAmount:Clone()
-            infAmount.Name = "InfiniteAmount"
-            infAmount.Text = "∞"
-            infAmount.Size = UDim2.new(0.225, 0, 0.7, 14)
-            infAmount.Parent = staminaBar
-        end
-        infAmount.Visible = state
-        originalAmount.Visible = not state
-    end
-
-    local centerCounter = tempUI:FindFirstChild("CenterStaminaCounter")
-    if centerCounter then centerCounter.Visible = not state end
-
-    local centerDrain = tempUI:FindFirstChild("Drain")
-    if centerDrain then centerDrain.Visible = not state end
-end
-
-local function applyStaminaLock()
-    if not infStaminaOn then return end
-
-    if not MainModule then
-        locateMainModule()
-    end
-
-    if MainModule and MainModule.MaxStamina then
-        rawset(MainModule, "Stamina", MainModule.MaxStamina)
-    end
-end
-
-UtilityTab:CreateToggle({
-    Name = "Infinite Stamina",
-    CurrentValue = false,
-    Callback = function(value)
-        infStaminaOn = value
-        if value then locateMainModule() end
-        updateStaminaHUD(value)
-    end,
-})
-
-RS.Heartbeat:Connect(applyStaminaLock)
-RS.RenderStepped:Connect(applyStaminaLock)
-
-player.CharacterAdded:Connect(function()
-    task.wait(1)
-    locateMainModule()
-    if infStaminaOn then updateStaminaHUD(true) end
-end)
-
---// LOOP PLAYERS TP (ITEM VELOCITY DISRUPTION)
-UtilityTab:CreateSection("Disruption Mods")
-
-local loopTpActive = false
-local loopTpConn = nil
-
-local function runLoopTP(state)
-    loopTpActive = state
-    if not state then
-        if loopTpConn then
-            loopTpConn:Disconnect()
-            loopTpConn = nil
-        end
-        return
-    end
-
-    task.spawn(function()
-        local targetNames = {
-            "BloxyCola",
-            "Medkit"
-        }
-
-        local function isValidItem(obj)
-            if obj:IsA("BasePart") and not obj.Anchored then
-                for _, name in ipairs(targetNames) do
-                    if obj.Name:lower():find(name:lower()) then
-                        return true
-                    end
-                end
-            end
-            return false
-        end
-
-        local itemsToTarget = {}
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if isValidItem(obj) then
-                table.insert(itemsToTarget, obj)
-            end
-        end
-
-        if #itemsToTarget > 0 and loopTpActive then
-            local character = player.Character or player.CharacterAdded:Wait()
-            local hrp = character:WaitForChild("HumanoidRootPart", 5)
-            if not hrp then return end
-
-            local activeItems = {}
-
-            for _, item in ipairs(itemsToTarget) do
-                if not loopTpActive then break end
-                if item and item.Parent and not item.Anchored then
-                    hrp.CFrame = item.CFrame * CFrame.new(0, 1.5, 0)
-                    task.wait(0.3)
-                    table.insert(activeItems, item)
-                end
-            end
-
-            if loopTpConn then
-                loopTpConn:Disconnect()
-                loopTpConn = nil
-            end
-
-            loopTpConn = RS.Heartbeat:Connect(function()
-                if not loopTpActive then
-                    if loopTpConn then
-                        loopTpConn:Disconnect()
-                        loopTpConn = nil
-                    end
-                    return
-                end
-                for _, item in ipairs(activeItems) do
-                    if item and item.Parent and not item.Anchored then
-                        item.AssemblyLinearVelocity = Vector3.new(99999, 99999, 99999)
-                        item.AssemblyAngularVelocity = Vector3.new(99999, 99999, 99999)
-                    end
-                end
-            end)
-        end
-    end)
-end
-
-UtilityTab:CreateToggle({
-    Name = "Loop Players TP (This may Not Work)",
-    CurrentValue = false,
-    Callback = function(value)
-        runLoopTP(value)
-    end,
-})
-
---// SAFE AUTO GENERATOR (1.5S COOLDOWN)
-UtilityTab:CreateSection("Generator Automation")
-
-local AutoGenEnabled = false
-local CurrentGenIndex = 1
-local AutoGenCooldown = 1.5
-
-local function GetGameMap()
-    return workspace:FindFirstChild("Map") 
-        and workspace.Map:FindFirstChild("Ingame") 
-        and workspace.Map.Ingame:FindFirstChild("Map")
-end
-
-local function TeleportToNextGen()
-    local localCharacter = player.Character
-    local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
-    local gameMap = GetGameMap()
-
-    if not localRoot or not gameMap then return end
-
-    local generators = {}
-    for _, object in ipairs(gameMap:QueryDescendants("Model#Generator:has(#Main)")) do
-        local mainPart = object:FindFirstChild("Main")
-        if mainPart then
-            table.insert(generators, mainPart)
-        end
-    end
-
-    if #generators == 0 then return end
-
-    if CurrentGenIndex > #generators then
-        CurrentGenIndex = 1
-    end
-
-    local targetGen = generators[CurrentGenIndex]
-    if targetGen then
-        localRoot.CFrame = targetGen.CFrame * CFrame.new(0, 3, -4)
-        CurrentGenIndex = CurrentGenIndex + 1
-    end
-end
-
-local function RunTimedAutoGen()
-    local localCharacter = player.Character
-    local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
-    local gameMap = GetGameMap()
-
-    if not localRoot or not gameMap then return end
-
-    for _, object in ipairs(gameMap:QueryDescendants("Model#Generator:has(#Main)")) do
-        local mainPart = object:FindFirstChild("Main")
-        if mainPart and (mainPart.Position - localRoot.Position).Magnitude < 7 then
-            local remotes = object:FindFirstChild("Remotes")
-            local progress = object:FindFirstChild("Progress")
-            local remoteEvent = progress and remotes and remotes:FindFirstChildOfClass("RemoteEvent")
-
-            if remoteEvent then
-                remoteEvent:FireServer()
-                task.wait(AutoGenCooldown)
-            end
-        end
-    end
-end
-
-UtilityTab:CreateToggle({
-    Name = "Auto Gen",
-    CurrentValue = false,
-    Callback = function(value)
-        AutoGenEnabled = value
-    end,
-})
+-- Safe Platform TP
+local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local platform
 
 UtilityTab:CreateButton({
-    Name = "TP to Next Gen",
+    Name = "Save Place (Platform TP)",
     Callback = function()
-        pcall(TeleportToNextGen)
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if not platform or not platform.Parent then
+            platform = Instance.new("Part")
+            platform.Size = Vector3.new(60, 5, 60)
+            platform.Position = savedPos
+            platform.Anchored = true
+            platform.Color = Color3.fromRGB(120, 120, 120)
+            platform.Material = Enum.Material.SmoothPlastic
+            platform.Name = "SafePlatform"
+            platform.Parent = workspace
+        end
+        hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
+    end,
+})
+--------------------------------------------------------------------------------
+-- PART 5: PROTECTION & TELEPORTER (REUSABLE AUTO-PROTECTION PINNING)
+--------------------------------------------------------------------------------
+
+local lowHealthProtectionOn = false
+local healthThreshold = 40
+local protectionPlatform = nil
+local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local isCurrentlyProtected = false
+
+UtilityTab:CreateSection("Safety & Protection")
+
+UtilityTab:CreateToggle({
+    Name = "Low Health Auto-Teleport",
+    CurrentValue = false,
+    Callback = function(value)
+        lowHealthProtectionOn = value
+        if not value then
+            isCurrentlyProtected = false
+        end
     end,
 })
 
+UtilityTab:CreateSlider({
+    Name = "Health Threshold",
+    Range = {10, 80},
+    Increment = 5,
+    CurrentValue = 40,
+    Callback = function(value)
+        healthThreshold = value
+    end,
+})
+
+-- Reusable Auto-Protection Loop with Return-to-Platform Enforcer
 task.spawn(function()
     while true do
-        task.wait(0.1)
-        if AutoGenEnabled then
-            pcall(RunTimedAutoGen)
+        task.wait(0.2)
+        if lowHealthProtectionOn and char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and hrp and humanoid.Health > 0 then
+                if humanoid.Health <= healthThreshold then
+                    -- Ensure platform exists
+                    if not protectionPlatform or not protectionPlatform.Parent then
+                        protectionPlatform = Instance.new("Part", workspace)
+                        protectionPlatform.Size = Vector3.new(60, 5, 60)
+                        protectionPlatform.Position = savedPos
+                        protectionPlatform.Anchored = true
+                        protectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                        protectionPlatform.Material = Enum.Material.SmoothPlastic
+                        protectionPlatform.Name = "AutoProtectionBaseplate"
+                    end
+
+                    local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
+                    local dist = (hrp.Position - targetPlatformPos).Magnitude
+                    
+                    -- Initial trigger or return if fallen off / teleported away
+                    if not isCurrentlyProtected or dist > 25 then
+                        hrp.CFrame = CFrame.new(targetPlatformPos)
+                        isCurrentlyProtected = true
+                    end
+                else
+                    -- Reset condition: if health recovers above threshold, stop pinning to platform
+                    if isCurrentlyProtected then
+                        isCurrentlyProtected = false
+                    end
+                end
+            end
+        else
+            isCurrentlyProtected = false
         end
     end
 end)
---------------------------------------------------------------------------------
--- PART 5: TELEPORTATION SYSTEM (UPDATED WITH DOOMBRINGER & CACHED SEARCH)
---------------------------------------------------------------------------------
 
-local selectedPlayerName = nil
+TeleportTab:CreateSection("Player Teleporter")
 
-local KILLER_CLASSES = {
-    ["slasher"]         = true,
-    ["jason"]           = true,
-    ["coolkid"]         = true,
-    ["c00lkidd"]        = true,
-    ["coolkidrework"]   = true,
-    ["1x4"]             = true,
-    ["1x1x1x1"]         = true,
-    ["noli"]            = true,
-    ["swordsmaster"]    = true,
-    ["guest666"]        = true,
-    ["2011x"]           = true,
-    ["johndoe"]         = true,
-    ["azure"]           = true,
-    ["shedletskyfunny"] = true,
-    ["doombringer"]     = true,
-}
+local selectedPlayer, stickInFrontOn, stickOffset, searchQuery = nil, false, 5.5, ""
+local playerDropdownOptions, playerMap, PlayerDropdown = {}, {}, nil
 
-local function getPlayerList()
-    local list = {}
+local function refreshPlayerDropdown()
+    playerDropdownOptions, playerMap = {}, {}
+    local queryLower = string.lower(searchQuery)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
-            table.insert(list, p.Name)
+            local displayName, username = p.DisplayName, p.Name
+            if queryLower == "" or string.find(string.lower(displayName), queryLower, 1, true) or string.find(string.lower(username), queryLower, 1, true) then
+                local formattedName = displayName .. " (@" .. username .. ")"
+                table.insert(playerDropdownOptions, formattedName)
+                playerMap[formattedName] = p
+            end
         end
     end
-    return list
+    if #playerDropdownOptions == 0 then
+        playerDropdownOptions = {"No Players Found"}
+    end
+    if PlayerDropdown and PlayerDropdown.Refresh then
+        PlayerDropdown:Refresh(playerDropdownOptions)
+    end
 end
 
-TeleportTab:CreateSection("Player Teleportation")
-
-local PlayerDropdown = TeleportTab:CreateDropdown({
-    Name = "Select Player",
-    Options = getPlayerList(),
-    CurrentOption = "",
-    Callback = function(option)
-        selectedPlayerName = typeof(option) == "table" and option[1] or option
+TeleportTab:CreateInput({
+    Name = "Search Player",
+    PlaceholderText = "Type to filter...",
+    Callback = function(text)
+        searchQuery = text or ""
+        refreshPlayerDropdown()
     end,
 })
 
+PlayerDropdown = TeleportTab:CreateDropdown({
+    Name = "Select Target Player",
+    Options = {"Loading..."},
+    CurrentOption = "Loading...",
+    Callback = function(option)
+        local selected = typeof(option) == "table" and option[1] or option
+        selectedPlayer = playerMap[selected]
+    end,
+})
+
+task.defer(function()
+    refreshPlayerDropdown()
+end)
+
+Players.PlayerAdded:Connect(function()
+    task.wait(0.5)
+    refreshPlayerDropdown()
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if selectedPlayer == p then
+        selectedPlayer = nil
+        stickInFrontOn = false
+    end
+    refreshPlayerDropdown()
+end)
+
 TeleportTab:CreateButton({
-    Name = "Teleport to Selected Player",
+    Name = "Teleport to Player",
     Callback = function()
-        if not selectedPlayerName or selectedPlayerName == "" then
-            Rayfield:Notify({
-                Title = "Teleport Failed",
-                Content = "Please select a player from the dropdown first.",
-                Duration = 2,
-                Image = 4483362458,
-            })
+        if selectedPlayer and selectedPlayer.Character then
+            local targetHrp = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if targetHrp and myHrp then
+                myHrp.CFrame = targetHrp.CFrame * CFrame.new(0, 0, -3)
+            end
+        end
+    end,
+})
+
+TeleportTab:CreateToggle({
+    Name = "Stick in Front of Player",
+    CurrentValue = false,
+    Callback = function(value)
+        stickInFrontOn = value
+    end,
+})
+
+TeleportTab:CreateSlider({
+    Name = "Stick Distance Offset",
+    Range = {2, 25},
+    Increment = 0.5,
+    CurrentValue = 5.5,
+    Callback = function(value)
+        stickOffset = value
+    end,
+})
+
+RS.RenderStepped:Connect(function()
+    if stickInFrontOn and selectedPlayer and selectedPlayer.Character then
+        local targetChar = selectedPlayer.Character
+        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+        local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+        if not targetHrp or not targetHum or targetHum.Health <= 0 then
+            stickInFrontOn = false
+            selectedPlayer = nil
             return
         end
 
-        local targetPlr = Players:FindFirstChild(selectedPlayerName)
-        local tRoot = targetPlr and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart")
-        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-
-        if tRoot and myRoot then
-            myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, 3)
-        else
-            Rayfield:Notify({
-                Title = "Player Unavailable",
-                Content = "Target player is no longer available or alive.",
-                Duration = 2,
-                Image = 4483362458,
-            })
+        if myHrp then
+            local pos = targetHrp.CFrame * CFrame.new(0, 0, -stickOffset)
+            myHrp.CFrame = CFrame.lookAt(pos.Position, targetHrp.Position)
         end
-    end,
-})
-
-TeleportTab:CreateButton({
-    Name = "Refresh Player List",
-    Callback = function()
-        if PlayerDropdown then
-            PlayerDropdown:Refresh(getPlayerList(), true)
-        end
-    end,
-})
-
-TeleportTab:CreateSection("Map Teleportation")
-
-TeleportTab:CreateButton({
-    Name = "Teleport to Ingame Map",
-    Callback = function()
-        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-
-        local map = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")
-        if map then
-            local spawnPoint = map:FindFirstChildWhichIsA("SpawnLocation", true) or map:FindFirstChildWhichIsA("BasePart", true)
-            if spawnPoint then
-                myRoot.CFrame = spawnPoint.CFrame * CFrame.new(0, 4, 0)
-            end
-        end
-    end,
-})
-
-TeleportTab:CreateButton({
-    Name = "Teleport to Killer",
-    Callback = function()
-        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if not myRoot then return end
-
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player and p.Character then
-                local charType = p.Character:GetAttribute("Character") 
-                    or p.Character:GetAttribute("CharacterType") 
-                    or p.Character:GetAttribute("Role")
-                    or p.Character.Name
-                local key = string.lower(tostring(charType))
-                if key == "c00lkidd" or key == "coolkidd" then key = "coolkid" end
-                if key == "1x1x1x1" then key = "1x4" end
-
-                if KILLER_CLASSES[key] then
-                    local kRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                    if kRoot then
-                        myRoot.CFrame = kRoot.CFrame * CFrame.new(0, 0, 5)
-                        Rayfield:Notify({
-                            Title = "Teleported",
-                            Content = "Teleported to " .. p.DisplayName .. " (" .. key .. ")!",
-                            Duration = 2.5,
-                            Image = 4483362458,
-                        })
-                        return
-                    end
-                end
-            end
-        end
-
-        Rayfield:Notify({
-            Title = "Killer Not Found",
-            Content = "No killer character found in the round.",
-            Duration = 2.5,
-            Image = 4483362458,
-        })
-    end,
-})
+    end
+end)
 --------------------------------------------------------------------------------
--- PART 6: ITEMS TAB (LIGHTWEIGHT ITEM & CRATE TELEPORTER)
+-- PART 6: 2011X (SONIC.EXE) AUTO FARM (NO COOLDOWN CHECKS / DUAL ABILITY CAST)
 --------------------------------------------------------------------------------
 
-local function isItemValid(v)
-    if not v or not v:IsDescendantOf(workspace) then return false end
-    local model = v:FindFirstAncestorOfClass("Model")
-    if model and (Players:GetPlayerFromCharacter(model) or model:FindFirstChildOfClass("Humanoid")) then
+local sonicAutoLowHp = false
+local sonicAutoAll = false
+local stickToTargetOn = true
+local sonicThreshold = 20
+local sonicHitOffset = 5.5
+
+local currentHardLockedTarget = nil
+local SonicLowHpToggle, SonicAllToggle
+local SonicLowHealthToggle
+
+-- Low Health Safety & Platform Pinning State
+local sonicLowHealthProtectionOn = false
+local sonicHealthThreshold = 30
+local sonicProtectionPlatform = nil
+local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local isSonicProtected = false
+
+--------------------------------------------------------------------------------
+-- 2011X DIRECT REMOTE FIRING (UNRESTRICTED DUAL CAST)
+--------------------------------------------------------------------------------
+local function findSonicRemote(name)
+    local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
+    if charRemotes then
+        local sonicFolder = charRemotes:FindFirstChild("2011X") or charRemotes:FindFirstChild("Sonic")
+        if sonicFolder then
+            local obj = sonicFolder:FindFirstChild(name)
+            if obj then return obj end
+        end
+    end
+    return ReplicatedStorage:FindFirstChild(name, true)
+end
+
+local attackRemote = findSonicRemote("Attack")
+local godspeedRemote = findSonicRemote("Godspeed")
+
+local function fireAttack()
+    if not attackRemote then attackRemote = findSonicRemote("Attack") end
+    if attackRemote then
+        pcall(function()
+            attackRemote:FireServer()
+        end)
+    end
+end
+
+local function fireGodspeed()
+    if not godspeedRemote then godspeedRemote = findSonicRemote("Godspeed") end
+    if godspeedRemote then
+        pcall(function()
+            godspeedRemote:FireServer()
+        end)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- TARGET DETECTION (ALL PLAYERS - NO WHITELIST)
+--------------------------------------------------------------------------------
+local function isTargetValid(targetPlayer, lowHpOnly)
+    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or targetPlayer == player then 
+        return false 
+    end
+
+    local targetChar = targetPlayer.Character
+    local hrp = targetChar:FindFirstChild("HumanoidRootPart")
+    local hum = targetChar:FindFirstChildOfClass("Humanoid")
+
+    if not hrp or not hum or hum.Health <= 0 or not targetChar:IsDescendantOf(workspace) then
         return false
     end
-    local prompt = v:FindFirstChildWhichIsA("ProximityPrompt", true)
-    return prompt and prompt.Enabled
-end
 
-local function teleportToItem(matchKeywords, itemName)
-    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-
-    local searchRoot = (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame")) or workspace
-
-    for _, v in ipairs(searchRoot:GetDescendants()) do
-        if v:IsA("ProximityPrompt") and v.Enabled then
-            local parent = v.Parent
-            local promptName = parent and parent.Name:lower() or ""
-            local actionText = v.ActionText:lower()
-            local objectText = v.ObjectText:lower()
-
-            for _, kw in ipairs(matchKeywords) do
-                local key = kw:lower()
-                if promptName:find(key) or actionText:find(key) or objectText:find(key) then
-                    local targetPart = parent:IsA("BasePart") and parent or parent:FindFirstChildWhichIsA("BasePart", true)
-                    if targetPart and isItemValid(parent) then
-                        myRoot.CFrame = targetPart.CFrame * CFrame.new(0, 3, 0)
-                        Rayfield:Notify({
-                            Title = "Item Teleport",
-                            Content = "Teleported to " .. itemName .. "!",
-                            Duration = 2.5,
-                            Image = 4483362458,
-                        })
-                        return
-                    end
-                end
-            end
-        end
+    if lowHpOnly and hum.Health > sonicThreshold then
+        return false
     end
 
-    Rayfield:Notify({
-        Title = "Item Unavailable",
-        Content = "No " .. itemName .. " found on the map.",
-        Duration = 2.5,
-        Image = 4483362458,
-    })
+    return true
 end
 
-ItemsTab:CreateSection("Item Teleporters")
-
-ItemsTab:CreateButton({
-    Name = "Teleport to Medkit",
-    Callback = function()
-        teleportToItem({"medkit", "med kit", "firstaid"}, "Medkit")
-    end,
-})
-
-ItemsTab:CreateButton({
-    Name = "Teleport to Bloxy Cola",
-    Callback = function()
-        teleportToItem({"bloxycola", "bloxy cola", "cola"}, "Bloxy Cola")
-    end,
-})
-
-ItemsTab:CreateSection("Crate Teleporters")
-
-ItemsTab:CreateButton({
-    Name = "Teleport to Crate",
-    Callback = function()
-        teleportToItem({"crate", "chest", "box"}, "Crate")
-    end,
-})
---------------------------------------------------------------------------------
--- PART 7: ANTI TAB (DEBUFF IMMUNITIES & KILLER COUNTERMEASURES)
---------------------------------------------------------------------------------
-
-local Lighting = game:GetService("Lighting")
-local PlayerGui = player:WaitForChild("PlayerGui")
-
-local function getInGameFolder()
-    return (workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Ingame"))
-        or workspace:FindFirstChild("Ingame")
-        or workspace
-end
-
-local function getKillersFolder()
-    local ingame = getInGameFolder()
-    return (ingame and ingame:FindFirstChild("Killers")) or workspace:FindFirstChild("Killers")
-end
-
---------------------------------------------------------------------------------
--- 1. ANTI SLOWNESS
---------------------------------------------------------------------------------
-local antiSlownessEnabled = false
-
-local function checkSlownessInstance(valueInst)
-    if not antiSlownessEnabled or not valueInst then return end
-    if valueInst.Name == "Sprinting" or valueInst.Name:lower() == "emoting" then return end
-
-    if valueInst.Name == "DirectionalMovement" or valueInst.Name == "FixingGenerator" or valueInst.Name:upper() == "ENRAGED" then
-        if valueInst.Value < 1 then valueInst.Value = 1 end
-        valueInst:GetPropertyChangedSignal("Value"):Connect(function()
-            if antiSlownessEnabled and valueInst.Value < 1 then valueInst.Value = 1 end
-        end)
-    elseif valueInst.Value > 0.03 and valueInst.Value < 1 then
-        valueInst:Destroy()
-    else
-        valueInst:GetPropertyChangedSignal("Value"):Connect(function()
-            if antiSlownessEnabled and valueInst.Value > 0.03 and valueInst.Value < 1 then
-                valueInst:Destroy()
-            end
-        end)
-    end
-end
-
-local function applyAntiSlowness()
+local function getClosestValidPlayer(lowHpOnly)
     local myChar = player.Character
-    local sm = myChar and myChar:FindFirstChild("SpeedMultipliers")
-    if sm then
-        for _, child in ipairs(sm:GetChildren()) do
-            checkSlownessInstance(child)
-        end
-    end
-end
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
 
-local function hookSpeedMultipliers(targetChar)
-    if not targetChar then return end
-    local sm = targetChar:WaitForChild("SpeedMultipliers", 5)
-    if sm then
-        sm.ChildAdded:Connect(function(child)
-            if not child:IsA("NumberValue") or child.Name == "Sprinting" or child.Name:lower() == "emoting" then return end
-            checkSlownessInstance(child)
-        end)
-        if antiSlownessEnabled then applyAntiSlowness() end
-    end
-end
+    local closestPlayer = nil
+    local shortestDist = math.huge
 
-player.CharacterAdded:Connect(hookSpeedMultipliers)
-if player.Character then hookSpeedMultipliers(player.Character) end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and isTargetValid(p, lowHpOnly) then
+            local tChar = p.Character
+            local tHrp = tChar:FindFirstChild("HumanoidRootPart")
+            local dist = (tHrp.Position - myRoot.Position).Magnitude
 
---------------------------------------------------------------------------------
--- 2. ANTI BLINDNESS
---------------------------------------------------------------------------------
-local AntiBlindness = { running = false, conn = nil }
-
-local function startAntiBlindness()
-    if AntiBlindness.running then return end
-    AntiBlindness.running = true
-
-    for _, obj in ipairs(Lighting:GetChildren()) do
-        if obj:IsA("BlurEffect") then 
-            pcall(function() obj:Destroy() end) 
+            if dist < shortestDist then
+                shortestDist = dist
+                closestPlayer = p
+            end
         end
     end
 
-    AntiBlindness.conn = Lighting.ChildAdded:Connect(function(obj)
-        if not AntiBlindness.running then return end
-        if obj:IsA("BlurEffect") then 
-            pcall(function() obj:Destroy() end) 
-        end
-    end)
-end
-
-local function stopAntiBlindness()
-    AntiBlindness.running = false
-    if AntiBlindness.conn then 
-        AntiBlindness.conn:Disconnect() 
-        AntiBlindness.conn = nil 
-    end
+    return closestPlayer
 end
 
 --------------------------------------------------------------------------------
--- 3. ANTI SUBSPACED
+-- REUSABLE LOW HEALTH PROTECTION LOOP
 --------------------------------------------------------------------------------
-local AntiSubspaced = { running = false, connections = {} }
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if sonicLowHealthProtectionOn then
+            local character = player.Character
+            if character then
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                local hrp = character:FindFirstChild("HumanoidRootPart")
 
-local function startAntiSubspaced()
-    if AntiSubspaced.running then return end
-    AntiSubspaced.running = true
+                if humanoid and hrp and humanoid.Health > 0 then
+                    if humanoid.Health <= sonicHealthThreshold then
+                        if sonicAutoLowHp then
+                            sonicAutoLowHp = false
+                            if SonicLowHpToggle then SonicLowHpToggle:Set(false) end
+                        end
+                        if sonicAutoAll then
+                            sonicAutoAll = false
+                            if SonicAllToggle then SonicAllToggle:Set(false) end
+                        end
+                        currentHardLockedTarget = nil
 
-    local LIGHTING_TARGETS = {
-        ["SubspaceVFXBlur"] = true,
-        ["SubspaceVFXColorCorrection"] = true,
-        ["HealthDesaturation"] = true,
-    }
-    local UI_TARGETS = {
-        ["Subspaced"] = true,
-    }
+                        if not sonicProtectionPlatform or not sonicProtectionPlatform.Parent then
+                            sonicProtectionPlatform = Instance.new("Part", workspace)
+                            sonicProtectionPlatform.Size = Vector3.new(60, 5, 60)
+                            sonicProtectionPlatform.Position = savedPos
+                            sonicProtectionPlatform.Anchored = true
+                            sonicProtectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                            sonicProtectionPlatform.Material = Enum.Material.SmoothPlastic
+                            sonicProtectionPlatform.Name = "SonicProtectionBaseplate"
+                        end
 
-    local function isLightTarget(obj)
-        return LIGHTING_TARGETS[obj.Name] and obj:IsDescendantOf(Lighting)
-    end
+                        local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
+                        local dist = (hrp.Position - targetPlatformPos).Magnitude
 
-    local function isUITarget(obj)
-        if not UI_TARGETS[obj.Name] then return false end
-        local m = PlayerGui:FindFirstChild("MainUI")
-        local tu = PlayerGui:FindFirstChild("TemporaryUI")
-        if m then
-            local sc = m:FindFirstChild("StatusContainer")
-            if sc and obj:IsDescendantOf(sc) then return true end
-        end
-        if tu and obj:IsDescendantOf(tu) then return true end
-        return false
-    end
-
-    local function process(obj)
-        if not obj or not obj.Parent then return end
-        if isLightTarget(obj) or isUITarget(obj) then
-            pcall(function() obj:Destroy() end)
-        end
-    end
-
-    local function watch(root)
-        if not root then return end
-        table.insert(AntiSubspaced.connections, root.DescendantAdded:Connect(process))
-        for _, o in ipairs(root:GetDescendants()) do 
-            process(o) 
-        end
-    end
-
-    watch(Lighting)
-    watch(PlayerGui)
-end
-
-local function stopAntiSubspaced()
-    AntiSubspaced.running = false
-    for _, c in ipairs(AntiSubspaced.connections) do 
-        pcall(function() c:Disconnect() end) 
-    end
-    AntiSubspaced.connections = {}
-end
-
---------------------------------------------------------------------------------
--- 4. DISABLE NOLI NPC
---------------------------------------------------------------------------------
-local disableNoliNPC = false
-
-local function handleNoliNPC(state)
-    local killers = getKillersFolder()
-    local ingame = getInGameFolder()
-
-    if state then
-        if killers then
-            for _, v in ipairs(killers:GetChildren()) do
-                if v.Name:lower() == "noli" and not Players:GetPlayerFromCharacter(v) then
-                    v.Parent = Lighting
-                    if v:IsA("Model") then v:PivotTo(v:GetPivot() * CFrame.new(0, -100, 0)) end
+                        if not isSonicProtected or dist > 25 then
+                            hrp.CFrame = CFrame.new(targetPlatformPos)
+                            isSonicProtected = true
+                        end
+                    else
+                        if isSonicProtected then
+                            isSonicProtected = false
+                        end
+                    end
                 end
             end
-        end
-        if workspace:FindFirstChild("Themes") then
-            for _, v in ipairs(workspace.Themes:GetChildren()) do
-                if v.Name:find("FakeLayer") and v:IsA("Sound") then v:Destroy() end
-            end
-        end
-    else
-        for _, v in ipairs(Lighting:GetChildren()) do
-            if v.Name:lower() == "noli" then
-                v.Parent = ingame or workspace
-                if v:IsA("Model") then v:PivotTo(v:GetPivot() * CFrame.new(0, 100, 0)) end
-            end
-        end
-    end
-end
-
-local killersFolder = getKillersFolder()
-if killersFolder then
-    killersFolder.ChildAdded:Connect(function()
-        task.wait(0.5)
-        if disableNoliNPC then handleNoliNPC(true) end
-    end)
-end
-
---------------------------------------------------------------------------------
--- 5. DISABLE JOHN DOE FOOTPRINTS
---------------------------------------------------------------------------------
-local disableFootprints = false
-
-local function handleFootprints(state)
-    local ingame = getInGameFolder()
-    if not ingame then return end
-
-    for _, v in ipairs(ingame:GetChildren()) do
-        if v:IsA("Folder") and v.Name:find("Shadows") then
-            for _, part in ipairs(v:GetChildren()) do
-                if part:IsA("BasePart") then part.CanTouch = not state end
-            end
-            if not v:GetAttribute("Checked") then
-                v:SetAttribute("Checked", true)
-                v.ChildAdded:Connect(function(part)
-                    if part:IsA("BasePart") then part.CanTouch = not disableFootprints end
-                end)
-            end
-        end
-    end
-end
-
---------------------------------------------------------------------------------
--- 6. SMALLER SPIKE COLLISIONS
---------------------------------------------------------------------------------
-local smallerSpikesEnabled = false
-
-local function updateSpikes(state)
-    local ingame = getInGameFolder()
-    if not ingame then return end
-
-    for _, v in ipairs(ingame:GetChildren()) do
-        if v.Name == "SpikeCollision" and v:IsA("Part") then
-            v.Size = state and Vector3.new(11, 3.5, 3.5) or Vector3.new(11, 5, 5)
-            v.Shape = state and Enum.PartType.Cylinder or Enum.PartType.Block
-        end
-    end
-end
-
---------------------------------------------------------------------------------
--- RAYFIELD ANTI TAB UI
---------------------------------------------------------------------------------
-
-AntiTab:CreateSection("Debuff & Visual Immunities")
-
-AntiTab:CreateToggle({
-    Name = "Anti Slowness",
-    CurrentValue = false,
-    Callback = function(value)
-        antiSlownessEnabled = value
-        if value then applyAntiSlowness() end
-    end,
-})
-
-AntiTab:CreateToggle({
-    Name = "Anti Blindness",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            startAntiBlindness()
         else
-            stopAntiBlindness()
+            isSonicProtected = false
         end
-    end,
-})
+    end
+end)
 
-AntiTab:CreateToggle({
-    Name = "Anti Subspaced",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            startAntiSubspaced()
+--------------------------------------------------------------------------------
+-- MAIN AUTO FARM LOOP (SIMULTANEOUS DUAL ABILITY CAST)
+--------------------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.03)
+
+        if sonicAutoLowHp or sonicAutoAll then
+            local lowHpOnly = sonicAutoLowHp and not sonicAutoAll
+            local targetPlayer = nil
+
+            if stickToTargetOn then
+                if currentHardLockedTarget and isTargetValid(currentHardLockedTarget, lowHpOnly) then
+                    targetPlayer = currentHardLockedTarget
+                else
+                    currentHardLockedTarget = getClosestValidPlayer(lowHpOnly)
+                    targetPlayer = currentHardLockedTarget
+                end
+            else
+                currentHardLockedTarget = nil
+                targetPlayer = getClosestValidPlayer(lowHpOnly)
+            end
+
+            if targetPlayer and targetPlayer.Character then
+                local targetChar = targetPlayer.Character
+                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+                local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+                local myChar = player.Character
+                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+                if targetHrp and targetHum and targetHum.Health > 0 and myHrp then
+                    for _, part in ipairs(myChar:GetDescendants()) do
+                        if part:IsA("BasePart") then part.CanCollide = false end
+                    end
+
+                    local lookAtPos = Vector3.new(targetHrp.Position.X, myHrp.Position.Y, targetHrp.Position.Z)
+                    local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -sonicHitOffset)
+                    myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
+
+                    -- Fire both abilities directly and simultaneously
+                    task.spawn(fireAttack)
+                    task.spawn(fireGodspeed)
+                end
+            end
         else
-            stopAntiSubspaced()
+            currentHardLockedTarget = nil
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- TAB UI ELEMENTS
+--------------------------------------------------------------------------------
+SonicEXEtab:CreateSection("Standalone Actions")
+
+SonicEXEtab:CreateButton({
+    Name = "Attack (M1)",
+    Callback = function()
+        fireAttack()
+    end,
+})
+
+SonicEXEtab:CreateButton({
+    Name = "Godspeed",
+    Callback = function()
+        fireGodspeed()
+    end,
+})
+
+SonicEXEtab:CreateSection("2011X Safety & Protection")
+
+SonicLowHealthToggle = SonicEXEtab:CreateToggle({
+    Name = "Low Health Auto-Teleport",
+    CurrentValue = false,
+    Callback = function(value)
+        sonicLowHealthProtectionOn = value
+        if not value then
+            isSonicProtected = false
         end
     end,
 })
 
-AntiTab:CreateSection("Killer Countermeasures")
-
-AntiTab:CreateToggle({
-    Name = "Disable Noli's NPC",
-    CurrentValue = false,
+SonicEXEtab:CreateSlider({
+    Name = "Health Threshold",
+    Range = {10, 50},
+    Increment = 5,
+    CurrentValue = 30,
     Callback = function(value)
-        disableNoliNPC = value
-        handleNoliNPC(value)
+        sonicHealthThreshold = value
     end,
 })
 
-AntiTab:CreateToggle({
-    Name = "Disable John Doe's Footprints",
+SonicEXEtab:CreateSection("2011X Auto Farm (All Players)")
+
+SonicLowHpToggle = SonicEXEtab:CreateToggle({
+    Name = "Auto Farm Low HP Players",
     CurrentValue = false,
     Callback = function(value)
-        disableFootprints = value
-        handleFootprints(value)
+        sonicAutoLowHp = value
+        currentHardLockedTarget = nil
+        if value and SonicAllToggle then SonicAllToggle:Set(false) end
     end,
 })
 
-AntiTab:CreateToggle({
-    Name = "Smaller Spike Collisions",
+SonicAllToggle = SonicEXEtab:CreateToggle({
+    Name = "Auto Farm All Players",
     CurrentValue = false,
     Callback = function(value)
-        smallerSpikesEnabled = value
-        updateSpikes(value)
+        sonicAutoAll = value
+        currentHardLockedTarget = nil
+        if value and SonicLowHpToggle then SonicLowHpToggle:Set(false) end
+    end,
+})
+
+SonicEXEtab:CreateToggle({
+    Name = "Lock to Target",
+    CurrentValue = true,
+    Callback = function(value)
+        stickToTargetOn = value
+        currentHardLockedTarget = nil
+    end,
+})
+
+SonicEXEtab:CreateSection("Targeting Parameters")
+
+SonicEXEtab:CreateInput({
+    Name = "Low HP Threshold",
+    PlaceholderText = "20",
+    Callback = function(text)
+        local v = tonumber(text)
+        if v then sonicThreshold = v end
+    end,
+})
+
+SonicEXEtab:CreateInput({
+    Name = "Hit Distance Offset",
+    PlaceholderText = "5.5",
+    Callback = function(text)
+        local v = tonumber(text)
+        if v then sonicHitOffset = v end
     end,
 })
