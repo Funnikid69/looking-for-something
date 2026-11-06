@@ -899,12 +899,28 @@ RS.Heartbeat:Connect(function()
         currentLockedTarget = nil
     end
 end)
-
 --------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (RAYFIELD: ORIGINAL FARM FIRST, UNDERGROUND SECOND)
+-- AUTO FARM TAB ELEMENTS (RAYFIELD)
 --------------------------------------------------------------------------------
 
--- SECTION 1: ORIGINAL AUTO FARM (SURFACE)
+-- Placed at the very top of the tab as the primary recommendation
+AutoFarmTab:CreateSection("⭐ RECOMMENDED")
+
+local UndergroundToggle = AutoFarmTab:CreateToggle({
+    Name = "Underground Auto Farm",
+    CurrentValue = false,
+    Flag = "UndergroundAutoFarmToggle",
+    Callback = function(value)
+        if value then
+            ugGui.Enabled = true
+            activateUnderground()
+        else
+            deactivateUnderground()
+            ugGui.Enabled = false
+        end
+    end,
+})
+
 AutoFarmTab:CreateSection("Targeting Options")
 
 AutoFarmTab:CreateToggle({
@@ -927,7 +943,8 @@ AutoFarmTab:CreateToggle({
 AutoFarmTab:CreateDropdown({
     Name = "Position Offset (Hit Range)",
     Options = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
-    CurrentOption = "Close (~3 studs)",
+    CurrentOption = {"Close (~3 studs)"},
+    MultipleOptions = false,
     Callback = function(option)
         local selected = typeof(option) == "table" and option[1] or option
         hitDistanceOffset = selected:find("Slightly Far") and 5.5 or (selected:find("Far") and 8 or 3)
@@ -973,64 +990,15 @@ AllPlayersToggle = AutoFarmTab:CreateToggle({
 AutoFarmTab:CreateDropdown({
     Name = "Low HP Target Threshold",
     Options = {"10 HP", "20 HP", "30 HP", "50 HP"},
-    CurrentOption = "20 HP",
+    CurrentOption = {"20 HP"},
+    MultipleOptions = false,
     Callback = function(option)
         local selected = typeof(option) == "table" and option[1] or option
-        local val = tonumber(string.match(selected, "%d+"))
-        if val then 
-            targetHealthThreshold = val 
-            currentLockedTarget = nil
-            isCurrentlyWaitingInSafeSpace = false
-        end
+        local num = tonumber(selected:match("%d+"))
+        if num then targetHealthThreshold = num end
     end,
 })
 
-AutoFarmTab:CreateSection("Safety & Protection")
-
-LowHealthToggle = AutoFarmTab:CreateToggle({
-    Name = "Low Health Auto-Teleport",
-    CurrentValue = false,
-    Callback = function(value)
-        lowHealthProtectionOn = value
-        if not value then
-            isCurrentlyProtected = false
-        end
-    end,
-})
-
-AutoFarmTab:CreateSlider({
-    Name = "Health Threshold",
-    Range = {10, 80},
-    Increment = 5,
-    CurrentValue = 50,
-    Callback = function(value)
-        healthThreshold = value
-    end,
-})
-
-AutoFarmTab:CreateButton({
-    Name = "Teleport to Safe Space",
-    Callback = function()
-        teleportToSafeSpace()
-    end,
-})
-
--- SECTION 2: UNDERGROUND AUTO FARM
-AutoFarmTab:CreateSection("RECOMMENDED TO USE")
-
-AutoFarmTab:CreateToggle({
-    Name = "Underground Auto Farm",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            ugGui.Enabled = true
-            activateUnderground()
-        else
-            deactivateUnderground()
-            ugGui.Enabled = false
-        end
-    end,
-})
 --------------------------------------------------------------------------------
 -- PART 3: ROLE-BASED DYNAMIC ESP (SURVIVORS & KILLERS)
 --------------------------------------------------------------------------------
