@@ -13,7 +13,7 @@ local BASE_FORWARD = 4
 local MAX_EXTRA_STUDS = 6
 local WALK_SPEED = 12
 local RUN_SPEED = 28
-local LUNGE_RANGE = 9.6
+local LUNGE_RANGE = 4.5 -- CFrame lunge thrust toward target during attacks
 
 --// STATE
 local active = false
@@ -25,7 +25,6 @@ local actualDepth = 6.5
 
 -- Persistent connection pointers
 local farmRenderConn = nil
-local lungeHeartbeatConn = nil
 local returnLoopConn = nil
 local playerRemovingConn = nil
 local charAddedConn = nil
@@ -263,11 +262,6 @@ local function deactivate()
         farmRenderConn = nil
     end
 
-    if lungeHeartbeatConn then
-        lungeHeartbeatConn:Disconnect()
-        lungeHeartbeatConn = nil
-    end
-
     if originalCameraSubject then 
         camera.CameraSubject = originalCameraSubject 
     end
@@ -292,46 +286,16 @@ local function activate()
         farmRenderConn:Disconnect()
     end
 
-    if lungeHeartbeatConn then
-        lungeHeartbeatConn:Disconnect()
-    end
-
-    -- Hitbox Expander / Lunge Boost Loop
-    lungeHeartbeatConn = RunService.Heartbeat:Connect(function()
-        if not active then return end
-        local character = player.Character
-        if not character then return end
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if not humanoid or not rootPart or humanoid.Health <= 0 then return end
-
-        for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-            local animObj = track.Animation
-            local name = animObj and animObj.Name:lower() or ""
-
-            local looksLikeAttack =
-                   name:find("attack")
-                or name:find("slash")
-                or name:find("swing")
-                or (track.Length > 0.3 and track.Length <= 1.5)
-
-            if looksLikeAttack and track.Length > 0 and (track.TimePosition / track.Length) < 0.75 then
-                local oldVelocity = rootPart.Velocity
-                rootPart.Velocity = oldVelocity + rootPart.CFrame.LookVector * LUNGE_RANGE
-                RunService.RenderStepped:Wait()
-                rootPart.Velocity = oldVelocity
-                break
-            end
-        end
-    end)
-
-    -- Primary Underground Positioning Loop
     farmRenderConn = RunService.RenderStepped:Connect(function()
         if not active or not targetPlayer then return end
         
         local myChar = player.Character
         if not myChar then return end
         
+        local myHum = myChar:FindFirstChildOfClass("Humanoid")
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if not myHum or not myRoot or myHum.Health <= 0 then return end
+
         local targetChar = targetPlayer.Character
         local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
         local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
@@ -343,43 +307,68 @@ local function activate()
         
         healthLabel.Text = "Health: [ " .. math.floor(targetHum.Health) .. " ]"
         
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if myRoot then
-            for _, part in ipairs(myChar:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
-            end
-
-            local velocity = targetRoot.AssemblyLinearVelocity
-            local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
-            local speed = horizontalVelocity.Magnitude
-            local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
-            
-            local movingOffset = 0
-            if speed > WALK_SPEED then
-                movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
-            elseif speed > 0.5 then
-                movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
-            end
-            
-            local lerpSpeed = movingOffset > smoothedOffset and 0.15 or 0.05
-            smoothedOffset = smoothedOffset + (movingOffset - smoothedOffset) * lerpSpeed
-            
-            local targetDepth = BASE_DEPTH
-            if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
-                targetDepth = AIR_DEPTH 
-            end
-            
-            actualDepth = actualDepth + (targetDepth - actualDepth) * 0.2
-            
-            local pos = targetRoot.Position + (moveDirection * (BASE_FORWARD + smoothedOffset)) - Vector3.new(0, actualDepth, 0)
-            local lookTarget = Vector3.new(pos.X, targetRoot.Position.Y, pos.Z)
-            
-            myRoot:PivotTo(CFrame.lookAt(pos, lookTarget))
-            myRoot.AssemblyLinearVelocity = Vector3.zero
-            myRoot.AssemblyAngularVelocity = Vector3.zero
-            
-            camera.CameraSubject = targetHum
+        for _, part in ipairs(myChar:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
+
+        -- Check if local player is executing an attack animation
+        local isAttacking = false
+        for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
+            local animObj = track.Animation
+            local name = animObj and animObj.Name:lower() or ""
+            local looksLikeAttack = name:find("attack")
+                or name:find("slash")
+                or name:find("swing")
+                or (track.Length > 0.2 and track.Length <= 1.8)
+
+            if looksLikeAttack and track.Length > 0 and (track.TimePosition / track.Length) < 0.85 then
+                isAttacking = true
+                break
+            end
+        end
+
+        local velocity = targetRoot.AssemblyLinearVelocity
+        local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+        local speed = horizontalVelocity.Magnitude
+        local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
+        
+        local movingOffset = 0
+        if speed > WALK_SPEED then
+            movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
+        elseif speed > 0.5 then
+            movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
+        end
+        
+        local lerpSpeed = movingOffset > smoothedOffset and 0.15 or 0.05
+        smoothedOffset = smoothedOffset + (movingOffset - smoothedOffset) * lerpSpeed
+        
+        local targetDepth = BASE_DEPTH
+        if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
+            targetDepth = AIR_DEPTH 
+        end
+        
+        -- Pull up closer toward target surface during attacks to guarantee hit registration
+        if isAttacking then
+            targetDepth = math.max(AIR_DEPTH, targetDepth - 2.5)
+        end
+
+        actualDepth = actualDepth + (targetDepth - actualDepth) * 0.2
+        
+        local basePos = targetRoot.Position + (moveDirection * (BASE_FORWARD + smoothedOffset)) - Vector3.new(0, actualDepth, 0)
+        local lookTarget = Vector3.new(basePos.X, targetRoot.Position.Y, basePos.Z)
+
+        -- Apply direct CFrame lunge boost toward target on attack frames
+        local finalCFrame = CFrame.lookAt(basePos, lookTarget)
+        if isAttacking then
+            local toTarget = (targetRoot.Position - basePos).Unit
+            finalCFrame = CFrame.lookAt(basePos + (toTarget * LUNGE_RANGE), lookTarget)
+        end
+        
+        myRoot:PivotTo(finalCFrame)
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+        
+        camera.CameraSubject = targetHum
     end)
 end
 
