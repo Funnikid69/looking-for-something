@@ -2691,3 +2691,290 @@ AntiTab:CreateToggle({
         updateSpikes(value)
     end,
 })
+--------------------------------------------------------------------------------
+-- PART 8: AIM TAB (STABLE, ANTI-GLITCH DEATH PROTECTION)
+--------------------------------------------------------------------------------
+
+local slasherAimbotOn = false
+local shedletskyAimbotOn = false
+
+local SLASHER_ANIM_IDS = {
+    ["114384283102737"] = true, -- Slasher Behead
+    ["98906674546879"]  = true, -- Slasher Slash
+    ["120537271555083"] = true, -- Slasher Behead (Alt)
+}
+
+local SHEDLETSKY_ANIM_IDS = {
+    ["106976963660502"] = true, -- Shedletsky Slash
+}
+
+local SURVIVOR_WHITELIST = {
+    ["guest1337"]     = true,
+    ["shedletsky"]    = true,
+    ["dusekkar"]      = true,
+    ["chance"]        = true,
+    ["twotime"]       = true,
+    ["007n7"]         = true,
+    ["elliot"]        = true,
+    ["veeronica"]     = true,
+    ["janedoe"]       = true,
+    ["messi"]         = true,
+    ["noob"]          = true,
+    ["taph"]          = true,
+    ["builderman"]    = true,
+    ["helperbot"]     = true,
+    ["torchwood"]     = true,
+}
+
+local KILLER_CLASSES = {
+    ["slasher"]         = true,
+    ["jason"]           = true,
+    ["c00lkidd"]        = true,
+    ["coolkid"]         = true,
+    ["coolkidrework"]   = true,
+    ["1x1x1x1"]         = true,
+    ["1x4"]             = true,
+    ["noli"]            = true,
+    ["swordsmaster"]    = true,
+    ["guest666"]        = true,
+    ["2011x"]           = true,
+    ["johndoe"]         = true,
+    ["azure"]           = true,
+    ["shedletskyfunny"] = true,
+    ["doombringer"]     = true,
+}
+
+local function extractNumericId(rawAnimId)
+    if not rawAnimId then return "" end
+    return tostring(rawAnimId):match("%d+") or ""
+end
+
+-- Validates that a Vector3 does not contain NaN or infinite values
+local function isVectorFinite(v)
+    if not v then return false end
+    return (v.X == v.X) and (v.Y == v.Y) and (v.Z == v.Z)
+        and (math.abs(v.X) < 1e6) and (math.abs(v.Y) < 1e6) and (math.abs(v.Z) < 1e6)
+end
+
+local function isPlayerAlive(plr)
+    if not plr or not plr.Character then return false end
+    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+    local root = plr.Character:FindFirstChild("HumanoidRootPart")
+    return hum and root and hum.Health > 0 and plr.Character:IsDescendantOf(workspace)
+end
+
+local function isPlayerKiller(plr)
+    if not plr or not plr.Character then return false end
+    local charType = plr.Character:GetAttribute("Character") 
+        or plr.Character:GetAttribute("CharacterType") 
+        or plr.Character:GetAttribute("Role")
+        or plr.Character.Name
+    local key = string.lower(tostring(charType))
+    if key == "coolkid" then key = "c00lkidd" end
+    if key == "1x4" then key = "1x1x1x1" end
+    return KILLER_CLASSES[key] == true
+end
+
+local function isPlayerWhitelistedSurvivor(plr)
+    if not plr or not plr.Character then return false end
+    local charType = plr.Character:GetAttribute("Character") 
+        or plr.Character:GetAttribute("CharacterType") 
+        or plr.Character:GetAttribute("Role")
+        or plr.Character.Name
+    local key = string.lower(tostring(charType))
+    return SURVIVOR_WHITELIST[key] == true and not KILLER_CLASSES[key]
+end
+
+local function getClosestSurvivor()
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local closest = nil
+    local shortestDist = 85
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and isPlayerAlive(p) and isPlayerWhitelistedSurvivor(p) then
+            local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
+            if tRoot then
+                local dist = (myRoot.Position - tRoot.Position).Magnitude
+                if dist < shortestDist then
+                    shortestDist = dist
+                    closest = p.Character
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local function getActiveKiller()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and isPlayerAlive(p) and isPlayerKiller(p) then
+            return p.Character
+        end
+    end
+    return nil
+end
+
+-- Active Snap & Track Loop with instant death break & NaN guards
+local activeSnapThread = nil
+
+local function lockOntoTargetForDuration(targetChar, duration)
+    if not targetChar then return end
+    local myChar = player.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myRoot or not myHum or myHum.Health <= 0 then return end
+
+    if activeSnapThread then
+        task.cancel(activeSnapThread)
+        activeSnapThread = nil
+    end
+
+    activeSnapThread = task.spawn(function()
+        local startTime = os.clock()
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+
+        while os.clock() - startTime < (duration or 0.38) do
+            -- Instant break if target or self died/despawned
+            if not targetChar or not targetChar:IsDescendantOf(workspace) then break end
+            if not myChar or not myChar:IsDescendantOf(workspace) then break end
+            if not targetHum or targetHum.Health <= 0 then break end
+            if not myHum or myHum.Health <= 0 then break end
+            if not targetRoot or not targetRoot:IsDescendantOf(workspace) then break end
+
+            local myPos = myRoot.Position
+            local targetPos = targetRoot.Position
+
+            -- Anti-glitch guard: prevent NaN calculations when ragdoll physics activate
+            if not isVectorFinite(myPos) or not isVectorFinite(targetPos) then
+                break
+            end
+
+            local flatDiff = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
+            if flatDiff.Magnitude > 0.4 then
+                pcall(function()
+                    myRoot.CFrame = CFrame.lookAt(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+                end)
+            end
+
+            local currentCamera = workspace.CurrentCamera
+            if currentCamera then
+                local camPos = currentCamera.CFrame.Position
+                local targetAim = targetPos + Vector3.new(0, 0.4, 0)
+                if isVectorFinite(camPos) and isVectorFinite(targetAim) then
+                    pcall(function()
+                        currentCamera.CFrame = CFrame.lookAt(camPos, targetAim)
+                    end)
+                end
+            end
+
+            RS.RenderStepped:Wait()
+        end
+        activeSnapThread = nil
+    end)
+end
+
+-- Animation Event Hooks
+local function hookHumanoidAnimations(humanoid)
+    if not humanoid then return end
+
+    humanoid.AnimationPlayed:Connect(function(track)
+        local animObj = track.Animation
+        local rawId = animObj and animObj.AnimationId or ""
+        local numericId = extractNumericId(rawId)
+
+        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] then
+            local target = getClosestSurvivor()
+            if target then
+                lockOntoTargetForDuration(target, 0.38)
+            end
+        elseif shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] then
+            local target = getActiveKiller()
+            if target then
+                lockOntoTargetForDuration(target, 0.38)
+            end
+        end
+    end)
+end
+
+if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+    hookHumanoidAnimations(player.Character:FindFirstChildOfClass("Humanoid"))
+end
+
+player.CharacterAdded:Connect(function(c)
+    local hum = c:WaitForChild("Humanoid", 5)
+    if hum then
+        hookHumanoidAnimations(hum)
+    end
+end)
+
+-- Background scan fallback
+RS.Heartbeat:Connect(function()
+    if not slasherAimbotOn and not shedletskyAimbotOn then return end
+    if activeSnapThread then return end
+
+    local myChar = player.Character
+    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myHum or myHum.Health <= 0 then return end
+
+    for _, track in ipairs(myHum:GetPlayingAnimationTracks()) do
+        local animObj = track.Animation
+        local rawId = animObj and animObj.AnimationId or ""
+        local numericId = extractNumericId(rawId)
+
+        if slasherAimbotOn and SLASHER_ANIM_IDS[numericId] and track.TimePosition < 0.25 then
+            local target = getClosestSurvivor()
+            if target then
+                lockOntoTargetForDuration(target, 0.35)
+            end
+            break
+        elseif shedletskyAimbotOn and SHEDLETSKY_ANIM_IDS[numericId] and track.TimePosition < 0.25 then
+            local target = getActiveKiller()
+            if target then
+                lockOntoTargetForDuration(target, 0.35)
+            end
+            break
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- RAYFIELD AIM TAB INTERFACE
+--------------------------------------------------------------------------------
+
+AimTab:CreateSection("Killer Combat")
+
+AimTab:CreateToggle({
+    Name = "Slasher Aimbot",
+    CurrentValue = false,
+    Callback = function(value)
+        slasherAimbotOn = value
+        if value and shedletskyAimbotOn then
+            shedletskyAimbotOn = false
+        end
+        if not value and activeSnapThread then
+            task.cancel(activeSnapThread)
+            activeSnapThread = nil
+        end
+    end,
+})
+
+AimTab:CreateSection("Survivor Combat")
+
+AimTab:CreateToggle({
+    Name = "Shedletsky Slash Aimbot",
+    CurrentValue = false,
+    Callback = function(value)
+        shedletskyAimbotOn = value
+        if value and slasherAimbotOn then
+            slasherAimbotOn = false
+        end
+        if not value and activeSnapThread then
+            task.cancel(activeSnapThread)
+            activeSnapThread = nil
+        end
+    end,
+})
