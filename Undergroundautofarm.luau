@@ -13,6 +13,7 @@ local BASE_FORWARD = 4
 local MAX_EXTRA_STUDS = 6
 local WALK_SPEED = 12
 local RUN_SPEED = 28
+local LUNGE_RANGE = 9.6
 
 --// STATE
 local active = false
@@ -22,8 +23,9 @@ local originalCameraSubject = nil
 local smoothedOffset = 0
 local actualDepth = 6.5
 
--- Persistent connection pointers (prevents RenderStepped stacking lag)
+-- Persistent connection pointers
 local farmRenderConn = nil
+local lungeHeartbeatConn = nil
 local returnLoopConn = nil
 local playerRemovingConn = nil
 local charAddedConn = nil
@@ -261,6 +263,11 @@ local function deactivate()
         farmRenderConn = nil
     end
 
+    if lungeHeartbeatConn then
+        lungeHeartbeatConn:Disconnect()
+        lungeHeartbeatConn = nil
+    end
+
     if originalCameraSubject then 
         camera.CameraSubject = originalCameraSubject 
     end
@@ -285,6 +292,40 @@ local function activate()
         farmRenderConn:Disconnect()
     end
 
+    if lungeHeartbeatConn then
+        lungeHeartbeatConn:Disconnect()
+    end
+
+    -- Hitbox Expander / Lunge Boost Loop
+    lungeHeartbeatConn = RunService.Heartbeat:Connect(function()
+        if not active then return end
+        local character = player.Character
+        if not character then return end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoid or not rootPart or humanoid.Health <= 0 then return end
+
+        for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+            local animObj = track.Animation
+            local name = animObj and animObj.Name:lower() or ""
+
+            local looksLikeAttack =
+                   name:find("attack")
+                or name:find("slash")
+                or name:find("swing")
+                or (track.Length > 0.3 and track.Length <= 1.5)
+
+            if looksLikeAttack and track.Length > 0 and (track.TimePosition / track.Length) < 0.75 then
+                local oldVelocity = rootPart.Velocity
+                rootPart.Velocity = oldVelocity + rootPart.CFrame.LookVector * LUNGE_RANGE
+                RunService.RenderStepped:Wait()
+                rootPart.Velocity = oldVelocity
+                break
+            end
+        end
+    end)
+
+    -- Primary Underground Positioning Loop
     farmRenderConn = RunService.RenderStepped:Connect(function()
         if not active or not targetPlayer then return end
         
