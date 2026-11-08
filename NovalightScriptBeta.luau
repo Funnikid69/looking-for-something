@@ -14,7 +14,7 @@ if not ALLOWED_PLACE_IDS[game.PlaceId] then
 end
 
 --------------------------------------------------------------------------------
--- ORIGINAL RAYFIELD SETUP
+-- RAYFIELD SETUP
 --------------------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
@@ -26,7 +26,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local camera = workspace.CurrentCamera
 
---// ORIGINAL RAYFIELD WINDOW
+--// RAYFIELD WINDOW
 local Window = Rayfield:CreateWindow({
     Name = "Novalight Beta",
     LoadingTitle = "Novalight Beta",
@@ -38,7 +38,7 @@ local Window = Rayfield:CreateWindow({
     }
 })
 
---// TABS (ORIGINAL SYNTAX)
+--// TABS
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local AutoFarmTab = Window:CreateTab("Auto Farm", 4483362458)
 local ESPTab = Window:CreateTab("ESP", 4483362458)
@@ -47,7 +47,7 @@ local TeleportTab = Window:CreateTab("Teleporter", 4483362458)
 local SonicEXEtab = Window:CreateTab("2011X", 4483362458)
 
 --------------------------------------------------------------------------------
--- CHARACTER & STATE TRACKING
+-- CHARACTER TRACKING
 --------------------------------------------------------------------------------
 local char = player.Character or player.CharacterAdded:Wait()
 local hum = char:WaitForChild("Humanoid")
@@ -62,6 +62,7 @@ end)
 --------------------------------------------------------------------------------
 local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
 local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
+local SAFE_SPACE_TARGET = Vector3.new(MAP_CENTER.X, 5005, MAP_CENTER.Z)
 local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
 
 if not safeSpacePart then
@@ -85,7 +86,7 @@ local function teleportToSafeSpace()
 end
 
 --------------------------------------------------------------------------------
--- ANTI-VOID SYSTEM (CENTERED AT NEW MAP COORDS)
+-- ANTI-VOID SYSTEM
 --------------------------------------------------------------------------------
 local ANTI_VOID_HEIGHT = -150
 local antiVoidPart = workspace:FindFirstChild("AntiVoidPlate")
@@ -113,242 +114,8 @@ antiVoidPart.Touched:Connect(function(hit)
         end
     end
 end)
-
 --------------------------------------------------------------------------------
--- CHARACTER ABILITY CONFIGURATIONS (SHEDLETSKY, NOLI & C00LKIDD)
---------------------------------------------------------------------------------
-local charRemotesFolder = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
-local shedFolder = charRemotesFolder and charRemotesFolder:FindFirstChild("Shedletsky")
-local noliFolder = charRemotesFolder and charRemotesFolder:FindFirstChild("Noli")
-local coolkidFolder = charRemotesFolder and (charRemotesFolder:FindFirstChild("Coolkid") or charRemotesFolder:FindFirstChild("c00lkidd"))
-
-local ShedletskyAbilities = {
-    ["Slash"] = {
-        ["Cooldown"] = 15,
-        ["LastUsed"] = 0,
-        ["Remote"] = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
-    }
-}
-
-local NoliAbilities = {
-    ["AltAbility2"] = { -- Nova
-        ["Cooldown"] = 0,
-        ["LastUsed"] = 0,
-        ["Remote"] = noliFolder and noliFolder:FindFirstChild("NoliNova")
-    }
-}
-
-local CoolkidAbilities = {
-    ["Corrupt"] = {
-        ["Cooldown"] = 12,
-        ["LastUsed"] = 0,
-        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
-    },
-    ["Walkspeed"] = {
-        ["Cooldown"] = 1,
-        ["LastUsed"] = 0,
-        ["Remote"] = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
-    }
-}
-
-local SHEDLETSKY_AUTO_ABILITIES = { "Slash" }
-local NOLI_AUTO_ABILITIES = { "AltAbility2" }
-local COOLKID_AUTO_ABILITIES = { "Corrupt", "Walkspeed" }
-
-local autoFarmLowHpOn = false
-local autoFarmAllOn = false
-local lockInFrontOn = false
-local stickToPersonOn = false
-local targetHealthThreshold = 20
-local hitDistanceOffset = 3
-local MAX_ABILITY_DISTANCE = 15
-
-local currentLockedTarget = nil
-
-local LowHpToggle
-local AllPlayersToggle
-
---------------------------------------------------------------------------------
--- CHARACTER STATE CHECKS
---------------------------------------------------------------------------------
-local function getCurrentCharacterType()
-    if not char then return nil end
-    return char:GetAttribute("Character")
-end
-
-local function canUseCharacter()
-    if not char or not hum or hum.Health <= 0 then return false end
-    local cType = getCurrentCharacterType()
-
-    if cType == "Noli" or cType == "Coolkid" or cType == "c00lkidd" or cType == "coolkidrework" or cType == "2011X" then
-        return char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
-    elseif cType == "Shedletsky" then
-        return char:GetAttribute("CanRun") ~= false and char:GetAttribute("CanAttack") ~= false and char:GetAttribute("Emoting") ~= true and char:GetAttribute("AbilitiesDisabled") ~= true
-    end
-    return true
-end
---------------------------------------------------------------------------------
--- PART 2A: SAFE SPACE, ABILITIES & UNDERGROUND GUI SETUP
---------------------------------------------------------------------------------
-
-local MAP_CENTER = Vector3.new(-1487.63, -2.90, -11347.20)
-local SAFE_SPACE_CFRAME = CFrame.new(MAP_CENTER.X, 5000, MAP_CENTER.Z)
-local SAFE_SPACE_TARGET = Vector3.new(MAP_CENTER.X, 5005, MAP_CENTER.Z)
-
-local safeSpacePart = workspace:FindFirstChild("SafeSpaceBaseplate")
-if not safeSpacePart then
-    safeSpacePart = Instance.new("Part")
-    safeSpacePart.Name = "SafeSpaceBaseplate"
-    safeSpacePart.Size = Vector3.new(200, 5, 200)
-    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
-    safeSpacePart.Anchored = true
-    safeSpacePart.Material = Enum.Material.SmoothPlastic
-    safeSpacePart.Color = Color3.fromRGB(40, 40, 45)
-    safeSpacePart.Parent = workspace
-else
-    safeSpacePart.CFrame = SAFE_SPACE_CFRAME
-end
-
-local function teleportToSafeSpace()
-    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-    if myRoot then
-        myRoot.CFrame = SAFE_SPACE_CFRAME * CFrame.new(0, 5, 0)
-    end
-end
-
--- Reusable Low Health Protection Variables
-local lowHealthProtectionOn = false
-local healthThreshold = 50
-local isCurrentlyProtected = false
-local LowHealthToggle
-
--- Remote Cache References (CharacterRemotes)
-local charRemotes = ReplicatedStorage:WaitForChild("CharacterRemotes", 5)
-
-local shedletskyRemote = charRemotes and charRemotes:FindFirstChild("Shedletsky") and charRemotes.Shedletsky:FindFirstChild("ShedletskyAttackRemote")
-local noliNovaRemote   = charRemotes and charRemotes:FindFirstChild("Noli") and charRemotes.Noli:FindFirstChild("NoliNova")
-
-local coolkidFolder = charRemotes and (charRemotes:FindFirstChild("Coolkid") or charRemotes:FindFirstChild("c00lkidd"))
-local coolkidWalkspeedRemote = coolkidFolder and coolkidFolder:FindFirstChild("Walkspeed")
-local coolkidCorruptRemote   = coolkidFolder and coolkidFolder:FindFirstChild("Corrupt")
-
-local function castCharacterAction(actionName, targetPosition)
-    if not canUseCharacter() then return end
-    local cType = getCurrentCharacterType()
-
-    -- 1. Shedletsky Slash
-    if cType and cType:lower():find("shedletsky") and actionName == "Slash" then
-        if not shedletskyRemote then
-            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
-            local shedFolder = remotesFolder and remotesFolder:FindFirstChild("Shedletsky")
-            shedletskyRemote = shedFolder and shedFolder:FindFirstChild("ShedletskyAttackRemote")
-        end
-
-        if shedletskyRemote then
-            local data = ShedletskyAbilities and ShedletskyAbilities["Slash"]
-            local now = os.clock()
-            
-            if (not data) or (now - data.LastUsed >= data.Cooldown) then
-                if data then data.LastUsed = now end
-
-                if targetPosition and char and char:FindFirstChild("HumanoidRootPart") then
-                    local myRoot = char.HumanoidRootPart
-                    myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(targetPosition.X, myRoot.Position.Y, targetPosition.Z))
-                end
-
-                task.spawn(function()
-                    pcall(function()
-                        if shedletskyRemote:IsA("RemoteFunction") then
-                            shedletskyRemote:InvokeServer()
-                        elseif shedletskyRemote:IsA("RemoteEvent") then
-                            shedletskyRemote:FireServer()
-                        end
-                    end)
-                end)
-            end
-        end
-        return
-    end
-
-    -- 2. Noli Nova
-    if cType and cType == "Noli" and actionName == "AltAbility2" then
-        if not noliNovaRemote then
-            local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
-            local nFolder = remotesFolder and remotesFolder:FindFirstChild("Noli")
-            noliNovaRemote = nFolder and nFolder:FindFirstChild("NoliNova")
-        end
-
-        if noliNovaRemote then
-            local data = NoliAbilities and NoliAbilities["AltAbility2"]
-            local now = os.clock()
-
-            if (not data) or (now - data.LastUsed >= data.Cooldown) then
-                if data then data.LastUsed = now end
-
-                task.spawn(function()
-                    pcall(function()
-                        noliNovaRemote:FireServer()
-                    end)
-                end)
-            end
-        end
-        return
-    end
-
-    -- 3. c00lkidd Abilities
-    if cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) then
-        local remotesFolder = ReplicatedStorage:FindFirstChild("CharacterRemotes")
-        local ckFolder = remotesFolder and (remotesFolder:FindFirstChild("Coolkid") or remotesFolder:FindFirstChild("c00lkidd"))
-
-        if actionName == "Walkspeed" then
-            if not coolkidWalkspeedRemote then
-                coolkidWalkspeedRemote = ckFolder and ckFolder:FindFirstChild("Walkspeed")
-            end
-
-            if coolkidWalkspeedRemote then
-                local data = CoolkidAbilities and CoolkidAbilities["Walkspeed"]
-                local now = os.clock()
-
-                if (not data) or (now - data.LastUsed >= data.Cooldown) then
-                    if data then data.LastUsed = now end
-
-                    task.spawn(function()
-                        pcall(function()
-                            coolkidWalkspeedRemote:FireServer()
-                        end)
-                    end)
-                end
-            end
-            return
-        end
-
-        if actionName == "Corrupt" then
-            if not coolkidCorruptRemote then
-                coolkidCorruptRemote = ckFolder and ckFolder:FindFirstChild("Corrupt")
-            end
-
-            if coolkidCorruptRemote then
-                local data = CoolkidAbilities and CoolkidAbilities["Corrupt"]
-                local now = os.clock()
-
-                if (not data) or (now - data.LastUsed >= data.Cooldown) then
-                    if data then data.LastUsed = now end
-
-                    local aimPos = targetPosition or (workspace.Camera.CFrame * CFrame.new(0, 0, -500)).Position
-                    task.spawn(function()
-                        pcall(function()
-                            coolkidCorruptRemote:FireServer(aimPos, true)
-                        end)
-                    end)
-                end
-            end
-            return
-        end
-    end
-end
-
---------------------------------------------------------------------------------
--- UNDERGROUND AUTO FARM SYSTEM (EXACT ORIGINAL LOGIC)
+-- UNDERGROUND AUTO FARM SYSTEM & SCREEN GUI
 --------------------------------------------------------------------------------
 local ugActive = false
 local ugTargetIndex = 0
@@ -365,8 +132,14 @@ local MAX_EXTRA_STUDS = 6
 local WALK_SPEED = 12
 local RUN_SPEED = 28
 
--- Connection handle to eliminate toggle stacking lag
 local ugRenderConn = nil
+local ugReturnLoopConn = nil
+local ugPlayerRemovingConn = nil
+local ugCharDiedConn = nil
+local cachedSpawnCFrame = nil
+
+-- Forward declaration for UI Toggle synchronization
+local UndergroundToggle = nil
 
 -- GUI Setup
 local ugGui = Instance.new("ScreenGui")
@@ -460,15 +233,14 @@ applyModernStyle(ugRightBtn)
 ugRightBtn.Text = ">"
 ugRightBtn.Visible = false
 ugRightBtn.Parent = ugActionFrame
---------------------------------------------------------------------------------
--- PART 2B: UNDERGROUND LOOPS, TARGETING & AUTOFARM TAB UI
---------------------------------------------------------------------------------
 
 local function getSafeSpawn()
+    if cachedSpawnCFrame then return cachedSpawnCFrame end
     local spawnCFrame = CFrame.new(0, 5, 0)
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("SpawnLocation") then
             spawnCFrame = obj.CFrame + Vector3.new(0, 5, 0)
+            cachedSpawnCFrame = spawnCFrame
             break
         end
     end
@@ -476,6 +248,11 @@ local function getSafeSpawn()
 end
 
 local function returnToSurface()
+    if ugReturnLoopConn then
+        ugReturnLoopConn:Disconnect()
+        ugReturnLoopConn = nil
+    end
+
     local character = player.Character
     if not character then return end
     local rootPart = character:FindFirstChild("HumanoidRootPart")
@@ -493,8 +270,7 @@ local function returnToSurface()
     rootPart.AssemblyAngularVelocity = Vector3.zero
     
     local frames = 0
-    local returnLoop
-    returnLoop = RS.RenderStepped:Connect(function()
+    ugReturnLoopConn = RS.RenderStepped:Connect(function()
         frames = frames + 1
         rootPart.CFrame = spawnCFrame
         rootPart.AssemblyLinearVelocity = Vector3.zero
@@ -508,11 +284,17 @@ local function returnToSurface()
         
         if frames >= 10 then 
             rootPart.Anchored = false 
-            returnLoop:Disconnect()
+            if ugReturnLoopConn then
+                ugReturnLoopConn:Disconnect()
+                ugReturnLoopConn = nil
+            end
         end
     end)
-    task.delay(0.5, function() 
-        if returnLoop then returnLoop:Disconnect() end 
+    task.delay(0.5, function()
+        if ugReturnLoopConn then
+            ugReturnLoopConn:Disconnect()
+            ugReturnLoopConn = nil
+        end
     end)
 end
 
@@ -522,7 +304,7 @@ local function getUndergroundTargets()
         if p ~= player and p.Character then
             local root = p.Character:FindFirstChild("HumanoidRootPart")
             local human = p.Character:FindFirstChildOfClass("Humanoid")
-            if root and human and human.Health > 0 then
+            if root and human and human.Health > 0 and p.Character:IsDescendantOf(workspace) then
                 table.insert(t, p)
             end
         end
@@ -580,7 +362,6 @@ local function deactivateUnderground()
     ugHealthLabel.Visible = false
     ugStatus.Text = "Inactive"
     
-    -- Disconnect active RenderStepped to stop memory and frame lag
     if ugRenderConn then
         ugRenderConn:Disconnect()
         ugRenderConn = nil
@@ -611,83 +392,93 @@ local function activateUnderground()
         ugRenderConn = nil
     end
 
-    -- Connects RenderStepped strictly when enabled
     ugRenderConn = RS.RenderStepped:Connect(function()
         if not ugActive or not ugTargetPlayer then return end
         
         local myChar = player.Character
         if not myChar then return end
         
+        local myHum = myChar:FindFirstChildOfClass("Humanoid")
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if not myHum or not myRoot or myHum.Health <= 0 then return end
+
         local targetChar = ugTargetPlayer.Character
         local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
         local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
         
-        if not targetRoot or not targetHum or targetHum.Health <= 0 then
+        if not targetRoot or not targetHum or targetHum.Health <= 0 or not targetChar:IsDescendantOf(workspace) then
             ugGoNext()
             return
         end
         
         ugHealthLabel.Text = "Health: [ " .. math.floor(targetHum.Health) .. " ]"
+
+        local velocity = targetRoot.AssemblyLinearVelocity
+        local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+        local speed = horizontalVelocity.Magnitude
+        local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
         
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if myRoot then
-            local velocity = targetRoot.AssemblyLinearVelocity
-            local horizontalVelocity = Vector3.new(velocity.X, 0, velocity.Z)
-            local speed = horizontalVelocity.Magnitude
-            local moveDirection = speed > 0.5 and horizontalVelocity.Unit or targetRoot.CFrame.LookVector
-            
-            local movingOffset = 0
-            if speed > WALK_SPEED then
-                movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
-            elseif speed > 0.5 then
-                movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
-            end
-            
-            local lerpSpeed = movingOffset > ugSmoothedOffset and 0.15 or 0.05
-            ugSmoothedOffset = ugSmoothedOffset + (movingOffset - ugSmoothedOffset) * lerpSpeed
-            
-            local targetDepth = BASE_DEPTH
-            if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
-                targetDepth = AIR_DEPTH 
-            end
-            
-            ugActualDepth = ugActualDepth + (targetDepth - ugActualDepth) * 0.2
-            
-            local pos = targetRoot.Position + (moveDirection * (BASE_FORWARD + ugSmoothedOffset)) - Vector3.new(0, ugActualDepth, 0)
-            local lookTarget = Vector3.new(pos.X, targetRoot.Position.Y, pos.Z)
-            
-            myRoot:PivotTo(CFrame.lookAt(pos, lookTarget))
-            myRoot.AssemblyLinearVelocity = Vector3.zero
-            myRoot.AssemblyAngularVelocity = Vector3.zero
-            
-            camera.CameraSubject = targetHum
+        local movingOffset = 0
+        if speed > WALK_SPEED then
+            movingOffset = math.clamp((speed - WALK_SPEED) / (RUN_SPEED - WALK_SPEED), 0, 1) * MAX_EXTRA_STUDS
+        elseif speed > 0.5 then
+            movingOffset = math.clamp(speed / WALK_SPEED, 0, 1) * (MAX_EXTRA_STUDS * 0.3)
         end
+        
+        local lerpSpeed = movingOffset > ugSmoothedOffset and 0.15 or 0.05
+        ugSmoothedOffset = ugSmoothedOffset + (movingOffset - ugSmoothedOffset) * lerpSpeed
+        
+        local targetDepth = BASE_DEPTH
+        if targetHum.FloorMaterial == Enum.Material.Air or targetHum:GetState() == Enum.HumanoidStateType.Freefall then
+            targetDepth = AIR_DEPTH 
+        end
+
+        ugActualDepth = ugActualDepth + (targetDepth - ugActualDepth) * 0.2
+        
+        local basePos = targetRoot.Position + (moveDirection * (BASE_FORWARD + ugSmoothedOffset)) - Vector3.new(0, ugActualDepth, 0)
+        local lookTarget = Vector3.new(basePos.X, targetRoot.Position.Y, basePos.Z)
+        
+        myRoot:PivotTo(CFrame.lookAt(basePos, lookTarget))
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+        
+        camera.CameraSubject = targetHum
     end)
 end
 
 ugButton.MouseButton1Click:Connect(function()
     if not ugActive then
         activateUnderground()
+        if UndergroundToggle then UndergroundToggle:Set(true) end
     else
         deactivateUnderground()
+        if UndergroundToggle then UndergroundToggle:Set(false) end
     end
 end)
 
 ugButton.MouseButton2Click:Connect(function()
-    if ugActive then deactivateUnderground() end
+    if ugActive then 
+        deactivateUnderground() 
+        if UndergroundToggle then UndergroundToggle:Set(false) end
+    end
 end)
 
 ugRightBtn.MouseButton1Click:Connect(function() if ugActive then ugGoNext() end end)
 ugLeftBtn.MouseButton1Click:Connect(function() if ugActive then ugGoPrev() end end)
 
-Players.PlayerRemoving:Connect(function(p) 
+if ugPlayerRemovingConn then ugPlayerRemovingConn:Disconnect() end
+ugPlayerRemovingConn = Players.PlayerRemoving:Connect(function(p) 
     if p == ugTargetPlayer then ugGoNext() end 
 end)
 
 local function hookDeath(character)
+    if ugCharDiedConn then ugCharDiedConn:Disconnect() end
     local humObj = character:WaitForChild("Humanoid")
-    humObj.Died:Connect(function() 
-        if ugActive then deactivateUnderground() end 
+    ugCharDiedConn = humObj.Died:Connect(function() 
+        if ugActive then 
+            deactivateUnderground()
+            if UndergroundToggle then UndergroundToggle:Set(false) end
+        end 
     end)
 end
 
@@ -695,99 +486,12 @@ if player.Character then hookDeath(player.Character) end
 player.CharacterAdded:Connect(hookDeath)
 
 --------------------------------------------------------------------------------
--- STRICT TARGET VALIDATION & SELECTION (ORIGINAL AUTO FARM)
+-- LOW HEALTH PROTECTION LOOP (TIED TO UNDERGROUND AUTO FARM)
 --------------------------------------------------------------------------------
-local function isTargetAliveAndValid(p, maxHpConstraint)
-    if not p or not p.Parent or not p.Character or p == player then return false end
-    local tHum = p.Character:FindFirstChild("Humanoid")
-    local tRoot = p.Character:FindFirstChild("HumanoidRootPart")
-    
-    if not tHum or not tRoot or tHum.Health <= 0 or not p.Character:IsDescendantOf(workspace) then
-        return false
-    end
+local lowHealthProtectionOn = false
+local healthThreshold = 50
+local isCurrentlyProtected = false
 
-    if maxHpConstraint and tHum.Health > maxHpConstraint then
-        return false
-    end
-
-    return true
-end
-
-local function getLowHpTarget(maxHp)
-    local limitHp = maxHp or targetHealthThreshold
-
-    if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget, limitHp) then
-        return currentLockedTarget
-    end
-
-    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local lowestHp = limitHp
-    local targetPlayer = nil
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and isTargetAliveAndValid(p, limitHp) then
-            local tHum = p.Character.Humanoid
-            if tHum.Health <= lowestHp then
-                lowestHp = tHum.Health
-                targetPlayer = p
-            end
-        end
-    end
-
-    currentLockedTarget = targetPlayer
-    return targetPlayer
-end
-
-local function getAnyTarget()
-    if stickToPersonOn and isTargetAliveAndValid(currentLockedTarget, nil) then
-        return currentLockedTarget
-    end
-
-    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
-    local closestDist = math.huge
-    local targetPlayer = nil
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and isTargetAliveAndValid(p, nil) then
-            local tRoot = p.Character.HumanoidRootPart
-            local dist = (tRoot.Position - myRoot.Position).Magnitude
-            if dist < closestDist then
-                closestDist = dist
-                targetPlayer = p
-            end
-        end
-    end
-
-    currentLockedTarget = targetPlayer
-    return targetPlayer
-end
-
-local function positionAtTarget(targetPlayer)
-    if not targetPlayer or not targetPlayer.Character then return end
-    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-    if not myRoot or not targetRoot then return end
-
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then part.CanCollide = false end
-    end
-
-    local offset = hitDistanceOffset
-    if lockInFrontOn then
-        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, -offset) * CFrame.Angles(0, math.pi, 0)
-    else
-        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, offset)
-    end
-end
-
---------------------------------------------------------------------------------
--- REUSABLE LOW HEALTH PROTECTION LOOP (AUTO-RETURN TO BASEPLATE)
---------------------------------------------------------------------------------
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -797,20 +501,18 @@ task.spawn(function()
 
             if humanoid and hrp and humanoid.Health > 0 then
                 if humanoid.Health <= healthThreshold then
-                    if autoFarmLowHpOn then
-                        autoFarmLowHpOn = false
-                        if LowHpToggle then LowHpToggle:Set(false) end
-                    end
-                    if autoFarmAllOn then
-                        autoFarmAllOn = false
-                        if AllPlayersToggle then AllPlayersToggle:Set(false) end
-                    end
+                    -- Disable underground auto farm immediately
                     if ugActive then
                         deactivateUnderground()
+                        ugGui.Enabled = false
+                        if UndergroundToggle then
+                            task.spawn(function()
+                                UndergroundToggle:Set(false)
+                            end)
+                        end
                     end
-                    currentLockedTarget = nil
-                    isCurrentlyWaitingInSafeSpace = false
 
+                    -- Ensure Baseplate exists
                     if not safeSpacePart or not safeSpacePart.Parent then
                         safeSpacePart = Instance.new("Part", workspace)
                         safeSpacePart.Name = "SafeSpaceBaseplate"
@@ -823,6 +525,7 @@ task.spawn(function()
 
                     local dist = (hrp.Position - SAFE_SPACE_TARGET).Magnitude
 
+                    -- Teleport and pin to safe baseplate
                     if not isCurrentlyProtected or dist > 25 then
                         hrp.CFrame = CFrame.new(SAFE_SPACE_TARGET)
                         isCurrentlyProtected = true
@@ -840,73 +543,11 @@ task.spawn(function()
 end)
 
 --------------------------------------------------------------------------------
--- POSITIONING & ATTACK LOOPS WITH IDLE SAFE SPACE TELEPORT
+-- AUTO FARM TAB (CLEANED UP & RECOMMENDED FIRST)
 --------------------------------------------------------------------------------
-local isCurrentlyWaitingInSafeSpace = false
-
-RS.Stepped:Connect(function()
-    if not autoFarmLowHpOn and not autoFarmAllOn then 
-        isCurrentlyWaitingInSafeSpace = false
-        return 
-    end
-    if not char or not hum or hum.Health <= 0 then return end
-
-    local activeTarget = autoFarmLowHpOn and getLowHpTarget(targetHealthThreshold) or getAnyTarget()
-    local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
-
-    if activeTarget and isTargetAliveAndValid(activeTarget, maxHpConstraint) then
-        isCurrentlyWaitingInSafeSpace = false
-        positionAtTarget(activeTarget)
-    else
-        currentLockedTarget = nil
-        
-        if autoFarmLowHpOn and not isCurrentlyWaitingInSafeSpace then
-            isCurrentlyWaitingInSafeSpace = true
-            teleportToSafeSpace()
-        end
-    end
-end)
-
-RS.Heartbeat:Connect(function()
-    local cType = getCurrentCharacterType()
-    if cType and cType:lower():find("shedletsky") then
-        char:SetAttribute("CanRun", true)
-        char:SetAttribute("Slowed", false)
-        if hum and hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-    end
-
-    if not autoFarmLowHpOn and not autoFarmAllOn then return end
-
-    local maxHpConstraint = autoFarmLowHpOn and targetHealthThreshold or nil
-    local targetP = currentLockedTarget
-
-    if targetP and isTargetAliveAndValid(targetP, maxHpConstraint) then
-        local autoList = (cType and cType:lower():find("shedletsky") and SHEDLETSKY_AUTO_ABILITIES) 
-            or (cType == "Noli" and NOLI_AUTO_ABILITIES) 
-            or (cType and (cType:lower():find("coolkid") or cType:lower():find("c00lkidd")) and COOLKID_AUTO_ABILITIES)
-            or {}
-
-        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-        if myRoot then
-            local tRoot = targetP.Character:FindFirstChild("HumanoidRootPart")
-            if tRoot and (tRoot.Position - myRoot.Position).Magnitude <= MAX_ABILITY_DISTANCE then
-                for _, abilityName in ipairs(autoList) do
-                    castCharacterAction(abilityName, tRoot.Position)
-                end
-            end
-        end
-    else
-        currentLockedTarget = nil
-    end
-end)
---------------------------------------------------------------------------------
--- AUTO FARM TAB ELEMENTS (RAYFIELD)
---------------------------------------------------------------------------------
-
--- Placed at the very top of the tab as the primary recommendation
 AutoFarmTab:CreateSection("⭐ RECOMMENDED")
 
-local UndergroundToggle = AutoFarmTab:CreateToggle({
+UndergroundToggle = AutoFarmTab:CreateToggle({
     Name = "Underground Auto Farm",
     CurrentValue = false,
     Flag = "UndergroundAutoFarmToggle",
@@ -921,84 +562,35 @@ local UndergroundToggle = AutoFarmTab:CreateToggle({
     end,
 })
 
-AutoFarmTab:CreateSection("Targeting Options")
+AutoFarmTab:CreateSection("Underground Safety Protection")
 
 AutoFarmTab:CreateToggle({
-    Name = "Lock in Front of Person",
+    Name = "Low Health Auto-Teleport (Baseplate)",
     CurrentValue = false,
     Callback = function(value)
-        lockInFrontOn = value
-    end,
-})
-
-AutoFarmTab:CreateToggle({
-    Name = "Stick to Person?",
-    CurrentValue = false,
-    Callback = function(value)
-        stickToPersonOn = value
-        if not value then currentLockedTarget = nil end
-    end,
-})
-
-AutoFarmTab:CreateDropdown({
-    Name = "Position Offset (Hit Range)",
-    Options = {"Close (~3 studs)", "Slightly Far (~5.5 studs)", "Far (~8 studs)"},
-    CurrentOption = {"Close (~3 studs)"},
-    MultipleOptions = false,
-    Callback = function(option)
-        local selected = typeof(option) == "table" and option[1] or option
-        hitDistanceOffset = selected:find("Slightly Far") and 5.5 or (selected:find("Far") and 8 or 3)
-    end,
-})
-
-AutoFarmTab:CreateSection("Auto Farm Automation")
-
-LowHpToggle = AutoFarmTab:CreateToggle({
-    Name = "Auto Farm Low Health Players",
-    CurrentValue = false,
-    Callback = function(value)
-        if value and hum and hum.Health <= healthThreshold and lowHealthProtectionOn then
-            autoFarmLowHpOn = false
-            task.spawn(function() if LowHpToggle then LowHpToggle:Set(false) end end)
-            teleportToSafeSpace()
-            return
+        lowHealthProtectionOn = value
+        if not value then
+            isCurrentlyProtected = false
         end
-        autoFarmLowHpOn = value
-        isCurrentlyWaitingInSafeSpace = false
-        if value and AllPlayersToggle then AllPlayersToggle:Set(false) end
-        if not value then currentLockedTarget = nil end
     end,
 })
 
-AllPlayersToggle = AutoFarmTab:CreateToggle({
-    Name = "Auto Farm All Players",
-    CurrentValue = false,
+AutoFarmTab:CreateSlider({
+    Name = "Health Threshold",
+    Range = {10, 80},
+    Increment = 5,
+    CurrentValue = 50,
     Callback = function(value)
-        if value and hum and hum.Health <= healthThreshold and lowHealthProtectionOn then
-            autoFarmAllOn = false
-            task.spawn(function() if AllPlayersToggle then AllPlayersToggle:Set(false) end end)
-            teleportToSafeSpace()
-            return
-        end
-        autoFarmAllOn = value
-        isCurrentlyWaitingInSafeSpace = false
-        if value and LowHpToggle then LowHpToggle:Set(false) end
-        if not value then currentLockedTarget = nil end
+        healthThreshold = tonumber(value) or 50
     end,
 })
 
-AutoFarmTab:CreateDropdown({
-    Name = "Low HP Target Threshold",
-    Options = {"10 HP", "20 HP", "30 HP", "50 HP"},
-    CurrentOption = {"20 HP"},
-    MultipleOptions = false,
-    Callback = function(option)
-        local selected = typeof(option) == "table" and option[1] or option
-        local num = tonumber(selected:match("%d+"))
-        if num then targetHealthThreshold = num end
+AutoFarmTab:CreateButton({
+    Name = "Teleport to Safe Space",
+    Callback = function()
+        teleportToSafeSpace()
     end,
 })
-
 --------------------------------------------------------------------------------
 -- PART 3: ROLE-BASED DYNAMIC ESP (SURVIVORS & KILLERS)
 --------------------------------------------------------------------------------
@@ -1148,7 +740,7 @@ local function applyESP(plr)
 end
 
 --------------------------------------------------------------------------------
--- ESP TAB ELEMENTS (ORIGINAL RAYFIELD)
+-- ESP TAB ELEMENTS
 --------------------------------------------------------------------------------
 ESPTab:CreateSection("ESP Visuals")
 
@@ -1177,7 +769,7 @@ Players.PlayerRemoving:Connect(function(p)
     removeESP(p)
 end)
 --------------------------------------------------------------------------------
--- PART 4: COMBAT TAB & UTILITY TAB (RAW KILLER CAMLOCK LOADER)
+-- PART 4: COMBAT TAB & UTILITY TAB
 --------------------------------------------------------------------------------
 
 local CoreGui = game:GetService("CoreGui")
@@ -1207,10 +799,10 @@ RS.Heartbeat:Connect(function()
             or (track.Length > 0.3 and track.Length <= 1.5)
 
         if looksLikeAttack and track.Length > 0 and (track.TimePosition / track.Length) < 0.75 then
-            local oldVelocity = rootPart.Velocity
-            rootPart.Velocity = oldVelocity + rootPart.CFrame.LookVector * lungeRange
+            local oldVelocity = rootPart.AssemblyLinearVelocity
+            rootPart.AssemblyLinearVelocity = oldVelocity + rootPart.CFrame.LookVector * lungeRange
             RS.RenderStepped:Wait()
-            rootPart.Velocity = oldVelocity
+            rootPart.AssemblyLinearVelocity = oldVelocity
             break
         end
     end
@@ -1408,36 +1000,36 @@ RS.Heartbeat:Connect(function()
 end)
 
 -- Safe Platform TP
-local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
-local platform
+local savedPlatformPos = Vector3.new(-1119.03, 894.94, -85.90)
+local utilityPlatform = nil
 
 UtilityTab:CreateButton({
     Name = "Save Place (Platform TP)",
     Callback = function()
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        if not platform or not platform.Parent then
-            platform = Instance.new("Part")
-            platform.Size = Vector3.new(60, 5, 60)
-            platform.Position = savedPos
-            platform.Anchored = true
-            platform.Color = Color3.fromRGB(120, 120, 120)
-            platform.Material = Enum.Material.SmoothPlastic
-            platform.Name = "SafePlatform"
-            platform.Parent = workspace
+        if not utilityPlatform or not utilityPlatform.Parent then
+            utilityPlatform = Instance.new("Part")
+            utilityPlatform.Size = Vector3.new(60, 5, 60)
+            utilityPlatform.Position = savedPlatformPos
+            utilityPlatform.Anchored = true
+            utilityPlatform.Color = Color3.fromRGB(120, 120, 120)
+            utilityPlatform.Material = Enum.Material.SmoothPlastic
+            utilityPlatform.Name = "SafePlatform"
+            utilityPlatform.Parent = workspace
         end
-        hrp.CFrame = CFrame.new(savedPos + Vector3.new(0, 6, 0))
+        hrp.CFrame = CFrame.new(savedPlatformPos + Vector3.new(0, 6, 0))
     end,
 })
 --------------------------------------------------------------------------------
--- PART 5: PROTECTION & TELEPORTER (REUSABLE AUTO-PROTECTION PINNING)
+-- PART 5: PROTECTION & TELEPORTER TAB
 --------------------------------------------------------------------------------
 
-local lowHealthProtectionOn = false
-local healthThreshold = 40
-local protectionPlatform = nil
-local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
-local isCurrentlyProtected = false
+local utilProtectionOn = false
+local utilHealthThreshold = 40
+local utilProtectionPlatform = nil
+local utilSavedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local isUtilProtected = false
 
 UtilityTab:CreateSection("Safety & Protection")
 
@@ -1445,9 +1037,9 @@ UtilityTab:CreateToggle({
     Name = "Low Health Auto-Teleport",
     CurrentValue = false,
     Callback = function(value)
-        lowHealthProtectionOn = value
+        utilProtectionOn = value
         if not value then
-            isCurrentlyProtected = false
+            isUtilProtected = false
         end
     end,
 })
@@ -1458,56 +1050,60 @@ UtilityTab:CreateSlider({
     Increment = 5,
     CurrentValue = 40,
     Callback = function(value)
-        healthThreshold = value
+        utilHealthThreshold = tonumber(value) or 40
     end,
 })
 
--- Reusable Auto-Protection Loop with Return-to-Platform Enforcer
 task.spawn(function()
     while true do
         task.wait(0.2)
-        if lowHealthProtectionOn and char then
+        if utilProtectionOn and char then
             local humanoid = char:FindFirstChildOfClass("Humanoid")
             local hrp = char:FindFirstChild("HumanoidRootPart")
             
             if humanoid and hrp and humanoid.Health > 0 then
-                if humanoid.Health <= healthThreshold then
-                    -- Ensure platform exists
-                    if not protectionPlatform or not protectionPlatform.Parent then
-                        protectionPlatform = Instance.new("Part", workspace)
-                        protectionPlatform.Size = Vector3.new(60, 5, 60)
-                        protectionPlatform.Position = savedPos
-                        protectionPlatform.Anchored = true
-                        protectionPlatform.Color = Color3.fromRGB(0, 200, 100)
-                        protectionPlatform.Material = Enum.Material.SmoothPlastic
-                        protectionPlatform.Name = "AutoProtectionBaseplate"
+                if humanoid.Health <= utilHealthThreshold then
+                    if not utilProtectionPlatform or not utilProtectionPlatform.Parent then
+                        utilProtectionPlatform = Instance.new("Part", workspace)
+                        utilProtectionPlatform.Size = Vector3.new(60, 5, 60)
+                        utilProtectionPlatform.Position = utilSavedPos
+                        utilProtectionPlatform.Anchored = true
+                        utilProtectionPlatform.Color = Color3.fromRGB(0, 200, 100)
+                        utilProtectionPlatform.Material = Enum.Material.SmoothPlastic
+                        utilProtectionPlatform.Name = "AutoProtectionBaseplate"
                     end
 
-                    local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
+                    local targetPlatformPos = utilSavedPos + Vector3.new(0, 6, 0)
                     local dist = (hrp.Position - targetPlatformPos).Magnitude
                     
-                    -- Initial trigger or return if fallen off / teleported away
-                    if not isCurrentlyProtected or dist > 25 then
+                    if not isUtilProtected or dist > 25 then
                         hrp.CFrame = CFrame.new(targetPlatformPos)
-                        isCurrentlyProtected = true
+                        isUtilProtected = true
                     end
                 else
-                    -- Reset condition: if health recovers above threshold, stop pinning to platform
-                    if isCurrentlyProtected then
-                        isCurrentlyProtected = false
+                    if isUtilProtected then
+                        isUtilProtected = false
                     end
                 end
             end
         else
-            isCurrentlyProtected = false
+            isUtilProtected = false
         end
     end
 end)
 
+--------------------------------------------------------------------------------
+-- TELEPORTER TAB
+--------------------------------------------------------------------------------
 TeleportTab:CreateSection("Player Teleporter")
 
-local selectedPlayer, stickInFrontOn, stickOffset, searchQuery = nil, false, 5.5, ""
-local playerDropdownOptions, playerMap, PlayerDropdown = {}, {}, nil
+local selectedPlayer = nil
+local stickInFrontOn = false
+local stickOffset = 5.5
+local searchQuery = ""
+local playerDropdownOptions = {}
+local playerMap = {}
+local PlayerDropdown = nil
 
 local function refreshPlayerDropdown()
     playerDropdownOptions, playerMap = {}, {}
@@ -1542,7 +1138,8 @@ TeleportTab:CreateInput({
 PlayerDropdown = TeleportTab:CreateDropdown({
     Name = "Select Target Player",
     Options = {"Loading..."},
-    CurrentOption = "Loading...",
+    CurrentOption = {"Loading..."},
+    MultipleOptions = false,
     Callback = function(option)
         local selected = typeof(option) == "table" and option[1] or option
         selectedPlayer = playerMap[selected]
@@ -1593,7 +1190,7 @@ TeleportTab:CreateSlider({
     Increment = 0.5,
     CurrentValue = 5.5,
     Callback = function(value)
-        stickOffset = value
+        stickOffset = tonumber(value) or 5.5
     end,
 })
 
@@ -1617,7 +1214,7 @@ RS.RenderStepped:Connect(function()
     end
 end)
 --------------------------------------------------------------------------------
--- PART 6: 2011X (SONIC.EXE) AUTO FARM (NO COOLDOWN CHECKS / DUAL ABILITY CAST)
+-- PART 6: 2011X (SONIC.EXE) AUTO FARM
 --------------------------------------------------------------------------------
 
 local sonicAutoLowHp = false
@@ -1630,14 +1227,14 @@ local currentHardLockedTarget = nil
 local SonicLowHpToggle, SonicAllToggle
 local SonicLowHealthToggle
 
--- Low Health Safety & Platform Pinning State
 local sonicLowHealthProtectionOn = false
 local sonicHealthThreshold = 30
 local sonicProtectionPlatform = nil
-local savedPos = Vector3.new(-1119.03, 894.94, -85.90)
+local sonicSavedPos = Vector3.new(-1119.03, 894.94, -85.90)
 local isSonicProtected = false
+
 --------------------------------------------------------------------------------
--- 2011X DIRECT REMOTE FIRING (UNRESTRICTED DUAL CAST)
+-- 2011X DIRECT REMOTE FIRING
 --------------------------------------------------------------------------------
 local function findSonicRemote(name)
     local charRemotes = ReplicatedStorage:FindFirstChild("CharacterRemotes")
@@ -1673,7 +1270,7 @@ local function fireGodspeed()
 end
 
 --------------------------------------------------------------------------------
--- TARGET DETECTION (ALL PLAYERS - NO WHITELIST)
+-- TARGET DETECTION
 --------------------------------------------------------------------------------
 local function isTargetValid(targetPlayer, lowHpOnly)
     if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or targetPlayer == player then 
@@ -1682,13 +1279,13 @@ local function isTargetValid(targetPlayer, lowHpOnly)
 
     local targetChar = targetPlayer.Character
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
-    local hum = targetChar:FindFirstChildOfClass("Humanoid")
+    local tHum = targetChar:FindFirstChildOfClass("Humanoid")
 
-    if not hrp or not hum or hum.Health <= 0 or not targetChar:IsDescendantOf(workspace) then
+    if not hrp or not tHum or tHum.Health <= 0 or not targetChar:IsDescendantOf(workspace) then
         return false
     end
 
-    if lowHpOnly and hum.Health > sonicThreshold then
+    if lowHpOnly and tHum.Health > sonicThreshold then
         return false
     end
 
@@ -1746,14 +1343,14 @@ task.spawn(function()
                         if not sonicProtectionPlatform or not sonicProtectionPlatform.Parent then
                             sonicProtectionPlatform = Instance.new("Part", workspace)
                             sonicProtectionPlatform.Size = Vector3.new(60, 5, 60)
-                            sonicProtectionPlatform.Position = savedPos
+                            sonicProtectionPlatform.Position = sonicSavedPos
                             sonicProtectionPlatform.Anchored = true
                             sonicProtectionPlatform.Color = Color3.fromRGB(0, 200, 100)
                             sonicProtectionPlatform.Material = Enum.Material.SmoothPlastic
                             sonicProtectionPlatform.Name = "SonicProtectionBaseplate"
                         end
 
-                        local targetPlatformPos = savedPos + Vector3.new(0, 6, 0)
+                        local targetPlatformPos = sonicSavedPos + Vector3.new(0, 6, 0)
                         local dist = (hrp.Position - targetPlatformPos).Magnitude
 
                         if not isSonicProtected or dist > 25 then
@@ -1774,7 +1371,7 @@ task.spawn(function()
 end)
 
 --------------------------------------------------------------------------------
--- MAIN AUTO FARM LOOP (SIMULTANEOUS DUAL ABILITY CAST)
+-- MAIN AUTO FARM LOOP
 --------------------------------------------------------------------------------
 task.spawn(function()
     while true do
@@ -1799,11 +1396,11 @@ task.spawn(function()
             if targetPlayer and targetPlayer.Character then
                 local targetChar = targetPlayer.Character
                 local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-                local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
+                local tHum = targetChar:FindFirstChildOfClass("Humanoid")
                 local myChar = player.Character
                 local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
-                if targetHrp and targetHum and targetHum.Health > 0 and myHrp then
+                if targetHrp and tHum and tHum.Health > 0 and myHrp then
                     for _, part in ipairs(myChar:GetDescendants()) do
                         if part:IsA("BasePart") then part.CanCollide = false end
                     end
@@ -1812,7 +1409,6 @@ task.spawn(function()
                     local offsetPos = targetHrp.CFrame * CFrame.new(0, 0, -sonicHitOffset)
                     myHrp.CFrame = CFrame.lookAt(offsetPos.Position, lookAtPos)
 
-                    -- Fire both abilities directly and simultaneously
                     task.spawn(fireAttack)
                     task.spawn(fireGodspeed)
                 end
@@ -1861,7 +1457,7 @@ SonicEXEtab:CreateSlider({
     Increment = 5,
     CurrentValue = 30,
     Callback = function(value)
-        sonicHealthThreshold = value
+        sonicHealthThreshold = tonumber(value) or 30
     end,
 })
 
